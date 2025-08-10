@@ -109,7 +109,7 @@
 #' # Prebuilt multimodal messages
 #' msgs <- list(
 #'   list(role = "system", content = "You are terse."),
-#''  list(role = "user", content = list(
+#'   list(role = "user", content = list(
 #'     list(type = "text", text = "Caption this image"),
 #'     list(type = "image_url", image_url = list(url = "data:image/png;base64,<...>"))
 #'   ))

@@ -134,6 +134,51 @@ no key. Mirrors the OpenAI schema; feature support depends on the local model/ru
 }
 }
 
+\examples{
+\dontrun{
+# Basic
+gpt("Say hello", provider = "openai", model = "gpt-4o-mini")
+
+# With a system message and token cap
+gpt(
+  "Summarize this in one sentence:\n<text>",
+  provider = "openai",
+  system = "You are a precise summarizer.",
+  max_tokens = 100
+)
+
+# Prebuilt multimodal messages
+msgs <- list(
+  list(role = "system", content = "You are terse."),
+  list(role = "user", content = list(
+    list(type = "text", text = "Caption this image"),
+    list(type = "image_url", image_url = list(url = "data:image/png;base64,<...>"))
+  ))
+)
+gpt(msgs, provider = "openai", model = "gpt-4o-mini")
+
+# Forcing JSON with a schema
+schema <- list(
+  type = "object",
+  properties = list(ok = list(type = "boolean")),
+  required = list("ok"),
+  additionalProperties = FALSE
+)
+gpt(
+  "Return {\"ok\": true|false} after checking: fever >= 38C?",
+  provider = "openai",
+  response_format = list(
+    type = "json_schema",
+    json_schema = list(name = "result", schema = schema)
+  )
+)
+
+# LM Studio (local): ensure the server is running and the port matches.
+options(gptcolumnr.provider = "lmstudio")
+gpt("hi")
+}
+
+}
 \seealso{
 \code{\link{gpt_messages}} for a focused help topic on message formats.
 }

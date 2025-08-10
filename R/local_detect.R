@@ -34,8 +34,24 @@
     NULL
 }
 
-#' List configured local backends
-#' @return A data frame with backend, name, base_url and probe.
+#' List configured local backend endpoints
+#'
+#' Returns the *configured* local backend endpoints from the package defaults
+#' (set in `.onLoad()` inside `zzz.R`) without attempting to detect whether these
+#' backends are actually running or reachable.
+#'
+#' To change these defaults globally, set them via `options()` in your `.Rprofile`
+#' or session, for example:
+#' \preformatted{
+#' options(
+#'   gpt.lmstudio_base_url = "http://localhost:1234/v1/chat/completions",
+#'   gpt.ollama_base_url   = "http://localhost:11434/v1/chat/completions"
+#' )
+#' }
+#'
+#' @return A named character vector of base URLs for supported local backends.
+#' @examples
+#' list_local_backends()
 #' @export
 list_local_backends <- function() {
     x <- .local_candidates()

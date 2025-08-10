@@ -1,3 +1,116 @@
+#' Extract Structured Data from Free Text with an LLM (column-wise)
+#'
+#' `gpt_column()` sends each row of a text column to a language model (local or OpenAI),
+#' using a prompt template or a prompt function, and parses the model's output into
+#' typed columns. It supports schema‑based validation (`keys`), fuzzy key correction,
+#' NA normalization, progress/ETA, optional parallelization, and debug capture of raw outputs.
+#'
+#' @section Schema (`keys`):
+#' Each element of `keys` can be either:
+#' - a **type string**: `"integer"`, `"numeric"`, `"character"`, or `"logical"`; the value is coerced.
+#' - a **vector of allowed values** (e.g., `c("oui","non","NA")`, `c(0,1)`, `c(TRUE,FALSE)`).
+#'   If present, outputs not in the allowed set are set to `NA`.
+#'
+#' The same `keys` are typically passed to your prompt builder (e.g. via `build_prompt()`)
+#' so the JSON skeleton shown to the model matches what the parser expects.
+#'
+#' @section Prompting:
+#' - `prompt` may be a **character template** (with `{text}` and optionally `{json_format}` placeholders,
+#'   typically filled by `build_prompt()`), **or** a **function** with signature `function(text, keys)`.
+#' - If you pass a function, it will be called for each row to build the final prompt string.
+#'
+#' @param data A data frame or tibble containing the text column to process.
+#' @param col Unquoted column name containing the input text for the LLM.
+#' @param prompt Either a character template (used by `build_prompt()`), or a function `function(text, keys)` that returns a prompt string per row.
+#' @param keys `NULL` (relaxed mode) or a **named list** defining the schema.
+#'   Each name is an expected output key. Each value is either a type string
+#'   (`"integer"`, `"numeric"`, `"character"`, `"logical"`) or a vector of allowed values.
+#' @param auto_correct_keys Logical. If `TRUE`, attempt fuzzy correction of near‑miss key names to the expected names.
+#' @param max.distance Numeric in \[0,1]. Maximum distance for fuzzy key matching (passed to `match_arg_tol()`).
+#' @param keep_unexpected_keys Logical. If `FALSE` (default), unexpected keys are dropped after autocorrection; if `TRUE`, they are kept.
+#' @param na_values Character vector of NA‑like tokens to normalize (case‑insensitive), e.g. `"NA"`, `"null"`, `""`, `"[]"`, `"{}"`, `"None"`.
+#' @param file_path Optional path to a file whose textual contents should be appended to the prompt (handled inside `gpt()`).
+#' @param image_path Optional path to an image to include in the prompt (handled inside `gpt()`).
+#' @param temperature Sampling temperature passed to `gpt()`.
+#' @param relaxed Logical. If `TRUE` **and** `keys = NULL`, returns the parsed list/object as is (no schema mapping).
+#'   If `FALSE` and `keys` are provided, rows with invalid/unsuitable JSON yield `NA` for all expected keys.
+#' @param verbose Logical. If `TRUE`, prints repair logs (from `tidy_json()`), unexpected keys, coercion notes, and ETA updates.
+#' @param show_invalid_rows Logical. If `TRUE`, prints the subset of `data` rows that failed completely after parsing.
+#' @param return_debug Logical. If `TRUE`, appends two debug columns: `.raw_output` (model output) and `.invalid_rows` (0/1 flag).
+#' @param parallel Logical. If `TRUE`, uses `furrr::future_map2_chr()`; configure workers via `future::plan()`.
+#' @param ... Additional arguments forwarded to `gpt()` (e.g., `provider`, `model`, `base_url`, `system`, `seed`, `response_format`, etc.).
+#'
+#' @return A tibble: original `data` **plus** one column per expected key (in the order of `names(keys)`).
+#' If `return_debug = TRUE`, also includes `.raw_output` and `.invalid_rows`. The integer vector of invalid row indices
+#' is also attached as an attribute `attr(result, "invalid_rows")`.
+#'
+#' @details
+#' **Flow per row**
+#' 1. Build prompt (template or function).
+#' 2. Call `gpt()` (local or OpenAI backend).
+#' 3. Clean/repair JSON via `tidy_json()` (strips fences, extracts the JSON blob, fixes common issues conservatively).
+#' 4. Parse with `jsonlite::fromJSON()`.
+#' 5. Normalize NA‑likes, coerce to declared types, and validate against allowed sets.
+#' 6. Autocorrect key names (if enabled) and map to the schema order; drop extras unless `keep_unexpected_keys = TRUE`.
+#'
+#' **Parallel & Progress**
+#' - Progress/ETA shown via `progressr`. When `parallel = TRUE`, work is split via `furrr` (respect your `future::plan()`).
+#'
+#' **Error handling**
+#' - Rows that cannot be parsed into valid JSON (and `relaxed = FALSE` with a schema) return all‑`NA` for expected keys.
+#' - Repair actions taken by `tidy_json()` are logged row‑by‑row when `verbose = TRUE`.
+#'
+#' @section Requirements:
+#' Uses functions from: **dplyr**, **purrr**, **tibble**, **jsonlite**, **stringr**, **rlang**, **vctrs**, **progressr**,
+#' and **furrr** (only if `parallel = TRUE`). Ensure `gpt()` is configured for your provider/model.
+#'
+#' @examples
+#' \dontrun{
+#' # --- 1) Using a template and build_prompt() ---------------------------
+#' template <- paste0(
+#'   "Tu es un assistant spécialisé.\n\n",
+#'   "Texte :\n\"{text}\"\n\n",
+#'   "Retourne un JSON sur une seule ligne, format exact :\n",
+#'   "{json_format}\n",
+#'   "- Clés entre guillemets; valeurs autorisées uniquement.\n",
+#'   "- Si absent: \"NA\". Aucune autre sortie."
+#' )
+#'
+#' prompt_fun <- function(text, keys) build_prompt(template, text, keys)
+#'
+#' res <- gpt_column(
+#'   data   = df,
+#'   col    = note_medicale,
+#'   prompt = prompt_fun,
+#'   keys   = list(
+#'     isolement_bin     = "integer",
+#'     tendance_isolement= c("oui","non","NA")
+#'   ),
+#'   provider = "openai",
+#'   model    = "gpt-4o-mini",
+#'   temperature = 0.2,
+#'   verbose  = TRUE
+#' )
+#'
+#' # --- 2) Prompt as a function (no template) ----------------------------
+#' pf <- function(text, keys) {
+#'   paste0(
+#'     "Texte:\n", text, "\n\n",
+#'     "Réponds avec un JSON une seule ligne:\n",
+#'     jsonlite::toJSON(setNames(as.list(rep("NA", length(keys))), names(keys)), auto_unbox = TRUE)
+#'   )
+#' }
+#' res2 <- gpt_column(df, note_medicale, pf,
+#'   keys = list(a = "integer", b = c("x","y","NA")),
+#'   provider = "local"
+#' )
+#' }
+#'
+#' @seealso [build_prompt()] for creating `{json_format}` blocks from `keys`,
+#'   [tidy_json()] for robust JSON cleanup, and [gpt()] for low-level model calls.
+#' @export
+
+
 gpt_column = function(data,
          col,
          prompt,

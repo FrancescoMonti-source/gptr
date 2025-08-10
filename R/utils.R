@@ -73,9 +73,6 @@ in_allowed <- function(value, allowed) {
     }
 }
 
-# =========================
-# utils.R
-# =========================
 
 # Determine if a scalar should be treated as NA (case-insensitive for characters)
 is_na_like <- function(x, na_vals = c("NA", "null", "", "[]", "{}", "None")) {
