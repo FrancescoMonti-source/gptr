@@ -2,6 +2,7 @@
 
 export(build_prompt)
 export(gpt)
+export(gpt_chat)
 export(gpt_column)
 export(list_lmstudio_models)
 export(list_local_backends)
