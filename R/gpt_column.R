@@ -1,5 +1,4 @@
-gpt_column
-function(data,
+gpt_column = function(data,
          col,
          prompt,
          keys = NULL,

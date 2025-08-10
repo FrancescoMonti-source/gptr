@@ -93,23 +93,15 @@ is_na_like <- function(x, na_vals = c("NA", "null", "", "[]", "{}", "None")) {
 tidy_json <- function(x,
                       na_values = c("NA", "null", "", "[]", "{}", "None"),
                       aggressive = FALSE) {
-
-    # --- internal helpers (not exported) ---
     strip_fences <- function(s) {
-        # remove starting/ending ```... fences if present
         s <- gsub("^\\s*```[a-zA-Z0-9_-]*\\s*", "", s)
         gsub("```\\s*$", "", s)
     }
     extract_json_blob <- function(s) {
-        # first {...} else first [...]
         m1 <- regexpr("\\{[\\s\\S]*\\}", s, perl = TRUE)
-        if (m1[1] != -1L) {
-            return(substr(s, m1[1], m1[1] + attr(m1, "match.length") - 1L))
-        }
+        if (m1[1] != -1L) return(substr(s, m1[1], m1[1] + attr(m1, "match.length") - 1L))
         m2 <- regexpr("\\[[\\s\\S]*\\]", s, perl = TRUE)
-        if (m2[1] != -1L) {
-            return(substr(s, m2[1], m2[1] + attr(m2, "match.length") - 1L))
-        }
+        if (m2[1] != -1L) return(substr(s, m2[1], m2[1] + attr(m2, "match.length") - 1L))
         s
     }
     escape_rx <- function(z) gsub("([\\[\\]{}()+*.^$?|\\\\])", "\\\\\\1", z, perl = TRUE)
@@ -122,55 +114,52 @@ tidy_json <- function(x,
     if (is.null(x) || !nzchar(x)) return(list(txt = "", log = log))
 
     # Pass 0: light normalization
-    s <- sub("^\ufeff", "", x, perl = TRUE)        # strip BOM
-    s <- strip_fences(s)
-    # collapse over-escaped quotes (\\\" -> \")
-    s <- gsub('\\\\\\\\"', '\\"', s, perl = TRUE)
-    # normalize smart quotes
-    s <- gsub('[\u201c\u201d\u201e\u201f\u2033\u2036]', '"', s, perl = TRUE)
-    s <- gsub('[\u2018\u2019\u2032\u2035]', "'",  s, perl = TRUE)
-    # normalize common tokens
-    s <- gsub("\\bTrue\\b",  "true",  s)
-    s <- gsub("\\bFalse\\b", "false", s)
-    s <- gsub("\\bNone\\b",  "null",  s)
-    # whitespace
-    s <- gsub("[\r\n\t]", " ", s, perl = TRUE)
-    s <- trimws(s)
-    # isolate the first JSON blob if surrounded by chatter
-    s <- extract_json_blob(s)
-    log <- c(log, "cleaned")
+    s0 <- x
+    s  <- sub("^\ufeff", "", x, perl = TRUE)
+    s  <- strip_fences(s)
+    s  <- gsub('\\\\\\\\"', '\\"', s, perl = TRUE)  # over-escaped quotes
+    s  <- gsub('[\u201c\u201d\u201e\u201f\u2033\u2036]', '"', s, perl = TRUE)
+    s  <- gsub('[\u2018\u2019\u2032\u2035]', "'",  s, perl = TRUE)
+    s  <- gsub("\\bTrue\\b",  "true",  s)
+    s  <- gsub("\\bFalse\\b", "false", s)
+    s  <- gsub("\\bNone\\b",  "null",  s)
+    s  <- gsub("[\r\n\t]", " ", s, perl = TRUE)
+    s  <- trimws(s)
+    s  <- extract_json_blob(s)
+    if (!identical(s, s0)) log <- c(log, "cleaned")
 
-    # Early parse attempt
+    # Early parse
     parsed <- tryCatch(jsonlite::fromJSON(s, simplifyVector = TRUE), error = function(e) NULL)
     if (!is.null(parsed)) return(list(txt = s, log = log))
 
     # Pass 1: conservative repairs
-
-    # Quote bare NA-like tokens after a colon:  "key: NA," -> "key: \"NA\","
     re_vals <- na_vals_pattern(na_values)
-    s2 <- gsub(paste0(":(\\s*)(", re_vals, ")(\\s*[,}])"),
-               ': "NA"\\3', s, ignore.case = TRUE, perl = TRUE)
 
-    # Strip trailing commas before } or ]
-    s2 <- gsub(",\\s*([}\\]])", "\\1", s2, perl = TRUE)
+    s1 <- s
+    # quote bare NA-like
+    s1a <- gsub(paste0(":(\\s*)(", re_vals, ")(\\s*[,}])"),
+                ': "NA"\\3', s1, ignore.case = TRUE, perl = TRUE)
+    if (!identical(s1a, s1)) log <- c(log, "quoted bare NA")
 
-    # Quote bare object keys: { key: ... } -> { "key": ... }
-    s2q <- gsub("([{,]\\s*)([A-Za-z_][A-Za-z0-9_]*)(\\s*:)", '\\1"\\2"\\3', s2, perl = TRUE)
+    # strip trailing commas
+    s1b <- gsub(",\\s*([}\\]])", "\\1", s1a, perl = TRUE)
+    if (!identical(s1b, s1a)) log <- c(log, "removed trailing comma")
 
-    parsed <- tryCatch(jsonlite::fromJSON(s2q, simplifyVector = TRUE), error = function(e) NULL)
-    if (!is.null(parsed)) {
-        return(list(txt = s2q, log = c(log, "quoted bare NA", "removed trailing comma", "quoted bare keys")))
+    # quote bare keys
+    s1c <- gsub("([{,]\\s*)([A-Za-z_][A-Za-z0-9_]*)(\\s*:)", '\\1"\\2"\\3', s1b, perl = TRUE)
+    if (!identical(s1c, s1b)) log <- c(log, "quoted bare keys")
+
+    parsed <- tryCatch(jsonlite::fromJSON(s1c, simplifyVector = TRUE), error = function(e) NULL)
+    if (!is.null(parsed)) return(list(txt = s1c, log = log))
+
+    # Pass 2: aggressive (single->double quotes only when no double quotes present)
+    if (aggressive && !grepl('"', s1c, fixed = TRUE) && grepl("'", s1c, fixed = TRUE)) {
+        s2 <- gsub("'", '"', s1c, fixed = TRUE)
+        if (!identical(s2, s1c)) log <- c(log, "single quotes -> double quotes")
+        parsed <- tryCatch(jsonlite::fromJSON(s2, simplifyVector = TRUE), error = function(e) NULL)
+        if (!is.null(parsed)) return(list(txt = s2, log = log))
     }
 
-    # Pass 2: aggressive (optional) — convert single quotes to double quotes when no double quotes present
-    if (aggressive && !grepl('"', s2q, fixed = TRUE) && grepl("'", s2q, fixed = TRUE)) {
-        s3 <- gsub("'", '"', s2q, fixed = TRUE)
-        parsed <- tryCatch(jsonlite::fromJSON(s3, simplifyVector = TRUE), error = function(e) NULL)
-        if (!is.null(parsed)) {
-            return(list(txt = s3, log = c(log, "single quotes -> double quotes")))
-        }
-    }
-
-    # Still unparsed; return best-effort string and log
-    list(txt = s2q, log = c(log, "unparsed-after-repair"))
+    list(txt = s1c, log = c(log, "unparsed-after-repair"))
 }
+
