@@ -50,6 +50,41 @@ This ensures the LLM sees exactly what fields to return and how to format them.
 
 ---
 
+## 🔑 Keys and value types
+
+In `gpt_column()`, the `keys` parameter defines the schema of the expected output.  
+Each key can take **one of two forms**:
+
+1. **Type string** — values will be coerced to this type:
+   - `"integer"`, `"numeric"`, `"character"`, `"logical"`
+
+2. **Vector of allowed values** — any output not in the set is replaced with `NA`:
+   ```r
+   keys = list(
+     severity = c("mild", "moderate", "severe", "NA"),
+     smoker   = c(0, 1)  # 0 = no, 1 = yes
+   )
+   ```
+
+Example:
+
+```r
+keys <- list(
+  age       = "integer",                 # coerced to integer
+  diagnosis = "character",               # coerced to character
+  smoker    = c(0, 1),                    # must be 0 or 1
+  severity  = c("mild", "moderate", "severe", "NA")
+)
+
+# LLM output outside these constraints will be set to NA
+```
+
+This schema is **both**:
+- Passed to the LLM via `{json_format}` (so it knows what to return)
+- Used by the parser to coerce, validate, and clean the output
+
+---
+
 ## 📦 Quick start
 
 ```r
