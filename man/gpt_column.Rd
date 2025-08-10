@@ -35,13 +35,13 @@ gpt_column(
 Each name is an expected output key. Each value is either a type string
 (\code{"integer"}, \code{"numeric"}, \code{"character"}, \code{"logical"}) or a vector of allowed values.}
 
-\item{auto_correct_keys}{Logical. If \code{TRUE}, attempt fuzzy correction of near‑miss key names to the expected names.}
+\item{auto_correct_keys}{Logical. If \code{TRUE}, attempt fuzzy correction of near-miss key names to the expected names.}
 
 \item{max.distance}{Numeric in [0,1]. Maximum distance for fuzzy key matching (passed to \code{match_arg_tol()}).}
 
 \item{keep_unexpected_keys}{Logical. If \code{FALSE} (default), unexpected keys are dropped after autocorrection; if \code{TRUE}, they are kept.}
 
-\item{na_values}{Character vector of NA‑like tokens to normalize (case‑insensitive), e.g. \code{"NA"}, \code{"null"}, \code{""}, \code{"[]"}, \code{"{}"}, \code{"None"}.}
+\item{na_values}{Character vector of NA-like tokens to normalize (case-insensitive), e.g. \code{"NA"}, \code{"null"}, \code{""}, \code{"[]"}, \code{"{}"}, \code{"None"}.}
 
 \item{file_path}{Optional path to a file whose textual contents should be appended to the prompt (handled inside \code{gpt()}).}
 
@@ -60,39 +60,46 @@ If \code{FALSE} and \code{keys} are provided, rows with invalid/unsuitable JSON 
 
 \item{parallel}{Logical. If \code{TRUE}, uses \code{furrr::future_map2_chr()}; configure workers via \code{future::plan()}.}
 
-\item{...}{Additional arguments forwarded to \code{gpt()} (e.g., \code{provider}, \code{model}, \code{base_url}, \code{system}, \code{seed}, \code{response_format}, etc.).}
+\item{...}{Additional arguments forwarded to \code{gpt()} (e.g., \code{provider}, \code{model}, \code{base_url}, \code{system}, \code{seed},
+\code{response_format}, timeouts, etc.).}
 }
 \value{
-A tibble: original \code{data} \strong{plus} one column per expected key (in the order of \code{names(keys)}).
-If \code{return_debug = TRUE}, also includes \code{.raw_output} and \code{.invalid_rows}. The integer vector of invalid row indices
-is also attached as an attribute \code{attr(result, "invalid_rows")}.
+A tibble: the original \code{data} \strong{plus} one column per expected key (in the order of \code{names(keys)}).
+If \code{return_debug = TRUE}, also includes \code{.raw_output} and \code{.invalid_rows}.
+An integer vector of invalid row indices is attached as an attribute:
+\code{attr(result, "invalid_rows")}.
 }
 \description{
 \code{gpt_column()} sends each row of a text column to a language model (local or OpenAI),
 using a prompt template or a prompt function, and parses the model's output into
-typed columns. It supports schema‑based validation (\code{keys}), fuzzy key correction,
+typed columns. It supports schema-based validation (\code{keys}), fuzzy key correction,
 NA normalization, progress/ETA, optional parallelization, and debug capture of raw outputs.
 }
 \details{
-\strong{Flow per row}
+\strong{Per-row flow}
 \enumerate{
 \item Build prompt (template or function).
 \item Call \code{gpt()} (local or OpenAI backend).
 \item Clean/repair JSON via \code{tidy_json()} (strips fences, extracts the JSON blob, fixes common issues conservatively).
 \item Parse with \code{jsonlite::fromJSON()}.
-\item Normalize NA‑likes, coerce to declared types, and validate against allowed sets.
+\item Normalize NA-likes, coerce to declared types, and validate against allowed sets.
 \item Autocorrect key names (if enabled) and map to the schema order; drop extras unless \code{keep_unexpected_keys = TRUE}.
 }
 
-\strong{Parallel & Progress}
+\strong{Progress & parallel}
 \itemize{
 \item Progress/ETA shown via \code{progressr}. When \code{parallel = TRUE}, work is split via \code{furrr} (respect your \code{future::plan()}).
 }
 
 \strong{Error handling}
 \itemize{
-\item Rows that cannot be parsed into valid JSON (and \code{relaxed = FALSE} with a schema) return all‑\code{NA} for expected keys.
-\item Repair actions taken by \code{tidy_json()} are logged row‑by‑row when \code{verbose = TRUE}.
+\item Rows that cannot be parsed into valid JSON (and \code{relaxed = FALSE} with a schema) return all-\code{NA} for expected keys.
+\item Repair actions taken by \code{tidy_json()} are logged row-by-row when \code{verbose = TRUE}.
+}
+
+\strong{Interoperability}
+\itemize{
+\item Works with local OpenAI-compatible servers (e.g., LM Studio) or hosted providers (set \code{provider}, \code{base_url}, \code{model}, \code{api_key} inside \code{gpt()}).
 }
 }
 \section{Schema (\code{keys})}{
@@ -104,7 +111,7 @@ Each element of \code{keys} can be either:
 If present, outputs not in the allowed set are set to \code{NA}.
 }
 
-The same \code{keys} are typically passed to your prompt builder (e.g. via \code{build_prompt()})
+The same \code{keys} are typically passed to your prompt builder (e.g., via \code{build_prompt()})
 so the JSON skeleton shown to the model matches what the parser expects.
 }
 
@@ -117,15 +124,20 @@ typically filled by \code{build_prompt()}), \strong{or} a \strong{function} with
 }
 }
 
-\section{Requirements}{
+\section{Troubleshooting}{
 
-Uses functions from: \strong{dplyr}, \strong{purrr}, \strong{tibble}, \strong{jsonlite}, \strong{stringr}, \strong{rlang}, \strong{vctrs}, \strong{progressr},
-and \strong{furrr} (only if \code{parallel = TRUE}). Ensure \code{gpt()} is configured for your provider/model.
+\itemize{
+\item \strong{All \code{NA} columns}: the model likely returned non-JSON or keys didn’t match. Inspect \code{.raw_output} (set \code{return_debug = TRUE})
+and consider \code{auto_correct_keys = TRUE}, adjusting \code{max.distance}, or loosening \code{na_values}.
+\item \strong{Dropped rows warning}: your prompt may return arrays or multiple objects; ensure the model returns \strong{exactly one} JSON object per row.
+\item \strong{Unexpected keys}: set \code{keep_unexpected_keys = TRUE} to keep them for inspection, or expand your \code{keys} schema.
+\item \strong{Timeouts/Rate limits}: pass timeouts or small delays via \code{...} to \code{gpt()}; for rate-limited providers, consider batching or \code{parallel = FALSE}.
+}
 }
 
 \examples{
 \dontrun{
-# --- 1) Using a template and build_prompt() ---------------------------
+# 1) Using a template and build_prompt()
 template <- paste0(
   "Tu es un assistant spécialisé.\n\n",
   "Texte :\n\"{text}\"\n\n",
@@ -142,31 +154,35 @@ res <- gpt_column(
   col    = note_medicale,
   prompt = prompt_fun,
   keys   = list(
-    isolement_bin     = "integer",
-    tendance_isolement= c("oui","non","NA")
+    isolement_bin      = "integer",
+    tendance_isolement = c("oui","non","NA")
   ),
   provider = "openai",
   model    = "gpt-4o-mini",
   temperature = 0.2,
-  verbose  = TRUE
+  verbose  = TRUE,
+  return_debug = TRUE
 )
 
-# --- 2) Prompt as a function (no template) ----------------------------
-pf <- function(text, keys) {
-  paste0(
-    "Texte:\n", text, "\n\n",
-    "Réponds avec un JSON une seule ligne:\n",
-    jsonlite::toJSON(setNames(as.list(rep("NA", length(keys))), names(keys)), auto_unbox = TRUE)
-  )
-}
-res2 <- gpt_column(df, note_medicale, pf,
-  keys = list(a = "integer", b = c("x","y","NA")),
-  provider = "local"
+# Rows that failed:
+attr(res, "invalid_rows")
+
+# 2) Retry failed rows (with audit trail)
+res2 <- patch_failed_rows(
+  data   = res,
+  prompt = prompt_fun,
+  col    = note_medicale,
+  id_col = patient_id,
+  keys   = list(isolement_bin = "integer", tendance_isolement = c("oui","non","NA")),
+  max_attempts = 2
 )
+attr(res2, "invalid_rows")
 }
 
 }
 \seealso{
 \code{\link[=build_prompt]{build_prompt()}} for creating \code{{json_format}} blocks from \code{keys},
-\code{\link[=tidy_json]{tidy_json()}} for robust JSON cleanup, and \code{\link[=gpt]{gpt()}} for low-level model calls.
+\code{\link[=tidy_json]{tidy_json()}} for robust JSON cleanup,
+\code{\link[=gpt]{gpt()}} for low-level model calls,
+and \code{\link[=patch_failed_rows]{patch_failed_rows()}} to automatically repair failed rows.
 }

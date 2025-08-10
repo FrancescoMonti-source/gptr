@@ -2,7 +2,7 @@
 % Please edit documentation in R/patch_failed_rows.R
 \name{patch_failed_rows}
 \alias{patch_failed_rows}
-\title{Retry and Patch Failed Rows from \code{gpt_column()} Output}
+\title{Retry Failed Rows in a \code{gpt_column()} Call}
 \usage{
 patch_failed_rows(
   data,
@@ -13,68 +13,87 @@ patch_failed_rows(
   max_attempts = 3,
   auto_correct_keys = TRUE,
   relaxed = TRUE,
-  parallel = FALSE,
   print_retry = TRUE,
   ...
 )
 }
 \arguments{
-\item{data}{A tibble returned by \code{gpt_column()}, with the \code{"invalid_rows"} attribute.}
+\item{data}{A data frame that was processed by \code{gpt_column()} and has an
+\code{"invalid_rows"} attribute (integer vector of row indices that failed).}
 
-\item{prompt}{The same prompt or prompt function used in the original \code{gpt_column()} call.}
+\item{prompt}{Character scalar. The prompt string to pass back into
+\code{gpt_column()}.}
 
-\item{col}{Unquoted name of the column containing free-text input sent to the model.}
+\item{col}{Column in \code{data} containing the text to be processed by
+\code{gpt_column()}. Use tidy-eval notation (unquoted column name).}
 
-\item{id_col}{Unquoted name of a column uniquely identifying rows (e.g., \code{PATID}). Used to patch results.}
+\item{id_col}{Column in \code{data} that uniquely identifies each row. Used to
+join retry results back into the main dataset. Must have unique values.}
 
-\item{keys}{(Optional) Named list of expected output keys and their types (e.g., \code{list(foo = "integer")}).}
+\item{keys}{Optional named list of expected output keys and their R types,
+passed to \code{gpt_column()}.}
 
-\item{max_attempts}{Not currently used in this version. Included for future compatibility.}
+\item{max_attempts}{Integer. Maximum number of attempts per row before
+giving up. Default is 3.}
 
-\item{auto_correct_keys}{Logical. Whether to allow fuzzy correction of unexpected keys. Default: \code{TRUE}.}
+\item{auto_correct_keys}{Logical. Whether to enable key name autocorrection
+in \code{gpt_column()}. Default is \code{TRUE}.}
 
-\item{relaxed}{Logical. If \code{TRUE}, tolerate missing or extra keys (relaxed JSON validation). Default: \code{TRUE}.}
+\item{relaxed}{Logical. Whether to run in relaxed mode in \code{gpt_column()}.
+Default is \code{TRUE}.}
 
-\item{parallel}{Logical. If \code{TRUE}, uses parallel evaluation via \code{furrr::future_map_dfr()}. Default: \code{FALSE}.}
-
-\item{print_retry}{Logical. If \code{TRUE}, prints the result of retried rows. Useful for debugging. Default: \code{FALSE}.}
+\item{print_retry}{Logical. If \code{TRUE} (default), prints the combined retry
+results for inspection (truncated after 50 rows).}
 
 \item{...}{Additional arguments passed to \code{gpt_column()}.}
 }
 \value{
-A tibble of the same structure as the input \code{data}, with successful retries patched in.
-The \code{"invalid_rows"} attribute is updated to reflect remaining failures.
+A data frame with successful retries merged back in, and an updated
+\code{"invalid_rows"} attribute containing the indices of any rows that still
+failed after all attempts.
 }
 \description{
-This function retries only the rows that previously failed when using \code{gpt_column()},
-identified via the \code{"invalid_rows"} attribute. It reprocesses these rows in parallel
-(if enabled) and patches the successful outputs back into the original dataset.
+Attempts to re-run \code{gpt_column()} on rows that previously failed validation,
+updating the original dataset with any successful retries.
 }
 \details{
-The function is useful for recovering from transient parsing or model errors,
-especially when using local LLMs or fragile prompts.
-\itemize{
-\item Only rows marked as invalid are retried.
-\item Progress is tracked via \code{{progressr}}.
-\item Parallelization is controlled by \code{{furrr}} and requires an active \code{future::plan()}.
-\item Each row is retried independently; failed retries are left unchanged.
+This is intended for use when \code{gpt_column()} returns a tibble with an
+\code{"invalid_rows"} attribute indicating which rows failed. The function will
+loop through those rows, retrying each one up to \code{max_attempts} times, and
+patch the original data frame in-place for any rows that succeed.
+
+The function:
+\enumerate{
+\item Checks the \code{"invalid_rows"} attribute of \code{data}.
+\item Loops through only those rows that failed.
+\item Calls \code{gpt_column()} on each row individually, catching errors.
+\item Immediately updates the original data for any rows that pass validation.
+\item Retries remaining failures until \code{max_attempts} is reached or all pass.
 }
+
+This sequential version does \strong{not} support parallel retries. It is safer
+for debugging and avoids concurrency issues.
 }
 \examples{
 \dontrun{
-result <- gpt_column(data = df, col = note, prompt = prompt, keys = keys)
+# Suppose 'df' was processed by gpt_column() and has invalid rows
+attr(df, "invalid_rows")
 
-# Retry failed rows by patient ID:
-result <- patch_failed_rows(
-  data = result,
-  prompt = prompt,
-  col = note,
-  id_col = PATID,
-  keys = keys
+# Retry failed rows up to 2 times
+df <- patch_failed_rows(
+  data = df,
+  prompt = "Extract key medical variables.",
+  col = note_text,
+  id_col = patient_id,
+  keys = list(age = "integer", diagnosis = "character"),
+  max_attempts = 2
 )
 
-# Check which rows still failed:
-attr(result, "invalid_rows")
+# Inspect which rows still failed
+attr(df, "invalid_rows")
 }
 
+}
+\seealso{
+\code{\link[=gpt_column]{gpt_column()}} for the main extraction function.
 }

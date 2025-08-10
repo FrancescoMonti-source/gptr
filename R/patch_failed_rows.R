@@ -1,106 +1,190 @@
-#' Retry and Patch Failed Rows from `gpt_column()` Output
+#' Retry Failed Rows in a `gpt_column()` Call
 #'
-#' This function retries only the rows that previously failed when using `gpt_column()`,
-#' identified via the `"invalid_rows"` attribute. It reprocesses these rows in parallel
-#' (if enabled) and patches the successful outputs back into the original dataset.
+#' Attempts to re-run `gpt_column()` on rows that previously failed validation,
+#' updating the original dataset with any successful retries.
 #'
-#' The function is useful for recovering from transient parsing or model errors,
-#' especially when using local LLMs or fragile prompts.
+#' This is intended for use when `gpt_column()` returns a tibble with an
+#' `"invalid_rows"` attribute indicating which rows failed. The function will
+#' loop through those rows, retrying each one up to `max_attempts` times, and
+#' patch the original data frame in-place for any rows that succeed.
 #'
-#' @param data A tibble returned by `gpt_column()`, with the `"invalid_rows"` attribute.
-#' @param prompt The same prompt or prompt function used in the original `gpt_column()` call.
-#' @param col Unquoted name of the column containing free-text input sent to the model.
-#' @param id_col Unquoted name of a column uniquely identifying rows (e.g., `PATID`). Used to patch results.
-#' @param keys (Optional) Named list of expected output keys and their types (e.g., `list(foo = "integer")`).
-#' @param max_attempts Not currently used in this version. Included for future compatibility.
-#' @param auto_correct_keys Logical. Whether to allow fuzzy correction of unexpected keys. Default: `TRUE`.
-#' @param relaxed Logical. If `TRUE`, tolerate missing or extra keys (relaxed JSON validation). Default: `TRUE`.
-#' @param parallel Logical. If `TRUE`, uses parallel evaluation via `furrr::future_map_dfr()`. Default: `FALSE`.
-#' @param print_retry Logical. If `TRUE`, prints the result of retried rows. Useful for debugging. Default: `FALSE`.
+#' @param data A data frame that was processed by `gpt_column()` and has an
+#'   `"invalid_rows"` attribute (integer vector of row indices that failed).
+#' @param prompt Character scalar. The prompt string to pass back into
+#'   `gpt_column()`.
+#' @param col Column in `data` containing the text to be processed by
+#'   `gpt_column()`. Use tidy-eval notation (unquoted column name).
+#' @param id_col Column in `data` that uniquely identifies each row. Used to
+#'   join retry results back into the main dataset. Must have unique values.
+#' @param keys Optional named list of expected output keys and their R types,
+#'   passed to `gpt_column()`.
+#' @param max_attempts Integer. Maximum number of attempts per row before
+#'   giving up. Default is 3.
+#' @param auto_correct_keys Logical. Whether to enable key name autocorrection
+#'   in `gpt_column()`. Default is `TRUE`.
+#' @param relaxed Logical. Whether to run in relaxed mode in `gpt_column()`.
+#'   Default is `TRUE`.
+#' @param print_retry Logical. If `TRUE` (default), prints the combined retry
+#'   results for inspection (truncated after 50 rows).
 #' @param ... Additional arguments passed to `gpt_column()`.
 #'
-#' @return A tibble of the same structure as the input `data`, with successful retries patched in.
-#'         The `"invalid_rows"` attribute is updated to reflect remaining failures.
+#' @return A data frame with successful retries merged back in, and an updated
+#'   `"invalid_rows"` attribute containing the indices of any rows that still
+#'   failed after all attempts.
 #'
 #' @details
-#' - Only rows marked as invalid are retried.
-#' - Progress is tracked via `{progressr}`.
-#' - Parallelization is controlled by `{furrr}` and requires an active `future::plan()`.
-#' - Each row is retried independently; failed retries are left unchanged.
+#' The function:
+#' 1. Checks the `"invalid_rows"` attribute of `data`.
+#' 2. Loops through only those rows that failed.
+#' 3. Calls `gpt_column()` on each row individually, catching errors.
+#' 4. Immediately updates the original data for any rows that pass validation.
+#' 5. Retries remaining failures until `max_attempts` is reached or all pass.
+#'
+#' This sequential version does **not** support parallel retries. It is safer
+#' for debugging and avoids concurrency issues.
 #'
 #' @examples
 #' \dontrun{
-#' result <- gpt_column(data = df, col = note, prompt = prompt, keys = keys)
+#' # Suppose 'df' was processed by gpt_column() and has invalid rows
+#' attr(df, "invalid_rows")
 #'
-#' # Retry failed rows by patient ID:
-#' result <- patch_failed_rows(
-#'   data = result,
-#'   prompt = prompt,
-#'   col = note,
-#'   id_col = PATID,
-#'   keys = keys
+#' # Retry failed rows up to 2 times
+#' df <- patch_failed_rows(
+#'   data = df,
+#'   prompt = "Extract key medical variables.",
+#'   col = note_text,
+#'   id_col = patient_id,
+#'   keys = list(age = "integer", diagnosis = "character"),
+#'   max_attempts = 2
 #' )
 #'
-#' # Check which rows still failed:
-#' attr(result, "invalid_rows")
+#' # Inspect which rows still failed
+#' attr(df, "invalid_rows")
 #' }
+#'
+#' @seealso
+#' [gpt_column()] for the main extraction function.
 #'
 #' @export
 
-patch_failed_rows <- function(data,
-                              prompt,
-                              col,
-                              id_col,
-                              keys = NULL,
-                              max_attempts = 3,
-                              auto_correct_keys = TRUE,
-                              relaxed = TRUE,
-                              parallel = FALSE,
-                              print_retry = TRUE,...) {
-    require(dplyr)
-    require(purrr)
-    require(progressr)
-    require(rlang)
 
-    id_col_quo <- enquo(id_col)
-    col_name <- as_name(enquo(col))
-    id_col_name <- as_name(id_col_quo)
+patch_failed_rows <- function(
+        data,
+        prompt,
+        col,
+        id_col,
+        keys = NULL,
+        max_attempts = 3,
+        auto_correct_keys = TRUE,
+        relaxed = TRUE,
+        print_retry = TRUE,
+        ...
+) {
+    # --- deps ---
+    for (pkg in c("dplyr", "purrr", "progressr", "rlang")) {
+        if (!requireNamespace(pkg, quietly = TRUE)) stop("Missing package: ", pkg, call. = FALSE)
+    }
 
+    # --- quosures & names ---
+    col_quo     <- rlang::enquo(col)
+    id_col_quo  <- rlang::enquo(id_col)
+    col_name    <- rlang::as_name(col_quo)
+    id_col_name <- rlang::as_name(id_col_quo)
+
+    # --- fetch rows to retry ---
     invalid_rows <- attr(data, "invalid_rows")
     if (is.null(invalid_rows) || length(invalid_rows) == 0) {
         message("No failed rows to retry.")
         return(data)
     }
 
-    rows_to_retry <- data[invalid_rows, c(id_col_name, col_name)]
+    # Ensure key uniqueness (rows_update requires unique key)
+    if (anyDuplicated(dplyr::pull(data, !!id_col_quo))) {
+        stop("`", id_col_name, "` contains duplicates. `rows_update()` requires unique keys.", call. = FALSE)
+    }
 
-    progressr::handlers("progress")
-    retry_results <- progressr::with_progress({
-        p <- progressr::progressor(steps = nrow(rows_to_retry))
-        map_dfr(
-            1:nrow(rows_to_retry),
-            function(i) {
-                row <- rows_to_retry[i, , drop = FALSE]
-                result <- gpt_column(
-                    data = row,
-                    col = !!col_quo,
-                    prompt = prompt,
-                    keys = keys,
-                    auto_correct_keys = auto_correct_keys,
-                    relaxed = relaxed,
-                    parallel = parallel,
-                    return_debug = TRUE,
-                    ...
-                )
-                p(sprintf("Row %d/%d", i, nrow(rows_to_retry)))
-                result
+    rows_to_retry <- data[invalid_rows, c(id_col_name, col_name), drop = FALSE]
+
+    # --- runner (one row) ---
+    run_one <- function(row_df) {
+        out <- tryCatch(
+            gpt_column(
+                data             = row_df,
+                col              = !!col_quo,
+                prompt           = prompt,
+                keys             = keys,
+                auto_correct_keys= auto_correct_keys,
+                relaxed          = relaxed,
+                return_debug     = TRUE,
+                ...
+            ),
+            error = function(e) {
+                tibble::as_tibble(row_df) |>
+                    dplyr::mutate(.error = conditionMessage(e), .invalid_rows = 1L)
             }
         )
+        # Ensure id column is present for rows_update join
+        if (!id_col_name %in% names(out)) {
+            out[[id_col_name]] <- row_df[[id_col_name]]
+        }
+        out
+    }
+
+    # --- progress + retries ---
+    n <- nrow(rows_to_retry)
+    all_results <- list()
+    remaining   <- rows_to_retry
+
+    progressr::handlers("progress")
+    progressr::with_progress({
+        p <- progressr::progressor(steps = n * max_attempts)
+
+        for (attempt in seq_len(max_attempts)) {
+            if (nrow(remaining) == 0) break
+
+            batch <- purrr::map(seq_len(nrow(remaining)), function(i) {
+                p(sprintf("Attempt %d | row %d/%d", attempt, i, nrow(remaining)))
+                run_one(remaining[i, , drop = FALSE])
+            })
+
+            batch_df <- dplyr::bind_rows(batch)
+            all_results[[attempt]] <- batch_df
+
+            # identify successes (expect .invalid_rows == 0)
+            successes <- dplyr::filter(batch_df, .invalid_rows == 0L || .invalid_rows == FALSE)
+            if (nrow(successes) > 0) {
+                # Apply successful patches immediately
+                data <- dplyr::rows_update(data, successes, by = id_col_name)
+            }
+
+            # compute who is still failing
+            failed_ids <- dplyr::anti_join(
+                remaining[, id_col_name, drop = FALSE],
+                successes[, id_col_name, drop = FALSE],
+                by = id_col_name
+            )[[id_col_name]]
+
+            remaining <- if (length(failed_ids)) {
+                dplyr::semi_join(rows_to_retry, tibble::tibble(!!id_col_name := failed_ids), by = id_col_name)
+            } else {
+                remaining[0, , drop = FALSE]
+            }
+        }
     })
 
-    if (print_retry) print(retry_results)
-    retry_success <- retry_results %>% filter(.invalid_rows == 0)
+    retry_results <- dplyr::bind_rows(all_results)
+    if (isTRUE(print_retry)) {
+        print(retry_results, n = min(nrow(retry_results), 50))
+        if (nrow(retry_results) > 50) message("… output truncated.")
+    }
 
-    resultat <- dplyr::rows_update(data, retry_success, by = id_col_name)
-    return(resultat)
+    # --- update invalid_rows attribute on the returned data ---
+    if (nrow(remaining) > 0) {
+        idx_still_invalid <- which(dplyr::pull(data, !!id_col_quo) %in% remaining[[id_col_name]])
+    } else {
+        idx_still_invalid <- integer(0)
+    }
+    attr(data, "invalid_rows") <- idx_still_invalid
+
+    data
 }

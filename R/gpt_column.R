@@ -2,7 +2,7 @@
 #'
 #' `gpt_column()` sends each row of a text column to a language model (local or OpenAI),
 #' using a prompt template or a prompt function, and parses the model's output into
-#' typed columns. It supports schema‑based validation (`keys`), fuzzy key correction,
+#' typed columns. It supports schema-based validation (`keys`), fuzzy key correction,
 #' NA normalization, progress/ETA, optional parallelization, and debug capture of raw outputs.
 #'
 #' @section Schema (`keys`):
@@ -11,7 +11,7 @@
 #' - a **vector of allowed values** (e.g., `c("oui","non","NA")`, `c(0,1)`, `c(TRUE,FALSE)`).
 #'   If present, outputs not in the allowed set are set to `NA`.
 #'
-#' The same `keys` are typically passed to your prompt builder (e.g. via `build_prompt()`)
+#' The same `keys` are typically passed to your prompt builder (e.g., via `build_prompt()`)
 #' so the JSON skeleton shown to the model matches what the parser expects.
 #'
 #' @section Prompting:
@@ -25,10 +25,10 @@
 #' @param keys `NULL` (relaxed mode) or a **named list** defining the schema.
 #'   Each name is an expected output key. Each value is either a type string
 #'   (`"integer"`, `"numeric"`, `"character"`, `"logical"`) or a vector of allowed values.
-#' @param auto_correct_keys Logical. If `TRUE`, attempt fuzzy correction of near‑miss key names to the expected names.
+#' @param auto_correct_keys Logical. If `TRUE`, attempt fuzzy correction of near-miss key names to the expected names.
 #' @param max.distance Numeric in \[0,1]. Maximum distance for fuzzy key matching (passed to `match_arg_tol()`).
 #' @param keep_unexpected_keys Logical. If `FALSE` (default), unexpected keys are dropped after autocorrection; if `TRUE`, they are kept.
-#' @param na_values Character vector of NA‑like tokens to normalize (case‑insensitive), e.g. `"NA"`, `"null"`, `""`, `"[]"`, `"{}"`, `"None"`.
+#' @param na_values Character vector of NA-like tokens to normalize (case-insensitive), e.g. `"NA"`, `"null"`, `""`, `"[]"`, `"{}"`, `"None"`.
 #' @param file_path Optional path to a file whose textual contents should be appended to the prompt (handled inside `gpt()`).
 #' @param image_path Optional path to an image to include in the prompt (handled inside `gpt()`).
 #' @param temperature Sampling temperature passed to `gpt()`.
@@ -38,35 +38,44 @@
 #' @param show_invalid_rows Logical. If `TRUE`, prints the subset of `data` rows that failed completely after parsing.
 #' @param return_debug Logical. If `TRUE`, appends two debug columns: `.raw_output` (model output) and `.invalid_rows` (0/1 flag).
 #' @param parallel Logical. If `TRUE`, uses `furrr::future_map2_chr()`; configure workers via `future::plan()`.
-#' @param ... Additional arguments forwarded to `gpt()` (e.g., `provider`, `model`, `base_url`, `system`, `seed`, `response_format`, etc.).
+#' @param ... Additional arguments forwarded to `gpt()` (e.g., `provider`, `model`, `base_url`, `system`, `seed`,
+#'   `response_format`, timeouts, etc.).
 #'
-#' @return A tibble: original `data` **plus** one column per expected key (in the order of `names(keys)`).
-#' If `return_debug = TRUE`, also includes `.raw_output` and `.invalid_rows`. The integer vector of invalid row indices
-#' is also attached as an attribute `attr(result, "invalid_rows")`.
+#' @return
+#' A tibble: the original `data` **plus** one column per expected key (in the order of `names(keys)`).
+#' If `return_debug = TRUE`, also includes `.raw_output` and `.invalid_rows`.
+#' An integer vector of invalid row indices is attached as an attribute:
+#' `attr(result, "invalid_rows")`.
 #'
 #' @details
-#' **Flow per row**
+#' **Per-row flow**
 #' 1. Build prompt (template or function).
 #' 2. Call `gpt()` (local or OpenAI backend).
 #' 3. Clean/repair JSON via `tidy_json()` (strips fences, extracts the JSON blob, fixes common issues conservatively).
 #' 4. Parse with `jsonlite::fromJSON()`.
-#' 5. Normalize NA‑likes, coerce to declared types, and validate against allowed sets.
+#' 5. Normalize NA-likes, coerce to declared types, and validate against allowed sets.
 #' 6. Autocorrect key names (if enabled) and map to the schema order; drop extras unless `keep_unexpected_keys = TRUE`.
 #'
-#' **Parallel & Progress**
+#' **Progress & parallel**
 #' - Progress/ETA shown via `progressr`. When `parallel = TRUE`, work is split via `furrr` (respect your `future::plan()`).
 #'
 #' **Error handling**
-#' - Rows that cannot be parsed into valid JSON (and `relaxed = FALSE` with a schema) return all‑`NA` for expected keys.
-#' - Repair actions taken by `tidy_json()` are logged row‑by‑row when `verbose = TRUE`.
+#' - Rows that cannot be parsed into valid JSON (and `relaxed = FALSE` with a schema) return all-`NA` for expected keys.
+#' - Repair actions taken by `tidy_json()` are logged row-by-row when `verbose = TRUE`.
 #'
-#' @section Requirements:
-#' Uses functions from: **dplyr**, **purrr**, **tibble**, **jsonlite**, **stringr**, **rlang**, **vctrs**, **progressr**,
-#' and **furrr** (only if `parallel = TRUE`). Ensure `gpt()` is configured for your provider/model.
+#' **Interoperability**
+#' - Works with local OpenAI-compatible servers (e.g., LM Studio) or hosted providers (set `provider`, `base_url`, `model`, `api_key` inside `gpt()`).
+#'
+#' @section Troubleshooting:
+#' - **All `NA` columns**: the model likely returned non-JSON or keys didn’t match. Inspect `.raw_output` (set `return_debug = TRUE`)
+#'   and consider `auto_correct_keys = TRUE`, adjusting `max.distance`, or loosening `na_values`.
+#' - **Dropped rows warning**: your prompt may return arrays or multiple objects; ensure the model returns **exactly one** JSON object per row.
+#' - **Unexpected keys**: set `keep_unexpected_keys = TRUE` to keep them for inspection, or expand your `keys` schema.
+#' - **Timeouts/Rate limits**: pass timeouts or small delays via `...` to `gpt()`; for rate-limited providers, consider batching or `parallel = FALSE`.
 #'
 #' @examples
 #' \dontrun{
-#' # --- 1) Using a template and build_prompt() ---------------------------
+#' # 1) Using a template and build_prompt()
 #' template <- paste0(
 #'   "Tu es un assistant spécialisé.\n\n",
 #'   "Texte :\n\"{text}\"\n\n",
@@ -83,32 +92,38 @@
 #'   col    = note_medicale,
 #'   prompt = prompt_fun,
 #'   keys   = list(
-#'     isolement_bin     = "integer",
-#'     tendance_isolement= c("oui","non","NA")
+#'     isolement_bin      = "integer",
+#'     tendance_isolement = c("oui","non","NA")
 #'   ),
 #'   provider = "openai",
 #'   model    = "gpt-4o-mini",
 #'   temperature = 0.2,
-#'   verbose  = TRUE
+#'   verbose  = TRUE,
+#'   return_debug = TRUE
 #' )
 #'
-#' # --- 2) Prompt as a function (no template) ----------------------------
-#' pf <- function(text, keys) {
-#'   paste0(
-#'     "Texte:\n", text, "\n\n",
-#'     "Réponds avec un JSON une seule ligne:\n",
-#'     jsonlite::toJSON(setNames(as.list(rep("NA", length(keys))), names(keys)), auto_unbox = TRUE)
-#'   )
-#' }
-#' res2 <- gpt_column(df, note_medicale, pf,
-#'   keys = list(a = "integer", b = c("x","y","NA")),
-#'   provider = "local"
+#' # Rows that failed:
+#' attr(res, "invalid_rows")
+#'
+#' # 2) Retry failed rows (with audit trail)
+#' res2 <- patch_failed_rows(
+#'   data   = res,
+#'   prompt = prompt_fun,
+#'   col    = note_medicale,
+#'   id_col = patient_id,
+#'   keys   = list(isolement_bin = "integer", tendance_isolement = c("oui","non","NA")),
+#'   max_attempts = 2
 #' )
+#' attr(res2, "invalid_rows")
 #' }
 #'
-#' @seealso [build_prompt()] for creating `{json_format}` blocks from `keys`,
-#'   [tidy_json()] for robust JSON cleanup, and [gpt()] for low-level model calls.
+#' @seealso
+#' [build_prompt()] for creating `{json_format}` blocks from `keys`,
+#' [tidy_json()] for robust JSON cleanup,
+#' [gpt()] for low-level model calls,
+#' and [patch_failed_rows()] to automatically repair failed rows.
 #' @export
+
 
 
 gpt_column = function(data,
