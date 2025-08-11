@@ -168,7 +168,7 @@ gpt_column = function(data,
     preprocess_text <- function(x) {
         trim_text(
             x,
-            max_tokens = max_tokens_input,
+            max_tokens = max_tokens,
             token_mode = token_mode,
             custom_tokenizer = custom_tokenizer
         )
