@@ -195,6 +195,16 @@ gpt_column = function(data,
         } else {
             map2_chr(texts, seq_along(texts), gpt_safe)
         }
+
+        if (all(is.na(raw_outputs))) {
+            warning("All model calls returned NA — likely due to API limits, missing API key, or connection issues.")
+            # Optional: show first recorded warning from gpt() if available
+            last_warn <- last_warning()
+            if (!is.null(last_warn)) {
+                message("First warning from gpt(): ", conditionMessage(last_warn))
+            }
+        }
+
     })
 
     parsed_results <- purrr::imap(raw_outputs, function(out, i) {
