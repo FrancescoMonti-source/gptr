@@ -44,9 +44,14 @@
 #' @param ... Additional arguments forwarded to `gpt()` (e.g., `provider`, `model`, `base_url`, `system`, `seed`,
 #'   `response_format`, timeouts, etc.).
 #'
+#' @param max_tokens integer max boundary, passed to trim_text()
+#' @param token_mode "words" (default), "chars", or "custom" : allow the user to define what the parameter 'max_tokens' refers to. By default, leaving some margin, word counting could be a sufficient approximation for most users. If that's not the case, set the parameter to "custom" and provide a custom function via 'custom_tokenizer' parameter.
+#' @param custom_tokenizer optional function(text, max_tokens) -> trimmed_text
+#'
+#'
 #' @return
-#' A tibble: the original `data` **plus** one column per expected key (in the order of `names(keys)`).
-#' If `return_debug = TRUE`, also includes `.raw_output` and `.invalid_rows`.
+#' The function returns a tibble: the original `data` **plus** one column per expected key (in the order of `names(keys)`).
+#' If `return_debug = TRUE`, also includes `.raw_output` (the json string) and `.invalid_rows` (a binary column useful to check and/or eventually rerun only failed rows via patch_failed_rows()).
 #' An integer vector of invalid row indices is attached as an attribute:
 #' `attr(result, "invalid_rows")`.
 #'
@@ -124,7 +129,7 @@
 #' [build_prompt()] for creating `{json_format}` blocks from `keys`,
 #' [tidy_json()] for robust JSON cleanup,
 #' [gpt()] for low-level model calls,
-#' and [patch_failed_rows()] to automatically repair failed rows.
+#' and [patch_failed_rows()] to repair failed rows.
 #' @export
 
 gpt_column = function(data,
@@ -144,6 +149,9 @@ gpt_column = function(data,
                       return_debug = TRUE,
                       parallel = FALSE,
                       always_character = TRUE,   # <--- NEW PARAM (default TRUE)
+                      max_tokens = Inf,
+                      token_mode = c("words", "chars", "custom"),
+                      custom_tokenizer = NULL,
                       ...) {
 
     require(dplyr); require(purrr); require(tibble);  require(jsonlite)
@@ -157,11 +165,21 @@ gpt_column = function(data,
         purrr::map(keys, parse_key_spec)
     } else NULL
 
+    preprocess_text <- function(x) {
+        trim_text(
+            x,
+            max_tokens = max_tokens_input,
+            token_mode = token_mode,
+            custom_tokenizer = custom_tokenizer
+        )
+    }
+
     call_gpt <- function(.x) {
+        .x_trim <- preprocess_text(.x)
         input_prompt <- if (is.function(prompt)) {
-            prompt(.x, keys)
+            prompt(.x_trim, keys)
         } else {
-            build_prompt(prompt, text = .x, keys = keys)
+            build_prompt(prompt, text = .x_trim, keys = keys)
         }
         gpt(prompt      = input_prompt,
             temperature = temperature,

@@ -22,6 +22,9 @@ gpt_column(
   return_debug = TRUE,
   parallel = FALSE,
   always_character = TRUE,
+  max_tokens = Inf,
+  token_mode = c("words", "chars", "custom"),
+  custom_tokenizer = NULL,
   ...
 )
 }
@@ -65,12 +68,18 @@ If \code{FALSE} and \code{keys} are provided, rows with invalid/unsuitable JSON 
 character before returning. Prevents type mismatch errors in \code{bind_rows()}.
 You can later convert columns back to desired types manually.}
 
+\item{max_tokens}{integer max boundary, passed to trim_text()}
+
+\item{token_mode}{"words" (default), "chars", or "custom" : allow the user to define what the parameter 'max_tokens' refers to. By default, leaving some margin, word counting could be a sufficient approximation for most users. If that's not the case, set the parameter to "custom" and provide a custom function via 'custom_tokenizer' parameter.}
+
+\item{custom_tokenizer}{optional function(text, max_tokens) -> trimmed_text}
+
 \item{...}{Additional arguments forwarded to \code{gpt()} (e.g., \code{provider}, \code{model}, \code{base_url}, \code{system}, \code{seed},
 \code{response_format}, timeouts, etc.).}
 }
 \value{
-A tibble: the original \code{data} \strong{plus} one column per expected key (in the order of \code{names(keys)}).
-If \code{return_debug = TRUE}, also includes \code{.raw_output} and \code{.invalid_rows}.
+The function returns a tibble: the original \code{data} \strong{plus} one column per expected key (in the order of \code{names(keys)}).
+If \code{return_debug = TRUE}, also includes \code{.raw_output} (the json string) and \code{.invalid_rows} (a binary column useful to check and/or eventually rerun only failed rows via patch_failed_rows()).
 An integer vector of invalid row indices is attached as an attribute:
 \code{attr(result, "invalid_rows")}.
 }
@@ -189,5 +198,5 @@ attr(res2, "invalid_rows")
 \code{\link[=build_prompt]{build_prompt()}} for creating \code{{json_format}} blocks from \code{keys},
 \code{\link[=tidy_json]{tidy_json()}} for robust JSON cleanup,
 \code{\link[=gpt]{gpt()}} for low-level model calls,
-and \code{\link[=patch_failed_rows]{patch_failed_rows()}} to automatically repair failed rows.
+and \code{\link[=patch_failed_rows]{patch_failed_rows()}} to repair failed rows.
 }
