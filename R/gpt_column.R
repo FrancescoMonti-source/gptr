@@ -38,6 +38,9 @@
 #' @param show_invalid_rows Logical. If `TRUE`, prints the subset of `data` rows that failed completely after parsing.
 #' @param return_debug Logical. If `TRUE`, appends two debug columns: `.raw_output` (model output) and `.invalid_rows` (0/1 flag).
 #' @param parallel Logical. If `TRUE`, uses `furrr::future_map2_chr()`; configure workers via `future::plan()`.
+#' @param always_character If TRUE (default), coerces all extracted fields to
+#'   character before returning. Prevents type mismatch errors in `bind_rows()`.
+#'   You can later convert columns back to desired types manually.
 #' @param ... Additional arguments forwarded to `gpt()` (e.g., `provider`, `model`, `base_url`, `system`, `seed`,
 #'   `response_format`, timeouts, etc.).
 #'
@@ -124,31 +127,28 @@
 #' and [patch_failed_rows()] to automatically repair failed rows.
 #' @export
 
-
-
 gpt_column = function(data,
-         col,
-         prompt,
-         keys = NULL,
-         auto_correct_keys = TRUE,
-         max.distance = .2,
-         keep_unexpected_keys = FALSE,
-         na_values = c("NA", "null", "", "[]", "{}", "None"),
-         file_path = NULL,
-         image_path = NULL,
-         temperature = .2,
-         relaxed = FALSE,
-         verbose = TRUE,
-         show_invalid_rows = FALSE,
-         return_debug = TRUE,
-         parallel = FALSE,
-         ...) {
-    # ---- pkgs ------------------------------------------------------------
+                      col,
+                      prompt,
+                      keys = NULL,
+                      auto_correct_keys = TRUE,
+                      max.distance = .2,
+                      keep_unexpected_keys = FALSE,
+                      na_values = c("NA", "null", "", "[]", "{}", "None"),
+                      file_path = NULL,
+                      image_path = NULL,
+                      temperature = .2,
+                      relaxed = FALSE,
+                      verbose = TRUE,
+                      show_invalid_rows = FALSE,
+                      return_debug = TRUE,
+                      parallel = FALSE,
+                      always_character = TRUE,   # <--- NEW PARAM (default TRUE)
+                      ...) {
+
     require(dplyr); require(purrr); require(tibble);  require(jsonlite)
     require(stringr); require(rlang);  require(vctrs); require(progressr)
     if (parallel) require(furrr)
-
-    # ---------------------------------------------------------------------
 
     col_name <- rlang::as_string(rlang::ensym(col))
     texts    <- data[[col_name]]
@@ -156,7 +156,6 @@ gpt_column = function(data,
     key_specs <- if (!is.null(keys)) {
         purrr::map(keys, parse_key_spec)
     } else NULL
-
 
     call_gpt <- function(.x) {
         input_prompt <- if (is.function(prompt)) {
@@ -171,7 +170,6 @@ gpt_column = function(data,
             ...)
     }
 
-    # progress (parallel-safe) --------------------------------------------
     if (parallel) {
         n_workers <- future::nbrOfWorkers()
         message(glue::glue(
@@ -199,7 +197,6 @@ gpt_column = function(data,
         }
     })
 
-    # -----------------------  parsing  ------------------------------------
     parsed_results <- purrr::imap(raw_outputs, function(out, i) {
         tryCatch({
             if (any(trimws(tolower(out)) %in% trimws(tolower(na_values))))
@@ -220,21 +217,15 @@ gpt_column = function(data,
                 } else return(out)
             }
 
-            # field-level NA handling + type/allowed-set validation
             parsed <- purrr::imap(parsed, function(value, key) {
                 if (is_na_like(value, na_values)) return(NA)
 
                 if (!is.null(key_specs) && key %in% names(key_specs)) {
                     spec <- key_specs[[key]]
-
-                    # 1) type-first coercion (if a type was declared)
                     if (!is.null(spec$type)) {
                         value <- coerce_type(value, spec$type)
                     }
-
-                    # 2) allowed-set validation (if a set was declared)
                     if (!is.null(spec$allowed)) {
-                        # keep as scalar; if model returned vector/array, take first
                         if (length(value) > 1L) value <- value[[1L]]
                         if (!in_allowed(value, spec$allowed)) {
                             if (verbose) message(glue::glue(
@@ -244,13 +235,9 @@ gpt_column = function(data,
                     }
                     return(value)
                 }
-
-                # key not in schema
                 value
             })
 
-
-            # unexpected keys
             if (!is.null(expected_keys)) {
                 unexpected <- setdiff(names(parsed), expected_keys)
                 if (length(unexpected) > 0 && verbose)
@@ -258,7 +245,6 @@ gpt_column = function(data,
                                        paste(unexpected, collapse = ", ")))
             }
 
-            # auto-correct near-miss keys
             if (auto_correct_keys && !is.null(expected_keys) &&
                 !setequal(names(parsed), expected_keys)) {
                 corrected <- match_arg_tol(names(parsed), expected_keys,
@@ -281,15 +267,35 @@ gpt_column = function(data,
         })
     })
 
-    # bind results
-    parsed_df <- map_dfr(parsed_results, function(x) {
-        if (is.null(names(x)) || any(names(x) == ""))
-            x <- setNames(rep(NA, length(expected_keys)), expected_keys)
-        tibble::as_tibble_row(x)
-    })
-    result <- bind_cols(data, parsed_df)
+    if (isTRUE(always_character)) {
+        parsed_df <- purrr::map_dfr(parsed_results, function(x) {
+            if (is.null(names(x)) || any(names(x) == "")) {
+                x <- setNames(rep(NA, length(expected_keys)), expected_keys)
+            }
+            x_chr <- lapply(x, function(v) {
+                if (is.null(v) || length(v) == 0) return(NA_character_)
+                if (length(v) > 1L) v <- v[[1L]]
+                if (is_na_like(v, na_values)) return(NA_character_)
+                if (is.list(v)) return(jsonlite::toJSON(v, auto_unbox = TRUE, null = "null"))
+                if (is.atomic(v)) {
+                    if (length(v) == 1L && is.na(v)) return(NA_character_)
+                    return(as.character(v))
+                }
+                as.character(v)
+            })
+            tibble::as_tibble_row(x_chr)
+        })
+    } else {
+        parsed_df <- purrr::map_dfr(parsed_results, function(x) {
+            if (is.null(names(x)) || any(names(x) == ""))
+                x <- setNames(rep(NA, length(expected_keys)), expected_keys)
+            tibble::as_tibble_row(x)
+        })
+    }
 
-    invalid_rows <- which(map_lgl(parsed_results, ~ all(is.na(.x))))
+    result <- dplyr::bind_cols(data, parsed_df)
+
+    invalid_rows <- which(purrr::map_lgl(parsed_results, ~ all(is.na(.x))))
     if (return_debug) {
         result <- tibble::add_column(result, .raw_output = raw_outputs,
                                      .after = col_name)

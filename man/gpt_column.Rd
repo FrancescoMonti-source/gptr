@@ -21,6 +21,7 @@ gpt_column(
   show_invalid_rows = FALSE,
   return_debug = TRUE,
   parallel = FALSE,
+  always_character = TRUE,
   ...
 )
 }
@@ -59,6 +60,10 @@ If \code{FALSE} and \code{keys} are provided, rows with invalid/unsuitable JSON 
 \item{return_debug}{Logical. If \code{TRUE}, appends two debug columns: \code{.raw_output} (model output) and \code{.invalid_rows} (0/1 flag).}
 
 \item{parallel}{Logical. If \code{TRUE}, uses \code{furrr::future_map2_chr()}; configure workers via \code{future::plan()}.}
+
+\item{always_character}{If TRUE (default), coerces all extracted fields to
+character before returning. Prevents type mismatch errors in \code{bind_rows()}.
+You can later convert columns back to desired types manually.}
 
 \item{...}{Additional arguments forwarded to \code{gpt()} (e.g., \code{provider}, \code{model}, \code{base_url}, \code{system}, \code{seed},
 \code{response_format}, timeouts, etc.).}
