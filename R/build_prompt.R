@@ -64,10 +64,10 @@ build_prompt <- function(template, text, keys = NULL) {
 
     allowed_values_for_type <- function(type) {
         switch(type,
-               "integer" = "0 ou 1 ou NA",
-               "numeric" = "un nombre (ex: 3.14)",
+               "integer" = "\"0\"|\"1\"|\"NA\"",
+               "numeric" = "a number (ex: 3.14)",
                "character" = "\"valeur1\", \"valeur2\"",
-               "logical" = "true ou false",
+               "logical" = "true|false",
                "unknown"
         )
     }
