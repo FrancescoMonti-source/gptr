@@ -208,11 +208,10 @@ attr(res2, "invalid_rows")
 ## 💬 Multi-turn conversations
 
 ```r
-gpt_chat(reset = TRUE)  # start fresh
-gpt_chat(system = "You are a concise medical data assistant.")
-gpt_chat("Ciao! Facciamo un test?")
-gpt_chat("Ricordati che lavoro in sanità pubblica.")
+gpt_chat("Hi! My name is Bob.")
+gpt_chat("What's my name?")
 gpt_chat(show_history = TRUE)
+gpt_chat(reset = TRUE)  # start fresh
 ```
 
 Multi-turn chat works with all supported providers (see below).
