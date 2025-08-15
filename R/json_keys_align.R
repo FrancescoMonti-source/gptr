@@ -16,7 +16,7 @@ json_keys_align <- function(x,
                             expected_keys,
                             auto_correct = TRUE,
                             fuzzy_model = c("lev_ratio", "lev"),
-                            fuzzy_threshold = 0.3,
+                            fuzzy_threshold = 0.2,
                             keep_unexpected = FALSE) {
   if (is.null(expected_keys)) {
     return(x)
