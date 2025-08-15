@@ -52,28 +52,26 @@ gpt_column <- function(
     provider    <- match.arg(provider)
     final_types <- match.arg(final_types)
 
-    # ---- resolve backend; allows swap-in via options(gptr.gpt_fun = ...)
+    # resolve backend (respects options(gptr.gpt_fun))
     gpt_fun <- .gptr_resolve_backend(provider)
 
-    # ---- capture column and text values
+    # capture column values
     col_quo <- rlang::enquo(col)
-    stopifnot(rlang::quo_is_symbolic(col_quo) || rlang::quo_is_symbol(col_quo))
     texts <- dplyr::pull(data, !!col_quo)
     if (!is.character(texts)) texts <- as.character(texts)
     n <- length(texts)
 
-    # ---- key spec parsing
+    # parse key spec -> expected keys + types
     key_specs <- NULL
     expected_keys <- NULL
     if (!is.null(keys)) {
-        # parse_key_spec() in your package turns list/char specs into a named list with $type, etc.
         key_specs <- parse_key_spec(keys)
         expected_keys <- names(key_specs)
     }
 
-    # ---- helper: prompt per row
+    # build one prompt per row
     make_prompt_for <- function(.x_text) {
-        .x_trim <- preprocess_text(.x_text)
+        .x_trim <- trimws(.x_text)  # no preprocess_text()
         if (is.function(prompt)) {
             prompt(.x_trim, keys)
         } else {
@@ -81,7 +79,7 @@ gpt_column <- function(
         }
     }
 
-    # ---- Step 1: call model once per row
+    # call model row-wise
     raw_outputs <- purrr::map_chr(texts, function(.x) {
         input_prompt <- make_prompt_for(.x)
         gpt_fun(
@@ -93,7 +91,33 @@ gpt_column <- function(
         )
     })
 
-    # ---- Step 2: parse + per-row coercion (json_fix_parse_validate now does row-wise casting)
+    # simple scalar caster for per-key, per-row coercion
+    norm_type <- function(t) {
+        t <- tolower(trimws(as.character(t)))
+        if (t %in% c("integer","int","long","whole")) return("integer")
+        if (t %in% c("numeric","double","float","number","real")) return("numeric")
+        if (t %in% c("logical","bool","boolean")) return("logical")
+        if (t %in% c("character","string","text")) return("character")
+        t
+    }
+    cast_one <- function(val, type) {
+        type <- norm_type(type)
+        if (type == "integer")  return(suppressWarnings(as.integer(val)))
+        if (type == "numeric")  return(suppressWarnings(as.numeric(val)))
+        if (type == "logical") {
+            if (is.logical(val)) return(val)
+            if (is.numeric(val)) return(val != 0)
+            if (is.character(val)) {
+                v <- tolower(trimws(val))
+                return(ifelse(v %in% c("true","t","yes","y"), TRUE,
+                              ifelse(v %in% c("false","f","no","n"), FALSE, NA)))
+            }
+            return(suppressWarnings(as.logical(val)))
+        }
+        as.character(val)
+    }
+
+    # parse + per-row alignment + per-row coercion
     ok_flags <- integer(n)
     parsed_results <- vector("list", n)
 
@@ -106,8 +130,8 @@ gpt_column <- function(
                 na_values    = na_values,
                 verbose      = verbose,
                 i            = i,
-                coerce_types = coerce_types,
-                coerce_when  = coerce_when
+                coerce_types = FALSE,      # IMPORTANT: keep parser’s original behavior intact
+                coerce_when  = NULL
             ),
             error = function(e) {
                 if (verbose) message("Row ", i, ": parse error --> ", conditionMessage(e))
@@ -124,27 +148,42 @@ gpt_column <- function(
             } else {
                 parsed_results[[i]] <- out
             }
-        } else {
-            ok_flags[i] <- 1L
-            x <- rp$value
-
-            # Ensure key alignment again if caller turned off key_specs but passed expected_keys
-            if (!is.null(expected_keys) && !setequal(names(x), expected_keys)) {
-                x <- json_keys_align(
-                    x,
-                    expected_keys   = expected_keys,
-                    auto_correct    = auto_correct_keys,
-                    keep_unexpected = keep_unexpected_keys,
-                    fuzzy_model     = fuzzy_model,
-                    fuzzy_threshold = fuzzy_threshold
-                )
-            }
-
-            parsed_results[[i]] <- x
+            next
         }
+
+        ok_flags[i] <- 1L
+        x <- rp$value
+
+        # ensure alignment if the caller didn’t pass keys (safety)
+        if (!is.null(expected_keys) && !setequal(names(x), expected_keys)) {
+            x <- json_keys_align(
+                x,
+                expected_keys   = expected_keys,
+                auto_correct    = auto_correct_keys,
+                keep_unexpected = keep_unexpected_keys,
+                fuzzy_model     = fuzzy_model,
+                fuzzy_threshold = fuzzy_threshold
+            )
+        }
+
+        # per-key, per-row coercion using schema types (no column upcasting)
+        if (isTRUE(coerce_types) && !is.null(key_specs)) {
+            for (k in intersect(names(x), names(key_specs))) {
+                tt <- key_specs[[k]]$type
+                if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
+            }
+        } else if (!is.null(coerce_when) && isTRUE(coerce_types)) {
+            # optional coerce_when support if caller provided predicates/types
+            for (k in intersect(names(x), names(coerce_when))) {
+                tt <- coerce_when[[k]]
+                if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
+            }
+        }
+
+        parsed_results[[i]] <- x
     }
 
-    # ---- Step 3: bind rows to tibble without upcasting (row_to_tibble handles a single list row)
+    # bind rows to tibble
     parsed_df <- purrr::map_dfr(
         parsed_results,
         row_to_tibble,
@@ -152,7 +191,7 @@ gpt_column <- function(
         raw_col_name  = ".parsed"
     )
 
-    # ---- Step 4: final column typing (usually a no-op now; keep for safety)
+    # light finalization (kept for enums/”as_is”); types already coerced row-wise
     parsed_df <- finalize_columns(
         parsed_df,
         expected_keys = expected_keys,
@@ -160,10 +199,9 @@ gpt_column <- function(
         mode          = final_types
     )
 
-    # ---- Assemble result
     result <- dplyr::bind_cols(data, parsed_df)
 
-    # invalid rows = those whose parse/repair failed (not "all NA")
+    # invalid rows = parse/repair failures
     invalid_rows <- if (!is.null(expected_keys)) which(ok_flags == 0L) else integer(0)
 
     if (isTRUE(return_debug)) {
@@ -174,3 +212,4 @@ gpt_column <- function(
     attr(result, "invalid_rows") <- invalid_rows
     result
 }
+
