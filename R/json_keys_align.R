@@ -77,15 +77,18 @@ json_keys_align <- function(x,
   }
 
   if (!isTRUE(keep_unexpected)) {
-    x <- x[intersect(expected_keys, names(x))]
+      # drop anything not in the schema, but keep order of expected keys
+      x <- x[intersect(expected_keys, names(x))]
   }
 
   out <- setNames(vector("list", length(expected_keys)), expected_keys)
   for (k in expected_keys) out[[k]] <- if (k %in% names(x)) x[[k]] else NA
 
   if (isTRUE(keep_unexpected)) {
-    extra <- setdiff(names(x), expected_keys)
-    for (e in extra) out[[e]] <- x[[e]]
+      extra <- setdiff(names(x), expected_keys)
+      if (length(extra)) {
+          for (e in extra) out[[e]] <- x[[e]]
+      }
   }
   out
 }

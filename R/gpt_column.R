@@ -115,6 +115,7 @@ gpt_column <- function(data,
             purrr::map2_chr(texts, seq_along(texts), gpt_safe)
         }
 
+        ok_flags <- integer(n)  # 0/1 per row, filled below
         parsed_results <- purrr::imap(raw_outputs, function(out, i) {
             tryCatch({
                 rp <- json_fix_parse_validate(
@@ -128,11 +129,13 @@ gpt_column <- function(data,
                 )
 
                 if (!rp$ok) {
+                    ok_flags[i] <- 0L
                     if (relaxed && is.null(expected_keys)) return(out)
                     if (!is.null(expected_keys)) return(setNames(rep(NA, length(expected_keys)), expected_keys))
                     return(out)
                 }
 
+                ok_flags[i] <- 1L
                 x <- rp$value
                 if (!is.null(expected_keys)) {
                     x <- do.call(
@@ -147,6 +150,7 @@ gpt_column <- function(data,
                 x
             }, error = function(e) {
                 if (verbose) message("Row ", i, ": post-processing error --> ", conditionMessage(e))
+                ok_flags[i] <- 0L
                 setNames(rep(NA, length(expected_keys %||% 0)), expected_keys)
             })
         })
@@ -164,13 +168,13 @@ gpt_column <- function(data,
 
         result <- dplyr::bind_cols(data, parsed_df)
 
-        # FINAL invalid rows (all expected cols NA)
+        # FINAL invalid rows = rows that failed parse/repair/validation
+        # (tracked during json_fix_parse_validate + post-processing)
         if (!is.null(expected_keys)) {
-            present <- intersect(expected_keys, names(result))
-            if (length(present)) {
-                invalid_rows <- which(rowSums(is.na(result[, present, drop = FALSE])) == length(present))
-            } else invalid_rows <- integer(0)
-        } else invalid_rows <- integer(0)
+            invalid_rows <- which(ok_flags == 0L)
+        } else {
+            invalid_rows <- integer(0)
+        }
 
         if (return_debug) {
             result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
