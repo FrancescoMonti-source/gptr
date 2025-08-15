@@ -2,19 +2,21 @@
 % Please edit documentation in R/row_to_tibble.R
 \name{row_to_tibble}
 \alias{row_to_tibble}
-\title{Convert a named list to a one-row tibble (no forced character)}
+\title{Convert a named list (or scalar) to a one-row tibble (no forced character)}
 \usage{
-row_to_tibble(x, expected_keys)
+row_to_tibble(x, expected_keys, raw_col_name = ".parsed")
 }
 \arguments{
-\item{x}{Named list ready to become a row.}
+\item{x}{Named list ready to become a row; or a scalar (relaxed mode).}
 
 \item{expected_keys}{Character vector of expected keys (can be NULL).}
+
+\item{raw_col_name}{Name to use when x is an unnamed scalar (default ".parsed").}
 }
 \value{
 A one-row tibble.
 }
 \description{
-Keeps values as-is (picks first element if length > 1), so column typing can
-be done later at the column level by finalize_columns().
+Keeps values as-is (first element if length > 1). If x is an unnamed scalar
+(relaxed mode), it becomes a column named \code{.parsed} by default.
 }

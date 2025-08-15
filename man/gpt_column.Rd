@@ -10,7 +10,6 @@ gpt_column(
   prompt,
   keys = NULL,
   auto_correct_keys = TRUE,
-  max.distance = 0.2,
   keep_unexpected_keys = FALSE,
   na_values = c("NA", "null", "", "[]", "{}", "None"),
   file_path = NULL,
@@ -39,9 +38,7 @@ gpt_column(
 
 \item{keys}{Optional named list defining expected JSON keys and their type or allowed set.}
 
-\item{auto_correct_keys}{Logical; fuzzy-correct unexpected key names (unique match only).}
-
-\item{max.distance}{Max distance for fuzzy key matching (agrep).}
+\item{auto_correct_keys}{Logical; fuzzy-correct unexpected key names (unique match only). Fuzzy key correction is handled by json_keys_align(). You can control it by passing fuzzy_model ("lev_ratio" or "lev") and fuzzy_threshold via .... Defaults: fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3.}
 
 \item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
@@ -74,6 +71,8 @@ gpt_column(
 \item{custom_tokenizer}{Optional custom tokenizer for trim_text().}
 
 \item{...}{Extra args passed to \code{gpt()}.}
+
+\item{max.distance}{Max distance for fuzzy key matching (agrep).}
 }
 \description{
 Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,

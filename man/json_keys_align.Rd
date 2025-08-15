@@ -2,13 +2,14 @@
 % Please edit documentation in R/json_align_keys.R
 \name{json_keys_align}
 \alias{json_keys_align}
-\title{Align parsed JSON keys to the expected schema}
+\title{Align parsed JSON keys to the expected schema (configurable fuzzy match)}
 \usage{
 json_keys_align(
   x,
   expected_keys,
   auto_correct = TRUE,
-  max_distance = 0.2,
+  fuzzy_model = c("lev_ratio", "lev"),
+  fuzzy_threshold = 0.3,
   keep_unexpected = FALSE
 )
 }
@@ -19,14 +20,23 @@ json_keys_align(
 
 \item{auto_correct}{Logical; fuzzy-correct unexpected names (default TRUE).}
 
-\item{max_distance}{Numeric; max distance for agrep() (default 0.2).}
+\item{fuzzy_model}{One of:
+\itemize{
+\item "lev_ratio": compare edit distance as a proportion of target length.
+\item "lev": compare raw edit distance (absolute number of edits).
+}}
 
-\item{keep_unexpected}{Logical; keep keys not in expected_keys.}
+\item{fuzzy_threshold}{Numeric; interpretation depends on \code{fuzzy_model}:
+\itemize{
+\item if "lev_ratio": a proportion in \link{0,1}, e.g. 0.3.
+\item if "lev": an integer number of edits, e.g. 2.
+}}
+
+\item{keep_unexpected}{Logical; keep keys not in \code{expected_keys}.}
 }
 \value{
 Named list over expected_keys (plus extras if kept).
 }
 \description{
-Fuzzy-correct unexpected names (unique match only), optionally drop unexpected keys,
-and fill missing expected keys with NA.
+Align parsed JSON keys to the expected schema (configurable fuzzy match)
 }
