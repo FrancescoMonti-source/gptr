@@ -13,8 +13,8 @@ mock_gpt <- function(prompt, ...) {
 }
 
 # Force the mock for the whole test run (no HTTP)
-options(gptr.gpt_fun = mock_gpt)
-testthat::teardown(options(gptr.gpt_fun = NULL))
+# options(gptr.gpt_fun = mock_gpt)
+# testthat::teardown(options(gptr.gpt_fun = NULL))
 
 mock_prompt <- function(text, keys, tag = "BASIC_JSON") {
     paste0("Text: ", text, "\nMOCK_RET=", tag)

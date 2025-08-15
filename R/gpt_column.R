@@ -37,7 +37,7 @@ gpt_column <- function(data,
                        file_path = NULL,
                        image_path = NULL,
                        temperature = .2,
-                       provider = getOption("gptr.provider", NULL),  # <-- RESTORED
+                       provider = c("local", "openai"),
                        relaxed = FALSE,
                        verbose = TRUE,
                        show_invalid_rows = FALSE,
@@ -69,8 +69,6 @@ gpt_column <- function(data,
     }
 
     # ---- backend: provider-aware, but test-overridable
-    gpt_fun <- .gptr_resolve_backend(provider)
-
     call_model_once <- function(.x) {
         .x_trim <- preprocess_text(.x)
         input_prompt <- if (is.function(prompt)) {
@@ -78,11 +76,12 @@ gpt_column <- function(data,
         } else {
             build_prompt(prompt, text = .x_trim, keys = keys)
         }
-        gpt_fun(prompt = input_prompt,
-                temperature = temperature,
-                file_path   = file_path,
-                image_path  = image_path,
-                ...)
+        gpt(prompt      = input_prompt,
+            provider    = provider,       # <- always pass "local" unless user overrides
+            temperature = temperature,
+            file_path   = file_path,
+            image_path  = image_path,
+            ...)
     }
 
     # --- optional deprecation shim for old arg name

@@ -15,7 +15,7 @@ gpt_column(
   file_path = NULL,
   image_path = NULL,
   temperature = 0.2,
-  provider = getOption("gptr.provider", NULL),
+  provider = c("local", "openai"),
   relaxed = FALSE,
   verbose = TRUE,
   show_invalid_rows = FALSE,

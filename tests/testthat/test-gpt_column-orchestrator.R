@@ -7,6 +7,7 @@ test_that("gpt_column happy path (schema, coerce, schema final types)", {
         col = note,
         prompt = function(text, keys) mock_prompt(text, keys, "BASIC_JSON"),
         keys = keys,
+        provider = "local",
         temperature = 0,
         return_debug = TRUE,
         coerce_types = TRUE,
@@ -29,6 +30,7 @@ test_that("gpt_column handles broken JSON via tidy_json repair", {
         col = note,
         prompt = function(text, keys) mock_prompt(text, keys, "BROKEN_JSON"),
         keys = keys,
+        provider = "local",
         temperature = 0,
         return_debug = TRUE,
         final_types = "schema"
@@ -47,6 +49,7 @@ test_that("gpt_column fuzzy key autocorrect + drop/keep unexpected", {
     # has misspelled key 'smokre' + extra
     res_drop <- gpt_column(
         data = df, col = note, keys = keys,
+        provider = "local",
         prompt = function(text, keys) mock_prompt(text, keys, "EXTRA_KEYS"),
         auto_correct_keys = TRUE, keep_unexpected_keys = FALSE,
         final_types = "schema"
@@ -58,7 +61,8 @@ test_that("gpt_column fuzzy key autocorrect + drop/keep unexpected", {
         prompt = function(text, keys) mock_prompt(text, keys, "EXTRA_KEYS"),
         auto_correct_keys = TRUE, keep_unexpected_keys = TRUE,
         fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3,
-        final_types = "schema"
+        final_types = "schema",
+        provider = "local"
     )
     expect_true(all(c("age","smoker","extra") %in% names(res_keep)))
 })
@@ -70,6 +74,7 @@ test_that("gpt_column relaxed mode without keys passes through raw on not-json",
         data = df,
         col = note,
         keys = NULL,
+        provider = "local",
         prompt = function(text, keys) mock_prompt(text, keys, "NOT_JSON"),
         relaxed = TRUE,
         return_debug = TRUE,
@@ -89,6 +94,7 @@ test_that("gpt_column respects coerce_types = FALSE and final_types = infer", {
         col = note,
         prompt = function(text, keys) mock_prompt(text, keys, "BASIC_JSON"),
         keys = keys,
+        provider = "local",
         coerce_types = FALSE,   # row level off
         final_types  = "infer"  # decide per column at the end
     )
@@ -109,6 +115,7 @@ test_that("gpt_column coerce_when selectively coerces per key", {
         col = note,
         prompt = function(text, keys) mock_prompt(text, keys, "BASIC_JSON"), # {"age":"64","smoker":"1"} in helper; we reuse the mechanism
         keys = keys,
+        provider = "local",
         # coerce only 'a'; leave 'b' as character here, then finalize = 'schema' makes both integer
         coerce_types = FALSE,
         coerce_when  = function(key, value, spec, row_index) key == "a",
