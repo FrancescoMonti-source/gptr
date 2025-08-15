@@ -36,7 +36,8 @@ json_keys_align <- function(x,
         dist_best <- d[best]
 
         ok <- if (fuzzy_model == "lev_ratio") {
-            (dist_best / nchar(choices_norm[best])) <= fuzzy_threshold
+            # Allow up to ceil(ratio * target_length) edits
+            dist_best <= ceiling(fuzzy_threshold * nchar(choices_norm[best]))
         } else { # "lev"
             dist_best <= as.integer(fuzzy_threshold)
         }

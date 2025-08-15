@@ -10,8 +10,11 @@ test_that("json_keys_align exact pass-through and fill missing", {
 test_that("json_keys_align fuzzy-corrects unique and leaves ambiguous as NA", {
     exp <- c("smoker","smoker_status")
     x1  <- list(smokre = 1)      # misspelled 'smoker'
-    r1  <- json_keys_align(x1, exp, auto_correct = TRUE,fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3)
-    r1_abs <- json_keys_align(x1, exp, auto_correct = TRUE,
+    r1  <- json_keys_align(x1, exp,
+                           auto_correct = TRUE,
+                           fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3)
+    r1_abs <- json_keys_align(x1, exp,
+                              auto_correct = TRUE,
                               fuzzy_model = "lev", fuzzy_threshold = 2)
     expect_false(is.na(r1_abs$smoker))
     expect_false(is.na(r1$smoker))
