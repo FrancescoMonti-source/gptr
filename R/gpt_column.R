@@ -27,162 +27,150 @@
 #' @param ... Extra args passed to `gpt()`.
 #' @export
 
-gpt_column <- function(data,
-                       col,
-                       prompt,
-                       keys = NULL,
-                       auto_correct_keys = TRUE,
-                       keep_unexpected_keys = FALSE,
-                       na_values = c("NA", "null", "", "[]", "{}", "None"),
-                       file_path = NULL,
-                       image_path = NULL,
-                       temperature = .2,
-                       provider = c("local", "openai"),
-                       relaxed = FALSE,
-                       verbose = TRUE,
-                       show_invalid_rows = FALSE,
-                       return_debug = TRUE,
-                       parallel = FALSE,
-                       coerce_types = TRUE,
-                       coerce_when  = NULL,
-                       final_types  = c("schema","infer","as_is"),
-                       max_tokens = Inf,
-                       token_mode = c("words", "chars", "custom"),
-                       custom_tokenizer = NULL,
-                       ...) {
-
-    require(dplyr); require(purrr); require(tibble); require(jsonlite)
-    require(stringr); require(rlang); require(vctrs); require(progressr)
-    if (parallel) require(furrr)
-
+gpt_column <- function(
+        data,
+        col,
+        prompt,
+        keys                = NULL,
+        provider            = c("local", "openai"),
+        temperature         = 0,
+        file_path           = NULL,
+        image_path          = NULL,
+        coerce_types        = TRUE,
+        coerce_when         = NULL,
+        final_types         = c("schema", "infer", "as_is"),
+        na_values           = c("NA", "N/A", "null", "None", ""),
+        auto_correct_keys   = getOption("gptr.auto_correct_keys", TRUE),
+        keep_unexpected_keys= getOption("gptr.keep_unexpected_keys", FALSE),
+        fuzzy_model         = getOption("gptr.fuzzy_model", "lev_ratio"),
+        fuzzy_threshold     = getOption("gptr.fuzzy_threshold", 0.3),
+        relaxed             = FALSE,
+        return_debug        = FALSE,
+        verbose             = FALSE,
+        ...
+) {
+    provider    <- match.arg(provider)
     final_types <- match.arg(final_types)
-    token_mode  <- match.arg(token_mode)
 
-    col_name <- rlang::as_string(rlang::ensym(col))
-    texts    <- data[[col_name]]
+    # ---- resolve backend; allows swap-in via options(gptr.gpt_fun = ...)
+    gpt_fun <- .gptr_resolve_backend(provider)
 
-    expected_keys <- if (!is.null(keys)) names(keys) else NULL
-    key_specs     <- if (!is.null(keys)) purrr::map(keys, parse_key_spec) else NULL
+    # ---- capture column and text values
+    col_quo <- rlang::enquo(col)
+    stopifnot(rlang::quo_is_symbolic(col_quo) || rlang::quo_is_symbol(col_quo))
+    texts <- dplyr::pull(data, !!col_quo)
+    if (!is.character(texts)) texts <- as.character(texts)
+    n <- length(texts)
 
-    preprocess_text <- function(x) {
-        trim_text(x, max_tokens = max_tokens, token_mode = token_mode, custom_tokenizer = custom_tokenizer)
+    # ---- key spec parsing
+    key_specs <- NULL
+    expected_keys <- NULL
+    if (!is.null(keys)) {
+        # parse_key_spec() in your package turns list/char specs into a named list with $type, etc.
+        key_specs <- parse_key_spec(keys)
+        expected_keys <- names(key_specs)
     }
 
-    # ---- backend: provider-aware, but test-overridable
-    call_model_once <- function(.x) {
-        .x_trim <- preprocess_text(.x)
-        input_prompt <- if (is.function(prompt)) {
+    # ---- helper: prompt per row
+    make_prompt_for <- function(.x_text) {
+        .x_trim <- preprocess_text(.x_text)
+        if (is.function(prompt)) {
             prompt(.x_trim, keys)
         } else {
             build_prompt(prompt, text = .x_trim, keys = keys)
         }
-        gpt(prompt      = input_prompt,
-            provider    = provider,       # <- always pass "local" unless user overrides
+    }
+
+    # ---- Step 1: call model once per row
+    raw_outputs <- purrr::map_chr(texts, function(.x) {
+        input_prompt <- make_prompt_for(.x)
+        gpt_fun(
+            prompt      = input_prompt,
             temperature = temperature,
             file_path   = file_path,
             image_path  = image_path,
-            ...)
-    }
-
-    # --- optional deprecation shim for old arg name
-    dots <- list(...)
-    if ("max.distance" %in% names(dots)) {
-        warning("`max.distance` is deprecated; use `fuzzy_model` + `fuzzy_threshold`. ",
-                "Interpreting as fuzzy_model = 'lev_ratio', fuzzy_threshold = max.distance.")
-        dots$fuzzy_model     <- dots$fuzzy_model     %||% "lev_ratio"
-        dots$fuzzy_threshold <- dots$fuzzy_threshold %||% dots$max.distance
-        dots$max.distance <- NULL
-    }
-
-    n <- length(texts); start_time <- Sys.time()
-
-    result <- progressr::with_progress({
-        p <- progressr::progressor(steps = n)
-        gpt_safe <- function(.x, i) {
-            res <- call_model_once(.x)
-            elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-            avg <- elapsed / i
-            remaining <- avg * (n - i)
-            p(message = sprintf("ETA: ~%s | Avg/call: %.2fs",
-                                format(Sys.time() + remaining, "%H:%M:%S"), avg))
-            res
-        }
-
-        raw_outputs <- if (parallel) {
-            furrr::future_map2_chr(texts, seq_along(texts), gpt_safe, .options = furrr::furrr_options(seed = NULL))
-        } else {
-            purrr::map2_chr(texts, seq_along(texts), gpt_safe)
-        }
-
-        ok_flags <- integer(n)  # 0/1 per row, filled below
-        parsed_results <- purrr::imap(raw_outputs, function(out, i) {
-            tryCatch({
-                rp <- json_fix_parse_validate(
-                    out,
-                    key_specs    = key_specs,
-                    na_values    = na_values,
-                    verbose      = verbose,
-                    i            = i,
-                    coerce_types = coerce_types,
-                    coerce_when  = coerce_when
-                )
-
-                if (!rp$ok) {
-                    ok_flags[i] <- 0L
-                    if (relaxed && is.null(expected_keys)) return(out)
-                    if (!is.null(expected_keys)) return(setNames(rep(NA, length(expected_keys)), expected_keys))
-                    return(out)
-                }
-
-                ok_flags[i] <- 1L
-                x <- rp$value
-                if (!is.null(expected_keys)) {
-                    x <- do.call(
-                        json_keys_align,
-                        c(list(x,
-                               expected_keys   = expected_keys,
-                               auto_correct    = auto_correct_keys,
-                               keep_unexpected = keep_unexpected_keys),
-                          dots)  # forwards fuzzy_model/fuzzy_threshold
-                    )
-                }
-                x
-            }, error = function(e) {
-                if (verbose) message("Row ", i, ": post-processing error --> ", conditionMessage(e))
-                ok_flags[i] <- 0L
-                setNames(rep(NA, length(expected_keys %||% 0)), expected_keys)
-            })
-        })
-
-        # Step 3: bind rows (no lossy coercion here)
-        parsed_df <- purrr::map_dfr(parsed_results, row_to_tibble,
-                                    expected_keys = expected_keys,
-                                    raw_col_name  = ".parsed")
-
-        # Step 4: final column typing
-        parsed_df <- finalize_columns(parsed_df,
-                                      expected_keys = expected_keys,
-                                      key_specs     = key_specs,
-                                      mode          = final_types)
-
-        result <- dplyr::bind_cols(data, parsed_df)
-
-        # FINAL invalid rows = rows that failed parse/repair/validation
-        # (tracked during json_fix_parse_validate + post-processing)
-        if (!is.null(expected_keys)) {
-            invalid_rows <- which(ok_flags == 0L)
-        } else {
-            invalid_rows <- integer(0)
-        }
-
-        if (return_debug) {
-            result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
-            result$.invalid_rows <- as.integer(seq_len(nrow(result)) %in% invalid_rows)
-        }
-        attr(result, "invalid_rows") <- invalid_rows
-        result
+            ...
+        )
     })
 
-    return(result)
-}
+    # ---- Step 2: parse + per-row coercion (json_fix_parse_validate now does row-wise casting)
+    ok_flags <- integer(n)
+    parsed_results <- vector("list", n)
 
+    for (i in seq_len(n)) {
+        out <- raw_outputs[[i]]
+        rp <- tryCatch(
+            json_fix_parse_validate(
+                out,
+                key_specs    = key_specs,
+                na_values    = na_values,
+                verbose      = verbose,
+                i            = i,
+                coerce_types = coerce_types,
+                coerce_when  = coerce_when
+            ),
+            error = function(e) {
+                if (verbose) message("Row ", i, ": parse error --> ", conditionMessage(e))
+                list(ok = FALSE, value = NULL)
+            }
+        )
+
+        if (!isTRUE(rp$ok)) {
+            ok_flags[i] <- 0L
+            if (relaxed && is.null(expected_keys)) {
+                parsed_results[[i]] <- out
+            } else if (!is.null(expected_keys)) {
+                parsed_results[[i]] <- setNames(rep(NA, length(expected_keys)), expected_keys)
+            } else {
+                parsed_results[[i]] <- out
+            }
+        } else {
+            ok_flags[i] <- 1L
+            x <- rp$value
+
+            # Ensure key alignment again if caller turned off key_specs but passed expected_keys
+            if (!is.null(expected_keys) && !setequal(names(x), expected_keys)) {
+                x <- json_keys_align(
+                    x,
+                    expected_keys   = expected_keys,
+                    auto_correct    = auto_correct_keys,
+                    keep_unexpected = keep_unexpected_keys,
+                    fuzzy_model     = fuzzy_model,
+                    fuzzy_threshold = fuzzy_threshold
+                )
+            }
+
+            parsed_results[[i]] <- x
+        }
+    }
+
+    # ---- Step 3: bind rows to tibble without upcasting (row_to_tibble handles a single list row)
+    parsed_df <- purrr::map_dfr(
+        parsed_results,
+        row_to_tibble,
+        expected_keys = expected_keys,
+        raw_col_name  = ".parsed"
+    )
+
+    # ---- Step 4: final column typing (usually a no-op now; keep for safety)
+    parsed_df <- finalize_columns(
+        parsed_df,
+        expected_keys = expected_keys,
+        key_specs     = key_specs,
+        mode          = final_types
+    )
+
+    # ---- Assemble result
+    result <- dplyr::bind_cols(data, parsed_df)
+
+    # invalid rows = those whose parse/repair failed (not "all NA")
+    invalid_rows <- if (!is.null(expected_keys)) which(ok_flags == 0L) else integer(0)
+
+    if (isTRUE(return_debug)) {
+        result <- tibble::add_column(result, .raw_output = raw_outputs, .after = {{col}})
+        result$.invalid_rows <- as.integer(seq_len(nrow(result)) %in% invalid_rows)
+    }
+
+    attr(result, "invalid_rows") <- invalid_rows
+    result
+}

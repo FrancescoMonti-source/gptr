@@ -9,24 +9,21 @@ gpt_column(
   col,
   prompt,
   keys = NULL,
-  auto_correct_keys = TRUE,
-  keep_unexpected_keys = FALSE,
-  na_values = c("NA", "null", "", "[]", "{}", "None"),
+  provider = c("local", "openai"),
+  temperature = 0,
   file_path = NULL,
   image_path = NULL,
-  temperature = 0.2,
-  provider = c("local", "openai"),
-  relaxed = FALSE,
-  verbose = TRUE,
-  show_invalid_rows = FALSE,
-  return_debug = TRUE,
-  parallel = FALSE,
   coerce_types = TRUE,
   coerce_when = NULL,
   final_types = c("schema", "infer", "as_is"),
-  max_tokens = Inf,
-  token_mode = c("words", "chars", "custom"),
-  custom_tokenizer = NULL,
+  na_values = c("NA", "N/A", "null", "None", ""),
+  auto_correct_keys = getOption("gptr.auto_correct_keys", TRUE),
+  keep_unexpected_keys = getOption("gptr.keep_unexpected_keys", FALSE),
+  fuzzy_model = getOption("gptr.fuzzy_model", "lev_ratio"),
+  fuzzy_threshold = getOption("gptr.fuzzy_threshold", 0.3),
+  relaxed = FALSE,
+  return_debug = FALSE,
+  verbose = FALSE,
   ...
 )
 }
@@ -39,25 +36,9 @@ gpt_column(
 
 \item{keys}{Optional named list defining expected JSON keys and their type or allowed set.}
 
-\item{auto_correct_keys}{Logical; fuzzy-correct unexpected key names (unique match only). Fuzzy key correction is handled by json_keys_align(). You can control it by passing fuzzy_model ("lev_ratio" or "lev") and fuzzy_threshold via .... Defaults: fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3.}
-
-\item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
-
-\item{na_values}{Values treated as NA at multiple stages.}
-
-\item{file_path, image_path}{Optional file paths passed to the model call.}
-
 \item{temperature}{Sampling temperature for the model.}
 
-\item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
-
-\item{verbose}{Print repair/validation messages.}
-
-\item{show_invalid_rows}{Print offending inputs (by index) if validation fails.}
-
-\item{return_debug}{If TRUE, add \code{.raw_output} and \code{.invalid_rows}.}
-
-\item{parallel}{If TRUE, use \code{furrr} to parallelize.}
+\item{file_path, image_path}{Optional file paths passed to the model call.}
 
 \item{coerce_types}{Row-level coercion toggle (default TRUE).}
 
@@ -65,15 +46,31 @@ gpt_column(
 
 \item{final_types}{Final column typing: "schema" (default), "infer", or "as_is".}
 
+\item{na_values}{Values treated as NA at multiple stages.}
+
+\item{auto_correct_keys}{Logical; fuzzy-correct unexpected key names (unique match only). Fuzzy key correction is handled by json_keys_align(). You can control it by passing fuzzy_model ("lev_ratio" or "lev") and fuzzy_threshold via .... Defaults: fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3.}
+
+\item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
+
+\item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
+
+\item{return_debug}{If TRUE, add \code{.raw_output} and \code{.invalid_rows}.}
+
+\item{verbose}{Print repair/validation messages.}
+
+\item{...}{Extra args passed to \code{gpt()}.}
+
+\item{max.distance}{Max distance for fuzzy key matching (agrep).}
+
+\item{show_invalid_rows}{Print offending inputs (by index) if validation fails.}
+
+\item{parallel}{If TRUE, use \code{furrr} to parallelize.}
+
 \item{max_tokens}{Token limit for trim_text().}
 
 \item{token_mode}{"words", "chars", or "custom" for trim_text().}
 
 \item{custom_tokenizer}{Optional custom tokenizer for trim_text().}
-
-\item{...}{Extra args passed to \code{gpt()}.}
-
-\item{max.distance}{Max distance for fuzzy key matching (agrep).}
 }
 \description{
 Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,
