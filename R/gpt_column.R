@@ -37,18 +37,19 @@ gpt_column <- function(data,
                        file_path = NULL,
                        image_path = NULL,
                        temperature = .2,
+                       provider = getOption("gptr.provider", NULL),  # <-- RESTORED
                        relaxed = FALSE,
                        verbose = TRUE,
                        show_invalid_rows = FALSE,
                        return_debug = TRUE,
                        parallel = FALSE,
-                       coerce_types = TRUE,          # row-level
-                       coerce_when  = NULL,          # row-level predicate
+                       coerce_types = TRUE,
+                       coerce_when  = NULL,
                        final_types  = c("schema","infer","as_is"),
                        max_tokens = Inf,
                        token_mode = c("words", "chars", "custom"),
                        custom_tokenizer = NULL,
-                       ...) {                         # <- forwards fuzzy knobs etc.
+                       ...) {
 
     require(dplyr); require(purrr); require(tibble); require(jsonlite)
     require(stringr); require(rlang); require(vctrs); require(progressr)
@@ -67,14 +68,24 @@ gpt_column <- function(data,
         trim_text(x, max_tokens = max_tokens, token_mode = token_mode, custom_tokenizer = custom_tokenizer)
     }
 
+    # ---- backend: provider-aware, but test-overridable
+    gpt_fun <- .gptr_resolve_backend(provider)
+
     call_model_once <- function(.x) {
         .x_trim <- preprocess_text(.x)
-        input_prompt <- if (is.function(prompt)) prompt(.x_trim, keys) else build_prompt(prompt, text = .x_trim, keys = keys)
-        gpt_fun <- .gptr_get_gpt()
-        gpt_fun(prompt = input_prompt, temperature = temperature, file_path = file_path, image_path = image_path, ...)
+        input_prompt <- if (is.function(prompt)) {
+            prompt(.x_trim, keys)
+        } else {
+            build_prompt(prompt, text = .x_trim, keys = keys)
+        }
+        gpt_fun(prompt = input_prompt,
+                temperature = temperature,
+                file_path   = file_path,
+                image_path  = image_path,
+                ...)
     }
 
-    # Optional: deprecate old arg max.distance transparently
+    # --- optional deprecation shim for old arg name
     dots <- list(...)
     if ("max.distance" %in% names(dots)) {
         warning("`max.distance` is deprecated; use `fuzzy_model` + `fuzzy_threshold`. ",
@@ -106,7 +117,6 @@ gpt_column <- function(data,
 
         parsed_results <- purrr::imap(raw_outputs, function(out, i) {
             tryCatch({
-                # Step 1: fix/parse/validate (row-level coercion controlled by coerce_types/coerce_when)
                 rp <- json_fix_parse_validate(
                     out,
                     key_specs    = key_specs,
@@ -118,12 +128,11 @@ gpt_column <- function(data,
                 )
 
                 if (!rp$ok) {
-                    if (relaxed && is.null(expected_keys)) return(out)               # passthrough raw
+                    if (relaxed && is.null(expected_keys)) return(out)
                     if (!is.null(expected_keys)) return(setNames(rep(NA, length(expected_keys)), expected_keys))
                     return(out)
                 }
 
-                # Step 2: align keys to schema
                 x <- rp$value
                 if (!is.null(expected_keys)) {
                     x <- do.call(
@@ -132,7 +141,7 @@ gpt_column <- function(data,
                                expected_keys   = expected_keys,
                                auto_correct    = auto_correct_keys,
                                keep_unexpected = keep_unexpected_keys),
-                          dots)  # forwards fuzzy_model / fuzzy_threshold (and future knobs)
+                          dots)  # forwards fuzzy_model/fuzzy_threshold
                     )
                 }
                 x
@@ -155,7 +164,7 @@ gpt_column <- function(data,
 
         result <- dplyr::bind_cols(data, parsed_df)
 
-        # Compute invalid rows on the FINAL tibble (strict: all expected cols are NA)
+        # FINAL invalid rows (all expected cols NA)
         if (!is.null(expected_keys)) {
             present <- intersect(expected_keys, names(result))
             if (length(present)) {
@@ -173,3 +182,4 @@ gpt_column <- function(data,
 
     return(result)
 }
+
