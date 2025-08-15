@@ -155,7 +155,18 @@ gpt <- function(
         seed = NULL,
         ...
 ) {
-    provider <- match.arg(provider)
+
+    .local_provider_warned <- FALSE
+    if (is.null(provider)) {
+        provider <- "local"
+        if (!.local_provider_warned) {
+            warning("No provider specified; defaulting to 'local'. ",
+                    "You can set `provider = 'openai'` or `provider = 'local'` explicitly.")
+            .local_provider_warned <<- TRUE
+        }
+    } else {
+        provider <- match.arg(provider)
+    }
 
     ## ---------- choose sensible model/base_url if not supplied ----------
     if (provider == "local") {
