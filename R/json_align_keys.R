@@ -14,60 +14,78 @@
 #' @export
 json_keys_align <- function(x,
                             expected_keys,
-                            auto_correct    = TRUE,
-                            fuzzy_model     = c("lev_ratio", "lev"),
+                            auto_correct = TRUE,
+                            fuzzy_model = c("lev_ratio", "lev"),
                             fuzzy_threshold = 0.3,
                             keep_unexpected = FALSE) {
-    if (is.null(expected_keys)) return(x)
-    fuzzy_model <- match.arg(fuzzy_model)
+  if (is.null(expected_keys)) {
+    return(x)
+  }
+  fuzzy_model <- match.arg(fuzzy_model)
 
-    exp_keys_norm <- trimws(tolower(expected_keys))
+  exp_keys_norm <- trimws(tolower(expected_keys))
 
-    unique_best_match <- function(key, choices, choices_norm, fuzzy_model, fuzzy_threshold) {
-        if (is.na(key)) return(NA_character_)
-        key_norm <- trimws(tolower(key))
-
-        pos <- match(key_norm, choices_norm)
-        if (!is.na(pos)) return(choices[pos])
-
-        d <- adist(key_norm, choices_norm)
-        best <- which.min(d)
-        if (length(best) == 0L) return(NA_character_)
-        dist_best <- d[best]
-
-        ok <- if (fuzzy_model == "lev_ratio") {
-            # Allow up to ceil(ratio * target_length) edits
-            dist_best <= ceiling(fuzzy_threshold * nchar(choices_norm[best]))
-        } else { # "lev"
-            dist_best <= as.integer(fuzzy_threshold)
-        }
-
-        if (sum(d == dist_best) == 1L && ok) choices[best] else NA_character_
+  unique_best_match <- function(
+      key, choices, choices_norm,
+      fuzzy_model, fuzzy_threshold) {
+    if (is.na(key)) {
+      return(NA_character_)
+    }
+    key_norm <- trimws(tolower(key))
+    # direct match if present
+    pos <- match(key_norm, choices_norm)
+    if (!is.na(pos)) {
+      return(choices[pos])
     }
 
-    if (isTRUE(auto_correct) && !setequal(names(x), expected_keys)) {
-        new_names <- vapply(
-            names(x),
-            unique_best_match,
-            character(1),
-            choices         = expected_keys,
-            choices_norm    = exp_keys_norm,
-            fuzzy_model     = fuzzy_model,
-            fuzzy_threshold = fuzzy_threshold
-        )
-        names(x)[!is.na(new_names)] <- new_names[!is.na(new_names)]
+    # If the supplied key is a proper prefix of multiple expected keys,
+    # do not auto-correct: it’s ambiguous (e.g. “smok” <U+2192> c("smoker","smoker_status"))
+    if (sum(startsWith(choices_norm, key_norm)) > 1L) {
+      return(NA_character_)
     }
 
-    if (!isTRUE(keep_unexpected)) {
-        x <- x[intersect(expected_keys, names(x))]
+    # compute edit distances to all choices
+    d <- adist(key_norm, choices_norm)
+    best <- which.min(d)
+    if (length(best) == 0L) {
+      return(NA_character_)
     }
+    dist_best <- d[best]
 
-    out <- setNames(vector("list", length(expected_keys)), expected_keys)
-    for (k in expected_keys) out[[k]] <- if (k %in% names(x)) x[[k]] else NA
-
-    if (isTRUE(keep_unexpected)) {
-        extra <- setdiff(names(x), expected_keys)
-        for (e in extra) out[[e]] <- x[[e]]
+    # threshold logic: for "lev_ratio", use distance relative to target length;
+    # for "lev", use an absolute edit-distance cutoff
+    ok <- if (fuzzy_model == "lev_ratio") {
+      dist_best <= ceiling(fuzzy_threshold * nchar(choices_norm[best]))
+    } else {
+      dist_best <= as.integer(fuzzy_threshold)
     }
-    out
+    # Only accept a unique best match within threshold; otherwise leave as NA
+    if (sum(d == dist_best) == 1L && ok) choices[best] else NA_character_
+  }
+
+  if (isTRUE(auto_correct) && !setequal(names(x), expected_keys)) {
+    new_names <- vapply(
+      names(x),
+      unique_best_match,
+      character(1),
+      choices         = expected_keys,
+      choices_norm    = exp_keys_norm,
+      fuzzy_model     = fuzzy_model,
+      fuzzy_threshold = fuzzy_threshold
+    )
+    names(x)[!is.na(new_names)] <- new_names[!is.na(new_names)]
+  }
+
+  if (!isTRUE(keep_unexpected)) {
+    x <- x[intersect(expected_keys, names(x))]
+  }
+
+  out <- setNames(vector("list", length(expected_keys)), expected_keys)
+  for (k in expected_keys) out[[k]] <- if (k %in% names(x)) x[[k]] else NA
+
+  if (isTRUE(keep_unexpected)) {
+    extra <- setdiff(names(x), expected_keys)
+    for (e in extra) out[[e]] <- x[[e]]
+  }
+  out
 }
