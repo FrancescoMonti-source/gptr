@@ -2,7 +2,7 @@
 % Please edit documentation in R/gpt_column.R
 \name{gpt_column}
 \alias{gpt_column}
-\title{Extract Structured Data from Free Text with an LLM (column-wise)}
+\title{Extract Structured Data from Free Text via LLM Completion (Orchestrator)}
 \usage{
 gpt_column(
   data,
@@ -21,7 +21,9 @@ gpt_column(
   show_invalid_rows = FALSE,
   return_debug = TRUE,
   parallel = FALSE,
-  always_character = TRUE,
+  coerce_types = TRUE,
+  coerce_when = NULL,
+  final_types = c("schema", "infer", "as_is"),
   max_tokens = Inf,
   token_mode = c("words", "chars", "custom"),
   custom_tokenizer = NULL,
@@ -29,174 +31,51 @@ gpt_column(
 )
 }
 \arguments{
-\item{data}{A data frame or tibble containing the text column to process.}
+\item{data}{A data frame or tibble containing the text column.}
 
-\item{col}{Unquoted column name containing the input text for the LLM.}
+\item{col}{Unquoted name of the text column to send to the LLM.}
 
-\item{prompt}{Either a character template (used by \code{build_prompt()}), or a function \verb{function(text, keys)} that returns a prompt string per row.}
+\item{prompt}{Character template with {text}/{json_format} or function(text, keys) -> string.}
 
-\item{keys}{\code{NULL} (relaxed mode) or a \strong{named list} defining the schema.
-Each name is an expected output key. Each value is either a type string
-(\code{"integer"}, \code{"numeric"}, \code{"character"}, \code{"logical"}) or a vector of allowed values.}
+\item{keys}{Optional named list defining expected JSON keys and their type or allowed set.}
 
-\item{auto_correct_keys}{Logical. If \code{TRUE}, attempt fuzzy correction of near-miss key names to the expected names.}
+\item{auto_correct_keys}{Logical; fuzzy-correct unexpected key names (unique match only).}
 
-\item{max.distance}{Numeric in [0,1]. Maximum distance for fuzzy key matching (passed to \code{match_arg_tol()}).}
+\item{max.distance}{Max distance for fuzzy key matching (agrep).}
 
-\item{keep_unexpected_keys}{Logical. If \code{FALSE} (default), unexpected keys are dropped after autocorrection; if \code{TRUE}, they are kept.}
+\item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
-\item{na_values}{Character vector of NA-like tokens to normalize (case-insensitive), e.g. \code{"NA"}, \code{"null"}, \code{""}, \code{"[]"}, \code{"{}"}, \code{"None"}.}
+\item{na_values}{Values treated as NA at multiple stages.}
 
-\item{file_path}{Optional path to a file whose textual contents should be appended to the prompt (handled inside \code{gpt()}).}
+\item{file_path, image_path}{Optional file paths passed to the model call.}
 
-\item{image_path}{Optional path to an image to include in the prompt (handled inside \code{gpt()}).}
+\item{temperature}{Sampling temperature for the model.}
 
-\item{temperature}{Sampling temperature passed to \code{gpt()}.}
+\item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 
-\item{relaxed}{Logical. If \code{TRUE} \strong{and} \code{keys = NULL}, returns the parsed list/object as is (no schema mapping).
-If \code{FALSE} and \code{keys} are provided, rows with invalid/unsuitable JSON yield \code{NA} for all expected keys.}
+\item{verbose}{Print repair/validation messages.}
 
-\item{verbose}{Logical. If \code{TRUE}, prints repair logs (from \code{tidy_json()}), unexpected keys, coercion notes, and ETA updates.}
+\item{show_invalid_rows}{Print offending inputs (by index) if validation fails.}
 
-\item{show_invalid_rows}{Logical. If \code{TRUE}, prints the subset of \code{data} rows that failed completely after parsing.}
+\item{return_debug}{If TRUE, add \code{.raw_output} and \code{.invalid_rows}.}
 
-\item{return_debug}{Logical. If \code{TRUE}, appends two debug columns: \code{.raw_output} (model output) and \code{.invalid_rows} (0/1 flag).}
+\item{parallel}{If TRUE, use \code{furrr} to parallelize.}
 
-\item{parallel}{Logical. If \code{TRUE}, uses \code{furrr::future_map2_chr()}; configure workers via \code{future::plan()}.}
+\item{coerce_types}{Row-level coercion toggle (default TRUE).}
 
-\item{always_character}{If TRUE (default), coerces all extracted fields to
-character before returning. Prevents type mismatch errors in \code{bind_rows()}.
-You can later convert columns back to desired types manually.}
+\item{coerce_when}{Optional predicate function(key, value, spec, row_index) -> TRUE/FALSE for per-value control.}
 
-\item{max_tokens}{integer max boundary, passed to trim_text()}
+\item{final_types}{Final column typing: "schema" (default), "infer", or "as_is".}
 
-\item{token_mode}{"words" (default), "chars", or "custom" : allow the user to define what the parameter 'max_tokens' refers to. By default, leaving some margin, word counting could be a sufficient approximation for most users. If that's not the case, set the parameter to "custom" and provide a custom function via 'custom_tokenizer' parameter.}
+\item{max_tokens}{Token limit for trim_text().}
 
-\item{custom_tokenizer}{optional function(text, max_tokens) -> trimmed_text}
+\item{token_mode}{"words", "chars", or "custom" for trim_text().}
 
-\item{...}{Additional arguments forwarded to \code{gpt()} (e.g., \code{provider}, \code{model}, \code{base_url}, \code{system}, \code{seed},
-\code{response_format}, timeouts, etc.).}
-}
-\value{
-The function returns a tibble: the original \code{data} \strong{plus} one column per expected key (in the order of \code{names(keys)}).
-If \code{return_debug = TRUE}, also includes \code{.raw_output} (the json string) and \code{.invalid_rows} (a binary column useful to check and/or eventually rerun only failed rows via patch_failed_rows()).
-An integer vector of invalid row indices is attached as an attribute:
-\code{attr(result, "invalid_rows")}.
+\item{custom_tokenizer}{Optional custom tokenizer for trim_text().}
+
+\item{...}{Extra args passed to \code{gpt()}.}
 }
 \description{
-\code{gpt_column()} sends each row of a text column to a language model (local or OpenAI),
-using a prompt template or a prompt function, and parses the model's output into
-typed columns. It supports schema-based validation (\code{keys}), fuzzy key correction,
-NA normalization, progress/ETA, optional parallelization, and debug capture of raw outputs.
-}
-\details{
-\strong{Per-row flow}
-\enumerate{
-\item Build prompt (template or function).
-\item Call \code{gpt()} (local or OpenAI backend).
-\item Clean/repair JSON via \code{tidy_json()} (strips fences, extracts the JSON blob, fixes common issues conservatively).
-\item Parse with \code{jsonlite::fromJSON()}.
-\item Normalize NA-likes, coerce to declared types, and validate against allowed sets.
-\item Autocorrect key names (if enabled) and map to the schema order; drop extras unless \code{keep_unexpected_keys = TRUE}.
-}
-
-\strong{Progress & parallel}
-\itemize{
-\item Progress/ETA shown via \code{progressr}. When \code{parallel = TRUE}, work is split via \code{furrr} (respect your \code{future::plan()}).
-}
-
-\strong{Error handling}
-\itemize{
-\item Rows that cannot be parsed into valid JSON (and \code{relaxed = FALSE} with a schema) return all-\code{NA} for expected keys.
-\item Repair actions taken by \code{tidy_json()} are logged row-by-row when \code{verbose = TRUE}.
-}
-
-\strong{Interoperability}
-\itemize{
-\item Works with local OpenAI-compatible servers (e.g., LM Studio) or hosted providers (set \code{provider}, \code{base_url}, \code{model}, \code{api_key} inside \code{gpt()}).
-}
-}
-\section{Schema (\code{keys})}{
-
-Each element of \code{keys} can be either:
-\itemize{
-\item a \strong{type string}: \code{"integer"}, \code{"numeric"}, \code{"character"}, or \code{"logical"}; the value is coerced.
-\item a \strong{vector of allowed values} (e.g., \code{c("oui","non","NA")}, \code{c(0,1)}, \code{c(TRUE,FALSE)}).
-If present, outputs not in the allowed set are set to \code{NA}.
-}
-
-The same \code{keys} are typically passed to your prompt builder (e.g., via \code{build_prompt()})
-so the JSON skeleton shown to the model matches what the parser expects.
-}
-
-\section{Prompting}{
-
-\itemize{
-\item \code{prompt} may be a \strong{character template} (with \code{{text}} and optionally \code{{json_format}} placeholders,
-typically filled by \code{build_prompt()}), \strong{or} a \strong{function} with signature \verb{function(text, keys)}.
-\item If you pass a function, it will be called for each row to build the final prompt string.
-}
-}
-
-\section{Troubleshooting}{
-
-\itemize{
-\item \strong{All \code{NA} columns}: the model likely returned non-JSON or keys didn’t match. Inspect \code{.raw_output} (set \code{return_debug = TRUE})
-and consider \code{auto_correct_keys = TRUE}, adjusting \code{max.distance}, or loosening \code{na_values}.
-\item \strong{Dropped rows warning}: your prompt may return arrays or multiple objects; ensure the model returns \strong{exactly one} JSON object per row.
-\item \strong{Unexpected keys}: set \code{keep_unexpected_keys = TRUE} to keep them for inspection, or expand your \code{keys} schema.
-\item \strong{Timeouts/Rate limits}: pass timeouts or small delays via \code{...} to \code{gpt()}; for rate-limited providers, consider batching or \code{parallel = FALSE}.
-}
-}
-
-\examples{
-\dontrun{
-# 1) Using a template and build_prompt()
-template <- paste0(
-  "Tu es un assistant spécialisé.\n\n",
-  "Texte :\n\"{text}\"\n\n",
-  "Retourne un JSON sur une seule ligne, format exact :\n",
-  "{json_format}\n",
-  "- Clés entre guillemets; valeurs autorisées uniquement.\n",
-  "- Si absent: \"NA\". Aucune autre sortie."
-)
-
-prompt_fun <- function(text, keys) build_prompt(template, text, keys)
-
-res <- gpt_column(
-  data   = df,
-  col    = note_medicale,
-  prompt = prompt_fun,
-  keys   = list(
-    isolement_bin      = "integer",
-    tendance_isolement = c("oui","non","NA")
-  ),
-  provider = "openai",
-  model    = "gpt-4o-mini",
-  temperature = 0.2,
-  verbose  = TRUE,
-  return_debug = TRUE
-)
-
-# Rows that failed:
-attr(res, "invalid_rows")
-
-# 2) Retry failed rows (with audit trail)
-res2 <- patch_failed_rows(
-  data   = res,
-  prompt = prompt_fun,
-  col    = note_medicale,
-  id_col = patient_id,
-  keys   = list(isolement_bin = "integer", tendance_isolement = c("oui","non","NA")),
-  max_attempts = 2
-)
-attr(res2, "invalid_rows")
-}
-
-}
-\seealso{
-\code{\link[=build_prompt]{build_prompt()}} for creating \code{{json_format}} blocks from \code{keys},
-\code{\link[=tidy_json]{tidy_json()}} for robust JSON cleanup,
-\code{\link[=gpt]{gpt()}} for low-level model calls,
-and \code{\link[=patch_failed_rows]{patch_failed_rows()}} to repair failed rows.
+Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,
+validates and aligns it to a schema, then returns the structured columns bound to the input.
 }
