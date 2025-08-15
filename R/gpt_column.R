@@ -146,7 +146,7 @@ gpt_column <- function(data,
                 }
                 x
             }, error = function(e) {
-                if (verbose) message("Row ", i, ": post-processing error → ", conditionMessage(e))
+                if (verbose) message("Row ", i, ": post-processing error --> ", conditionMessage(e))
                 setNames(rep(NA, length(expected_keys %||% 0)), expected_keys)
             })
         })

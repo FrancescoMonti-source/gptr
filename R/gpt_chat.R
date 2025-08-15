@@ -161,7 +161,7 @@ gpt_chat <- local({
     ){
         if (reset) {
             history <<- list()
-            cat("🔄 History reset.\n")
+            cat("History reset.\n")
             return(invisible(NULL))
         }
 
@@ -170,14 +170,14 @@ gpt_chat <- local({
             if (!file.exists(load_path)) stop("History file not found: ", load_path)
             txt <- readLines(load_path, warn = FALSE)
             history <<- jsonlite::fromJSON(paste(txt, collapse = "\n"), simplifyVector = FALSE)
-            cat("📥 History loaded from ", load_path, ".\n", sep = "")
+            cat("History loaded from ", load_path, ".\n", sep = "")
             if (show_history && is.null(prompt)) show_history <- TRUE  # allow immediate print
         }
 
         # Print history and bail if requested
         if (show_history) {
             if (length(history) == 0) {
-                cat("⛔️ No conversation history yet.\n")
+                cat("No conversation history yet.\n")
                 return(invisible(NULL))
             }
             if (show_history_as_text) {
@@ -303,7 +303,7 @@ gpt_chat <- local({
         # Optional persistence after this turn
         if (!is.null(save_path)) {
             writeLines(jsonlite::toJSON(history, auto_unbox = TRUE, pretty = TRUE), save_path)
-            cat("💾 History saved to ", save_path, "\n", sep = "")
+            cat("History saved to ", save_path, "\n", sep = "")
         }
 
         cat(if (is.character(reply_content)) reply_content else "[non-text response]", "\n")

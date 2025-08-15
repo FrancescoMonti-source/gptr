@@ -12,7 +12,7 @@ gpt_chat_summarise <- function(
     history <- get("history", envir = env)
 
     if (length(history) < 2) {
-        message("⏳ Not enough history to summarize.")
+        message("Not enough history to summarize.")
         return(invisible(NULL))
     }
 
@@ -60,5 +60,5 @@ gpt_chat_summarise <- function(
     )
 
     assign("history", list(summary_message), envir = env)
-    message("🧠 Summary injected into chat history.")
+    message("Summary injected into chat history.")
 }

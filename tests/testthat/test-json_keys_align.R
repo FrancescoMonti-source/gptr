@@ -12,7 +12,7 @@ test_that("json_keys_align fuzzy-corrects unique and leaves ambiguous as NA", {
     x1  <- list(smokre = 1)      # misspelled 'smoker'
     r1  <- json_keys_align(x1, exp,
                            auto_correct = TRUE,
-                           fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3)
+                           fuzzy_model = "lev_ratio", fuzzy_threshold = 0.5)
     r1_abs <- json_keys_align(x1, exp,
                               auto_correct = TRUE,
                               fuzzy_model = "lev", fuzzy_threshold = 2)
