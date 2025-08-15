@@ -57,6 +57,7 @@ gpt_column <- function(
 
     # capture column values
     col_quo <- rlang::enquo(col)
+    col_name <- rlang::as_name(col_quo)
     texts <- dplyr::pull(data, !!col_quo)
     if (!is.character(texts)) texts <- as.character(texts)
     n <- length(texts)
@@ -68,7 +69,6 @@ gpt_column <- function(
         key_specs <- parse_key_spec(keys)
         expected_keys <- names(key_specs)
     }
-
     # build one prompt per row
     make_prompt_for <- function(.x_text) {
         .x_trim <- trimws(.x_text)  # no preprocess_text()
@@ -205,7 +205,7 @@ gpt_column <- function(
     invalid_rows <- if (!is.null(expected_keys)) which(ok_flags == 0L) else integer(0)
 
     if (isTRUE(return_debug)) {
-        result <- tibble::add_column(result, .raw_output = raw_outputs, .after = {{col}})
+        result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
         result$.invalid_rows <- as.integer(seq_len(nrow(result)) %in% invalid_rows)
     }
 

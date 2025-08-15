@@ -9,6 +9,7 @@ finalize_columns <- function(df, expected_keys, key_specs, mode = c("schema","in
     mode <- match.arg(mode)
     if (is.null(expected_keys) || ncol(df) == 0L) return(df)
 
+    # helper 1
     # normalize common type synonyms coming from specs
     norm_type <- function(t) {
         t <- tolower(trimws(as.character(t)))
@@ -19,6 +20,7 @@ finalize_columns <- function(df, expected_keys, key_specs, mode = c("schema","in
         t
     }
 
+    # helper 2
     cast_to <- function(x, type) {
         type <- norm_type(type)
         if (type == "integer") {
@@ -43,6 +45,7 @@ finalize_columns <- function(df, expected_keys, key_specs, mode = c("schema","in
         as.character(x) # character fallback
     }
 
+    # helper 3
     infer_type <- function(x) {
         # Prefer logical → integer → numeric → character
         if (is.character(x)) {
@@ -76,6 +79,39 @@ finalize_columns <- function(df, expected_keys, key_specs, mode = c("schema","in
         }
         as.character(x)
     }
+
+    # helper 4
+    infer_vec <- function(x) {
+        if (is.character(x)) {
+            v <- tolower(trimws(x))
+            # logical words ONLY (do not include "1"/"0" here)
+            if (all(v %in% c("true","t","yes","y","false","f","no","n","na",""))) {
+                return(ifelse(v %in% c("true","t","yes","y"), TRUE,
+                              ifelse(v %in% c("false","f","no","n"), FALSE, NA)))
+            }
+            # numeric / integer from strings
+            xn <- suppressWarnings(as.numeric(v))
+            if (any(!is.na(xn))) {
+                if (all(is.na(xn) | abs(xn - round(xn)) < .Machine$double.eps^0.5)) {
+                    return(suppressWarnings(as.integer(xn)))
+                }
+                return(xn)
+            }
+            return(as.character(x))
+        }
+        # non-character: prefer logical by value, then integer/numeric
+        xl <- suppressWarnings(as.logical(x))
+        if (all(is.na(xl) == is.na(x))) return(xl)
+        xn <- suppressWarnings(as.numeric(x))
+        if (any(!is.na(xn))) {
+            if (all(is.na(xn) | abs(xn - round(xn)) < .Machine$double.eps^0.5)) {
+                return(suppressWarnings(as.integer(xn)))
+            }
+            return(xn)
+        }
+        as.character(x)
+    }
+
 
     for (k in expected_keys) {
         if (!k %in% names(df)) next
@@ -120,7 +156,7 @@ finalize_columns <- function(df, expected_keys, key_specs, mode = c("schema","in
                 if (!is.logical(col)) df[[k]] <- as.character(col)
             }
         } else if (mode == "infer") {
-            df[[k]] <- infer_type(col)
+            df[[k]] <- infer_vec(df[[k]])
         }
 
         }
