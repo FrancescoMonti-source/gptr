@@ -4,14 +4,12 @@
 \alias{row_to_tibble}
 \title{Convert a named list (or scalar) to a one-row tibble (no forced character)}
 \usage{
-row_to_tibble(x, expected_keys, raw_col_name = ".parsed")
+row_to_tibble(x, expected_keys = NULL)
 }
 \arguments{
 \item{x}{Named list ready to become a row; or a scalar (relaxed mode).}
 
 \item{expected_keys}{Character vector of expected keys (can be NULL).}
-
-\item{raw_col_name}{Name to use when x is an unnamed scalar (default ".parsed").}
 }
 \value{
 A one-row tibble.
