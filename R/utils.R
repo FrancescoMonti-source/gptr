@@ -13,16 +13,20 @@ match_arg_tol <- function(x, choices, several.ok = FALSE, max.distance = .2) {
 }
 
 
-# interpret a key spec: either a type string OR a vector of allowed values
+#' Interpret a key spec (type string or allowed set)
+#' @param spec Either a type string ("integer","numeric","character","logical")
+#'   or a vector of allowed values.
+#' @return list(type = <chr|NULL>, allowed = <vector|NULL>)
+#' @export
 parse_key_spec <- function(spec) {
     types <- c("integer","numeric","character","logical")
     if (is.character(spec) && length(spec) == 1L && spec %in% types) {
         list(type = spec, allowed = NULL)
     } else {
-        # treat as allowed set; keep as-is so character/numeric/logical sets work
         list(type = NULL, allowed = spec)
     }
 }
+
 
 # normalize a scalar token for comparisons
 normalize_token <- function(x) {
