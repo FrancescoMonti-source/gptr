@@ -24,7 +24,6 @@ safe_row_to_tibble <- function(x, expected_keys = NULL) {
     tibble::tibble(.parsed = list(x))
 }
 
-parsed_df <- purrr::map_dfr(parsed_results, safe_row_to_tibble, expected_keys = expected_keys)
 
 # Only finalize when scalar columns really exist
 has_scalar <- !is.null(expected_keys) && all(expected_keys %in% names(parsed_df))
