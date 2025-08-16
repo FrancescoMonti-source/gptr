@@ -8,16 +8,13 @@ list_local_backends()
 }
 \value{
 A data frame with columns: backend, name, base_url, probe.
-
-A data frame with columns: backend, name, base_url, probe.
 }
 \description{
 Returns the configured local backend endpoints from package defaults or
 user options, without checking whether they are actually running.
 }
 \details{
-To change defaults globally, set them via \code{options()} in your \code{.Rprofile}
-or session, e.g.:
+To change defaults globally, set them via \code{options()} in your \code{.Rprofile}:
 \preformatted{
 options(
   gpt.lmstudio_base_url = "http://localhost:1234/v1/chat/completions",
@@ -25,18 +22,7 @@ options(
 )
 }
 
-Add custom backends:
-\preformatted{
-options(
-  gpt.extra_local_backends = list(
-    myserv = list(
-      key = "myserv", name = "MyServer",
-      base_url = "http://127.0.0.1:9999/v1/chat/completions",
-      probe    = "http://127.0.0.1:9999/v1/models"
-    )
-  )
-)
-}
+Add custom backends via \code{options(gpt.extra_local_backends = list(...))}.
 }
 \examples{
 list_local_backends()

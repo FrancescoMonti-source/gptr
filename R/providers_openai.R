@@ -261,35 +261,4 @@ openai_parse_text <- function(body) {
     )
 }
 
-# -- High-level convenience (optional) -------------------------------------
 
-#' One-shot OpenAI chat call (convenience wrapper)
-#' @keywords internal
-#' @param prompt user text
-#' @param system optional system prompt
-#' @param image_paths optional character vector of image file paths
-#' @param model,temperature,seed,response_format,... forwarded to compose/payload
-#' @return list(text, usage, finish_reason, raw)
-openai_chat_once <- function(
-        prompt,
-        system = NULL,
-        image_paths = NULL,
-        model = NULL,
-        temperature = 0.2,
-        seed = NULL,
-        response_format = NULL,
-        ...
-) {
-    defs <- .resolve_openai_defaults(model = model)
-    msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
-    payload <- openai_compose_payload(
-        messages = msgs,
-        model = defs$model,
-        temperature = temperature,
-        seed = seed,
-        response_format = response_format,
-        extra = list(...)
-    )
-    res <- request_openai(payload)
-    openai_parse_text(res$body)
-}

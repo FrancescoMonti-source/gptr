@@ -1,7 +1,6 @@
-# R/providers_local.R (or R/local_detect.R)
+# R/providers_local.R
 # Discovery helpers ---------------------------------------------------------
 
-#' @keywords internal
 #' @keywords internal
 .local_candidates <- function() {
     lmstudio_base <- getOption("gpt.lmstudio_base_url",
@@ -27,61 +26,31 @@
         ollama   = list(key = "ollama",   name = "Ollama",
                         base_url = ollama_base,   probes = mk_probes(ollama_base)),
         localai  = list(key = "localai",  name = "LocalAI",
-                        base_url = localai_base,  probes = mk_probes(localai_base))  # <- fixed "="
+                        base_url = localai_base,  probes = mk_probes(localai_base))
     )
 
+    # User-extendable overrides
     extras <- getOption("gpt.extra_local_backends", NULL)
     if (is.list(extras) && length(extras)) {
         for (nm in names(extras)) builtins[[nm]] <- extras[[nm]]
     }
     builtins
 }
-
-#' Detect a single running local backend (compat wrapper)
+# Return all running local backends with model lists (data.frame + list-col)
 #' @keywords internal
-#' @param timeout seconds
-#' @param backend optional backend key to force (e.g., "lmstudio","ollama","localai")
-#' @param require_model optional model id to prefer when choosing among multiple
-#' @return NULL or list(backend, name, base_url)
-.detect_local_backend <- function(timeout = getOption("gpt.timeout", 5),
-                                  backend = NULL,
-                                  require_model = NULL) {
-    df <- .detect_local_backends(timeout = timeout)
-    if (!nrow(df)) return(NULL)
-
-    if (!is.null(backend) && nzchar(backend)) {
-        row <- df[df$backend == backend, , drop = FALSE]
-        if (!nrow(row)) return(NULL)
-    } else {
-        row <- .pick_local_backend(df, require_model = require_model)
-    }
-
-    list(
-        backend  = row$backend[[1]],
-        name     = row$name[[1]],
-        base_url = row$base_url[[1]]
-        # (Optional) you can add models = row$models[[1]] if useful to callers
-    )
-}
-
-# Return all running local backends with model lists (data.frame with a list-col)
 .detect_local_backends <- function(timeout = getOption("gpt.timeout", 5)) {
-    cand <- .local_candidates()  # uses your configured endpoints
+    cand <- .local_candidates()
     out  <- list()
 
     test_ok <- function(url) {
-        ok <- tryCatch({
-            resp <- httr2::req_perform(
-                httr2::request(url) |> httr2::req_timeout(timeout)
-            )
+        tryCatch({
+            resp <- httr2::req_perform(httr2::request(url) |> httr2::req_timeout(timeout))
             httr2::resp_status(resp) < 400
         }, error = function(e) FALSE)
-        ok
     }
 
     for (key in names(cand)) {
-        probes <- cand[[key]]$probes %||% c(cand[[key]]$probe)  # old/new field compat
-        # try each probe pattern; take the first that works
+        probes <- cand[[key]]$probes %||% c(cand[[key]]$probe)  # compat
         good <- NULL
         for (pr in probes) if (isTRUE(test_ok(pr))) { good <- pr; break }
         if (!is.null(good)) {
@@ -113,8 +82,8 @@
         stringsAsFactors = FALSE
     )
 }
-
-# Pick a backend from those running, by preference and required model (if any)
+# Choose a backend from detected ones by preference and/or required model
+#' @keywords internal
 .pick_local_backend <- function(available_df,
                                 prefer = getOption("gpt.local_prefer",
                                                    c("lmstudio", "ollama", "localai")),
@@ -129,23 +98,18 @@
         has_model <- vapply(df$models, function(vec) {
             is.character(vec) && any(tolower(vec) == req)
         }, FALSE)
-        if (any(has_model)) {
-            return(df[which(has_model)[1L], , drop = FALSE])
-        }
+        if (any(has_model)) return(df[which(has_model)[1L], , drop = FALSE])
     }
 
     df[1L, , drop = FALSE]
 }
 
-
 # Probe /v1/models and return a character vector of model ids
+#' @keywords internal
 .probe_models <- function(models_url, timeout = getOption("gpt.timeout", 5)) {
     if (!requireNamespace("httr2", quietly = TRUE)) return(character(0))
     resp <- tryCatch(
-        httr2::req_perform(
-            httr2::request(models_url) |>
-                httr2::req_timeout(timeout)
-        ),
+        httr2::req_perform(httr2::request(models_url) |> httr2::req_timeout(timeout)),
         error = function(e) NULL
     )
     if (is.null(resp) || httr2::resp_status(resp) >= 400) return(character(0))
@@ -168,11 +132,8 @@
         ids <- get_ids(j); return(ids[nzchar(ids)])
     }
     if (is.character(j)) return(j[nzchar(j)])
-
     character(0)
 }
-
-
 # Public helper -------------------------------------------------------------
 
 #' List configured local backend endpoints
@@ -180,8 +141,7 @@
 #' Returns the configured local backend endpoints from package defaults or
 #' user options, without checking whether they are actually running.
 #'
-#' To change defaults globally, set them via `options()` in your `.Rprofile`
-#' or session, e.g.:
+#' To change defaults globally, set them via `options()` in your `.Rprofile`:
 #' \preformatted{
 #' options(
 #'   gpt.lmstudio_base_url = "http://localhost:1234/v1/chat/completions",
@@ -189,24 +149,11 @@
 #' )
 #' }
 #'
-#' Add custom backends:
-#' \preformatted{
-#' options(
-#'   gpt.extra_local_backends = list(
-#'     myserv = list(
-#'       key = "myserv", name = "MyServer",
-#'       base_url = "http://127.0.0.1:9999/v1/chat/completions",
-#'       probe    = "http://127.0.0.1:9999/v1/models"
-#'     )
-#'   )
-#' )
-#' }
+#' Add custom backends via \code{options(gpt.extra_local_backends = list(...))}.
 #'
 #' @return A data frame with columns: backend, name, base_url, probe.
 #' @examples
 #' list_local_backends()
-#' @export
-#' @return A data frame with columns: backend, name, base_url, probe.
 #' @export
 list_local_backends <- function() {
     x <- .local_candidates()
@@ -215,14 +162,13 @@ list_local_backends <- function() {
         if (is.null(p)) "" else as.character(p[[1]])
     }, "")
     data.frame(
-        backend  = vapply(x, function(e) e$key %||% "", ""),
+        backend  = vapply(seq_along(x), function(i) (x[[i]]$key %||% names(x)[i]), ""),
         name     = vapply(x, `[[`, "", "name"),
         base_url = vapply(x, `[[`, "", "base_url"),
         probe    = probe1,
         row.names = NULL, stringsAsFactors = FALSE
     )
 }
-
 
 
 
