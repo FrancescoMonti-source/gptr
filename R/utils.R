@@ -3,11 +3,6 @@ browse_openai_documentation = function(url = "https://platform.openai.com/docs/"
     browseURL(url)
 }
 
-#' Null-coalescing operator
-#' @keywords internal
-`%||%` <- function(x, y) {
-    if (is.null(x) || length(x) == 0) y else x
-}
 
 match_arg_tol <- function(x, choices, several.ok = FALSE, max.distance = .2) {
     match_vec <- vapply(x, function(k) {

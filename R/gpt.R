@@ -1,306 +1,186 @@
-#' Chat with an LLM (Local or OpenAI), with optional file/image ingestion
+#' Chat once with the selected provider
 #'
-#' `gpt()` sends a Chat Completions–style request to either a local
-#' OpenAI-compatible API (e.g., LM Studio, Ollama, LocalAI) or the OpenAI API.
-#' You can pass a simple character prompt or a full `messages` list.
-#' See Details for message formats and options. The function
-#' returns the assistant's text; if the API replies with multiple content parts,
-#' their `text` fields are concatenated.
+#' Minimal front-door that delegates to provider-specific helpers.
+#' Returns plain text (character scalar). Usage is attached as an attribute.
 #'
-#' @section What you can pass as `prompt`:
-#' You may provide either:
+#' @param prompt Character scalar user message. Ignored if `messages` is supplied upstream.
+#' @param model Optional model id. If NULL, resolved per provider defaults.
+#' @param temperature Numeric scalar (default 0.2).
+#' @param provider One of "local", "openai".
+#' @param base_url Optional override of the chat completions endpoint.
+#' @param openai_api_key Optional API key for OpenAI; defaults to env var.
+#' @param image_path Optional path or vector of paths to images to include.
+#' @param system Optional system prompt.
+#' @param seed Optional integer for determinism (when supported).
+#' @param response_format NULL, "json_object", or a full list (OpenAI API shape).
+#' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
-#' - A character prompt (most common). If `file_path` and/or `image_path` are
-#'   supplied, they are appended to the same user message as extra content parts.
-#' - A prebuilt `messages` list (advanced). Each item is a list with `role`
-#'   and `content`. `content` may be a single string or a list of parts, e.g.:
-#'
-#'   ```r
-#'   list(
-#'     list(role = "system", content = "You are concise."),
-#'     list(role = "user", content = list(
-#'       list(type = "text", text = "Caption this image"),
-#'       list(type = "image_url", image_url = list(url = "data:image/png;base64,<...>"))
-#'     ))
-#'   )
-#'   ```
-#'
-#'   Supported content parts include:
-#'
-#'   - `list(type = "text", text = "<string>")`
-#'   - `list(type = "image_url", image_url = list(url = "<https://... or data:...>"))`
-#'
-#' @section File and image ingestion (helpers):
-#' When `prompt` is a character string:
-#'
-#' - `file_path` (optional): reads `.txt`, `.md`, `.csv`, `.log`, `.pdf`, `.docx`
-#'   and appends the text as a `type = "text"` part to the same user message.
-#' - `image_path` (optional): loads a local image and appends a
-#'   `type = "image_url"` part using a base64 `data:` URI.
-#'
-#' These are ignored when you pass a prebuilt `messages` list.
-#'
-#' @section Extra API parameters via `...`:
-#' Any valid Chat Completions fields can be forwarded. Common ones:
-#'
-#' - `max_tokens` (integer): cap completion length.
-#' - `stop` (character vector): stop sequences.
-#' - `top_p` (numeric), `presence_penalty` / `frequency_penalty` (numeric).
-#' - `logit_bias` (named numeric vector).
-#' - `response_format` (list) to force JSON / JSON Schema, for example:
-#'
-#'   ```r
-#'   response_format = list(
-#'     type = "json_schema",
-#'     json_schema = list(
-#'       name = "result",
-#'       schema = list(
-#'         type = "object",
-#'         properties = list(ok = list(type = "boolean")),
-#'         required = list("ok"),
-#'         additionalProperties = FALSE
-#'       )
-#'     )
-#'   )
-#'   ```
-#'
-#' - Tool calling: supply `tools = list(...)` and optionally `tool_choice`.
-#' - Streaming: `stream = TRUE` (note: this wrapper does not yet expose a stream handler).
-#'
-#' @section Providers:
-#' - OpenAI: requires `openai_api_key` (or env `OPENAI_API_KEY`). Uses
-#'   `https://api.openai.com/v1/chat/completions`. Supports system messages, JSON
-#'   formats, tools, and (if the chosen model supports it) images.
-#' - LM Studio: local server (default `http://127.0.0.1:1234/v1/chat/completions`),
-#'   no key. Mirrors the OpenAI schema; feature support depends on the local model/runtime.
-#'
-#' @param prompt Character (single string) or a prebuilt `messages` list (see above).
-#' @param model Character. When `NULL`, a default is chosen per provider:
-#'   LM Studio: `"mistralai/mistral-7b-instruct-v0.3"`;
-#'   OpenAI: option `gptcolumnr.openai_model` (default `"gpt-4o-mini"`).
-#' @param temperature Numeric sampling temperature.
-#' @param provider One of `"lmstudio"` or `"openai"`.
-#' @param base_url Endpoint URL. If `NULL`, provider-specific defaults are used.
-#' @param openai_api_key Character. If omitted, falls back to env `OPENAI_API_KEY`
-#'   (or legacy `OPENAI_openai_api_key`).
-#' @param image_path,file_path Optional local paths; see "File and image ingestion".
-#' @param system Optional system prompt (prepended when `prompt` is a character;
-#'   ignored if you pass a full `messages` list).
-#' @param seed Optional deterministic seed (if supported by the backend).
-#' @param ... Extra fields forwarded to the API body (see "Extra API parameters").
-#'
-#' @return Character scalar containing the assistant's text. If the API returns
-#' a list of `content` parts, their `text` fields are concatenated. Returns
-#' `NA_character_` if no content is available.
-#'
-#' @examples
-#' \dontrun{
-#' # Basic
-#' gpt("Say hello", provider = "openai", model = "gpt-4o-mini")
-#'
-#' # With a system message and token cap
-#' gpt(
-#'   "Summarize this in one sentence:\n<text>",
-#'   provider = "openai",
-#'   system = "You are a precise summarizer.",
-#'   max_tokens = 100
-#' )
-#'
-#' # Prebuilt multimodal messages
-#' msgs <- list(
-#'   list(role = "system", content = "You are terse."),
-#'   list(role = "user", content = list(
-#'     list(type = "text", text = "Caption this image"),
-#'     list(type = "image_url", image_url = list(url = "data:image/png;base64,<...>"))
-#'   ))
-#' )
-#' gpt(msgs, provider = "openai", model = "gpt-4o-mini")
-#'
-#' # Forcing JSON with a schema
-#' schema <- list(
-#'   type = "object",
-#'   properties = list(ok = list(type = "boolean")),
-#'   required = list("ok"),
-#'   additionalProperties = FALSE
-#' )
-#' gpt(
-#'   "Return {\"ok\": true|false} after checking: fever >= 38C?",
-#'   provider = "openai",
-#'   response_format = list(
-#'     type = "json_schema",
-#'     json_schema = list(name = "result", schema = schema)
-#'   )
-#' )
-#'
-#' # LM Studio (local): ensure the server is running and the port matches.
-#' options(gptcolumnr.provider = "lmstudio")
-#' gpt("hi")
-#' }
-#'
-#' @seealso \code{\link{gpt_messages}} for a focused help topic on message formats.
+#' @return Character scalar (assistant message). `attr(value, "usage")` may contain token usage.
 #' @export
-
-
-
 gpt <- function(
         prompt,
         model = NULL,
         temperature = 0.2,
         provider = c("local", "openai"),
         base_url = NULL,
-        openai_api_key = Sys.getenv("OPENAI_API_KEY", Sys.getenv("OPENAI_openai_api_key", "")),
+        openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
         image_path = NULL,
-        file_path = NULL,
         system = NULL,
         seed = NULL,
+        response_format = NULL,
+        backend = NULL,   # already added earlier
+        strict_model = getOption("gpt.strict_model", TRUE),              # NEW
+        allow_backend_autoswitch = getOption("gpt.local_autoswitch", TRUE), # NEW
         ...
 ) {
+    provider <- match.arg(provider)
+    image_paths <- if (is.null(image_path)) NULL else as.character(image_path)
 
-    .local_provider_warned <- FALSE
-    if (is.null(provider)) {
-        provider <- "local"
-        if (!.local_provider_warned) {
-            warning("No provider specified; defaulting to 'local'. ",
-                    "You can set `provider = 'openai'` or `provider = 'local'` explicitly.")
-            .local_provider_warned <<- TRUE
-        }
-    } else {
-        provider <- match.arg(provider)
-    }
+    # ------------ provider == "openai" ------------
+    if (provider == "openai") {
+        # (unchanged OpenAI path)
+        msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
+        defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
 
-    ## ---------- choose sensible model/base_url if not supplied ----------
-    if (provider == "local") {
-        # If user gave a base_url, use it; else autodetect
-        if (is.null(base_url) || base_url == "") {
-            hit <- .detect_local_backend()
-            if (!is.null(hit)) {
-                base_url <- hit$base_url
-                # Optional: message about which backend we picked
-                if (isTRUE(getOption("gpt.local_verbose", FALSE))) {
-                    cli::cli_inform("Using local backend: {hit$name} ({hit$base_url})")
-                }
-            } else {
-                # Fallback to LM Studio defaults if nothing detected
-                base_url <- getOption("gpt.local_base_url",
-                                      "http://127.0.0.1:1234/v1/chat/completions")
+        if (!is.null(model) && nzchar(model)) {
+            ids <- tryCatch(list_models(provider = "openai", openai_api_key = defs$api_key)$id,
+                            error = function(e) character(0))
+            if (length(ids) && !tolower(model) %in% tolower(ids)) {
+                stop(sprintf(
+                    "Model '%s' not found for OpenAI.\nTo list OpenAI models:\n  list_models(provider = 'openai')",
+                    model
+                ), call. = FALSE)
             }
         }
-        if (is.null(model) || model == "") {
-            # Generic local default; user can set these to point to their favorite model
-            model <- getOption("gpt.local_model",
-                               getOption("gpt.lmstudio_model",
-                                         "mistralai/mistral-7b-instruct-v0.3"))
-        }
-    } else if (provider == "openai") {
-        if (is.null(base_url) || base_url == "") {
-            base_url <- "https://api.openai.com/v1/chat/completions"
-        }
-        if (is.null(model) || model == "") {
-            model <- getOption("gpt.openai_model", "gpt-4o-mini")
-        }
-    }
 
-    ## ---------- helper for required packages ----------
-    .require_package <- function(pkg) {
-        if (!requireNamespace(pkg, quietly = TRUE))
-            stop("Package ‘", pkg, "’ is required but not installed.")
-    }
-    purrr::walk(c("base64enc", "pdftools", "officer", "httr", "jsonlite", "stringr"), .require_package)
-
-    # Ensure a valid temp directory (Windows can purge %TEMP% while R is open)
-    td <- tempdir()
-    if (!dir.exists(td)) {
-        dir.create(td, recursive = TRUE, showWarnings = FALSE)
-    }
-
-    ## ---------- optional file ingestion ----------
-    file_text <- NULL
-    if (!is.null(file_path)) {
-        if (!file.exists(file_path)) stop("File not found: ", file_path)
-        ext <- tolower(tools::file_ext(file_path))
-        file_text <- switch(
-            ext,
-            txt  = paste(readLines(file_path, warn = FALSE), collapse = "\n"),
-            md   = paste(readLines(file_path, warn = FALSE), collapse = "\n"),
-            csv  = paste(readLines(file_path, warn = FALSE), collapse = "\n"),
-            log  = paste(readLines(file_path, warn = FALSE), collapse = "\n"),
-            pdf  = paste(pdftools::pdf_text(file_path), collapse = "\n"),
-            docx = {
-                doc <- officer::read_docx(file_path)
-                paste(stats::na.omit(officer::docx_summary(doc)$text), collapse = "\n")
-            },
-            stop("Unsupported file type: ", ext)
+        payload <- openai_compose_payload(
+            messages = msgs,
+            model = defs$model,
+            temperature = temperature,
+            seed = seed,
+            response_format = response_format,
+            extra = list(...)
         )
+        res <- request_openai(payload, base_url = defs$base_url, api_key = defs$api_key)
+        parsed <- openai_parse_text(res$body)
+        out <- parsed$text
+        attr(out, "usage") <- parsed$usage
+        attr(out, "backend") <- "openai"
+        attr(out, "model") <- defs$model
+        return(out)
     }
 
-    ## ---------- optional image ingestion ----------
-    image_block <- NULL
-    if (!is.null(image_path)) {
-        if (!file.exists(image_path)) stop("Image not found: ", image_path)
-        image_b64  <- base64enc::base64encode(image_path)
-        image_uri  <- paste0("data:image/png;base64,", image_b64)
-        image_block <- list(type = "image_url", image_url = list(url = image_uri))
-    }
-
-    ## ---------- construct messages ----------
-    if (is.character(prompt)) {
-        content_blocks <- list(list(type = "text", text = prompt))
-        if (!is.null(file_text))
-            content_blocks <- append(content_blocks, list(list(type = "text",
-                                                               text = paste0("\n\nContenu du fichier :\n", file_text))))
-        if (!is.null(image_block))
-            content_blocks <- append(content_blocks, list(image_block))
-
-        messages <- list()
-        if (!is.null(system)) {
-            messages <- append(messages, list(list(role = "system", content = system)))
+    # ------------ provider == "local" ------------
+    # Case A: user forces a base_url  -> validate model, if possible
+    if (!is.null(base_url) && nzchar(base_url)) {
+        # optional: validate model by probing /models
+        requested_model <- model
+        if (!is.null(requested_model) && nzchar(requested_model)) {
+            ids <- .models_from_base_url(base_url)
+            if (length(ids) && !tolower(requested_model) %in% tolower(ids)) {
+                stop(sprintf(
+                    "Model '%s' not found on this server.\nTo list models on this server:\n  list_models(base_url = %s)",
+                    requested_model, shQuote(base_url)
+                ), call. = FALSE)
+            }
         }
-        messages <- append(messages, list(list(role = "user", content = content_blocks)))
 
-    } else {
-        messages <- prompt # assume already a proper messages list
-    }
+        model <- requested_model %||% getOption("gpt.local_model", "mistralai/mistral-7b-instruct-v0.3")
 
-    ## ---------- choose headers ----------
-    if (provider == "local") {
-        headers <- httr::add_headers(`Content-Type` = "application/json")
-    } else { # provider == "openai"
-        if (openai_api_key == "")
-            stop("OPENAI_API_KEY missing; set Sys.setenv(OPENAI_API_KEY = 'sk-…') or pass openai_api_key.")
-        headers <- httr::add_headers(
-            Authorization  = paste("Bearer", openai_api_key),
-            `Content-Type` = "application/json"
+        msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
+        payload <- openai_compose_payload(
+            messages = msgs,
+            model = model,
+            temperature = temperature,
+            seed = seed,
+            response_format = response_format,
+            extra = list(...)
         )
+        res <- request_local(payload, base_url = base_url)
+        parsed <- openai_parse_text(res$body)
+        out <- parsed$text
+        attr(out, "usage") <- parsed$usage
+        attr(out, "backend") <- backend %||% "custom-local"
+        attr(out, "model") <- model
+        return(out)
     }
 
-    ## ---------- POST request ----------
-    response <- httr::POST(
-        url   = base_url,
-        headers,
-        body  = jsonlite::toJSON(
-            c(list(model = model, messages = messages, temperature = temperature),
-              if (!is.null(seed)) list(seed = seed),
-              list(...)),
-            auto_unbox = TRUE
-        ),
-        encode = "json"
+    # Case B: auto-detect backends and pick one (optionally by model)
+    avail <- .detect_local_backends()
+    if (!nrow(avail)) {
+        stop("No local OpenAI-compatible backend detected. Set a base_url or start LM Studio/Ollama/LocalAI.", call. = FALSE)
+    }
+
+    # respect explicit backend filter
+    if (!is.null(backend) && nzchar(backend)) {
+        avail <- avail[avail$backend == backend, , drop = FALSE]
+        if (!nrow(avail)) stop(sprintf(
+            "Requested backend '%s' is not running.\nTo see running backends and models:\n  list_models(provider = c(\"any\",\"lmstudio\",\"ollama\",\"localai\",\"openai\"))",
+            backend
+        ), call. = FALSE)
+    }
+
+    chosen <- NULL
+    requested_model <- model
+
+    # If user asked for a model, try to find a backend that has it
+    if (!is.null(requested_model) && nzchar(requested_model)) {
+        has <- vapply(avail$models, function(vec) is.character(vec) && any(tolower(vec) == tolower(requested_model)), FALSE)
+        if (any(has)) {
+            # choose the first backend (in preference order) that has the model
+            chosen <- avail[which(has)[1L], , drop = FALSE]
+        } else {
+            if (!any(has)) {
+                if (isTRUE(strict_model)) {
+                    stop(sprintf(
+                        "Model '%s' not found on any running local backend.\nTo list available models:\n  list_models(provider = c(\"any\",\"lmstudio\",\"ollama\",\"localai\",\"openai\"))",
+                        requested_model
+                    ), call. = FALSE)
+                } else {
+                    warning(sprintf(
+                        "Model '%s' not found; falling back to a default model.",
+                        requested_model
+                    ), call. = FALSE)
+                    requested_model <- NULL
+                }
+            }
+
+        }
+    }
+
+    # If we still haven't chosen, pick by preference (and optionally auto-switch for model)
+    if (is.null(chosen)) {
+        chosen <- .pick_local_backend(avail, require_model = NULL)  # already ordered by preference
+    }
+
+    base_url <- chosen$base_url
+    if (is.null(requested_model) || !nzchar(requested_model)) {
+        # use configured default or first model on that backend
+        requested_model <- getOption("gpt.local_model", NULL)
+        if (is.null(requested_model) || !nzchar(requested_model)) {
+            mods <- chosen$models[[1L]]
+            if (is.character(mods) && length(mods)) {
+                requested_model <- mods[[1L]]
+            } else {
+                requested_model <- "mistralai/mistral-7b-instruct-v0.3"
+            }
+        }
+    }
+
+    msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
+    payload <- openai_compose_payload(
+        messages = msgs,
+        model = requested_model,
+        temperature = temperature,
+        seed = seed,
+        response_format = response_format,
+        extra = list(...)
     )
-
-    ## ---------- handle response ----------
-    if (httr::status_code(response) != 200) {
-        warning("Request failed: ", httr::content(response, "text", encoding = "UTF-8"))
-        return(NA_character_)
-    }
-
-    parsed <- httr::content(response, "parsed", encoding = "UTF-8")
-    # Concatenate all text parts if multimodal
-    content_parts <- parsed$choices[[1]]$message$content
-    if (is.character(content_parts)) {
-        return(stringr::str_trim(paste(content_parts, collapse = "\n")))
-    } else if (is.list(content_parts)) {
-        texts <- vapply(content_parts, function(p) if (!is.null(p$text)) as.character(p$text) else "", character(1))
-        return(stringr::str_trim(paste(texts, collapse = "\n")))
-    } else {
-        return(NA_character_)
-    }
+    res <- request_local(payload, base_url = base_url)
+    parsed <- openai_parse_text(res$body)
+    out <- parsed$text
+    attr(out, "usage") <- parsed$usage
+    attr(out, "backend") <- chosen$backend
+    attr(out, "model") <- requested_model
+    out
 }

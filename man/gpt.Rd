@@ -2,7 +2,7 @@
 % Please edit documentation in R/gpt.R
 \name{gpt}
 \alias{gpt}
-\title{Chat with an LLM (Local or OpenAI), with optional file/image ingestion}
+\title{Chat once with the selected provider}
 \usage{
 gpt(
   prompt,
@@ -10,175 +10,44 @@ gpt(
   temperature = 0.2,
   provider = c("local", "openai"),
   base_url = NULL,
-  openai_api_key = Sys.getenv("OPENAI_API_KEY", Sys.getenv("OPENAI_openai_api_key", "")),
+  openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
   image_path = NULL,
-  file_path = NULL,
   system = NULL,
   seed = NULL,
+  response_format = NULL,
+  backend = NULL,
+  strict_model = getOption("gpt.strict_model", TRUE),
+  allow_backend_autoswitch = getOption("gpt.local_autoswitch", TRUE),
   ...
 )
 }
 \arguments{
-\item{prompt}{Character (single string) or a prebuilt \code{messages} list (see above).}
+\item{prompt}{Character scalar user message. Ignored if \code{messages} is supplied upstream.}
 
-\item{model}{Character. When \code{NULL}, a default is chosen per provider:
-LM Studio: \code{"mistralai/mistral-7b-instruct-v0.3"};
-OpenAI: option \code{gptcolumnr.openai_model} (default \code{"gpt-4o-mini"}).}
+\item{model}{Optional model id. If NULL, resolved per provider defaults.}
 
-\item{temperature}{Numeric sampling temperature.}
+\item{temperature}{Numeric scalar (default 0.2).}
 
-\item{provider}{One of \code{"lmstudio"} or \code{"openai"}.}
+\item{provider}{One of "local", "openai".}
 
-\item{base_url}{Endpoint URL. If \code{NULL}, provider-specific defaults are used.}
+\item{base_url}{Optional override of the chat completions endpoint.}
 
-\item{openai_api_key}{Character. If omitted, falls back to env \code{OPENAI_API_KEY}
-(or legacy \code{OPENAI_openai_api_key}).}
+\item{openai_api_key}{Optional API key for OpenAI; defaults to env var.}
 
-\item{image_path, file_path}{Optional local paths; see "File and image ingestion".}
+\item{image_path}{Optional path or vector of paths to images to include.}
 
-\item{system}{Optional system prompt (prepended when \code{prompt} is a character;
-ignored if you pass a full \code{messages} list).}
+\item{system}{Optional system prompt.}
 
-\item{seed}{Optional deterministic seed (if supported by the backend).}
+\item{seed}{Optional integer for determinism (when supported).}
 
-\item{...}{Extra fields forwarded to the API body (see "Extra API parameters").}
+\item{response_format}{NULL, "json_object", or a full list (OpenAI API shape).}
+
+\item{...}{Extra fields passed through to the provider payload (e.g. \code{max_tokens}, \code{stop}).}
 }
 \value{
-Character scalar containing the assistant's text. If the API returns
-a list of \code{content} parts, their \code{text} fields are concatenated. Returns
-\code{NA_character_} if no content is available.
+Character scalar (assistant message). \code{attr(value, "usage")} may contain token usage.
 }
 \description{
-\code{gpt()} sends a Chat Completions–style request to either a local
-OpenAI-compatible API (e.g., LM Studio, Ollama, LocalAI) or the OpenAI API.
-You can pass a simple character prompt or a full \code{messages} list.
-See Details for message formats and options. The function
-returns the assistant's text; if the API replies with multiple content parts,
-their \code{text} fields are concatenated.
-}
-\section{What you can pass as \code{prompt}}{
-
-You may provide either:
-\itemize{
-\item A character prompt (most common). If \code{file_path} and/or \code{image_path} are
-supplied, they are appended to the same user message as extra content parts.
-\item A prebuilt \code{messages} list (advanced). Each item is a list with \code{role}
-and \code{content}. \code{content} may be a single string or a list of parts, e.g.:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{list(
-  list(role = "system", content = "You are concise."),
-  list(role = "user", content = list(
-    list(type = "text", text = "Caption this image"),
-    list(type = "image_url", image_url = list(url = "data:image/png;base64,<...>"))
-  ))
-)
-}\if{html}{\out{</div>}}
-
-Supported content parts include:
-\itemize{
-\item \code{list(type = "text", text = "<string>")}
-\item \code{list(type = "image_url", image_url = list(url = "<https://... or data:...>"))}
-}
-}
-}
-
-\section{File and image ingestion (helpers)}{
-
-When \code{prompt} is a character string:
-\itemize{
-\item \code{file_path} (optional): reads \code{.txt}, \code{.md}, \code{.csv}, \code{.log}, \code{.pdf}, \code{.docx}
-and appends the text as a \code{type = "text"} part to the same user message.
-\item \code{image_path} (optional): loads a local image and appends a
-\code{type = "image_url"} part using a base64 \verb{data:} URI.
-}
-
-These are ignored when you pass a prebuilt \code{messages} list.
-}
-
-\section{Extra API parameters via \code{...}}{
-
-Any valid Chat Completions fields can be forwarded. Common ones:
-\itemize{
-\item \code{max_tokens} (integer): cap completion length.
-\item \code{stop} (character vector): stop sequences.
-\item \code{top_p} (numeric), \code{presence_penalty} / \code{frequency_penalty} (numeric).
-\item \code{logit_bias} (named numeric vector).
-\item \code{response_format} (list) to force JSON / JSON Schema, for example:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{response_format = list(
-  type = "json_schema",
-  json_schema = list(
-    name = "result",
-    schema = list(
-      type = "object",
-      properties = list(ok = list(type = "boolean")),
-      required = list("ok"),
-      additionalProperties = FALSE
-    )
-  )
-)
-}\if{html}{\out{</div>}}
-\item Tool calling: supply \code{tools = list(...)} and optionally \code{tool_choice}.
-\item Streaming: \code{stream = TRUE} (note: this wrapper does not yet expose a stream handler).
-}
-}
-
-\section{Providers}{
-
-\itemize{
-\item OpenAI: requires \code{openai_api_key} (or env \code{OPENAI_API_KEY}). Uses
-\verb{https://api.openai.com/v1/chat/completions}. Supports system messages, JSON
-formats, tools, and (if the chosen model supports it) images.
-\item LM Studio: local server (default \verb{http://127.0.0.1:1234/v1/chat/completions}),
-no key. Mirrors the OpenAI schema; feature support depends on the local model/runtime.
-}
-}
-
-\examples{
-\dontrun{
-# Basic
-gpt("Say hello", provider = "openai", model = "gpt-4o-mini")
-
-# With a system message and token cap
-gpt(
-  "Summarize this in one sentence:\n<text>",
-  provider = "openai",
-  system = "You are a precise summarizer.",
-  max_tokens = 100
-)
-
-# Prebuilt multimodal messages
-msgs <- list(
-  list(role = "system", content = "You are terse."),
-  list(role = "user", content = list(
-    list(type = "text", text = "Caption this image"),
-    list(type = "image_url", image_url = list(url = "data:image/png;base64,<...>"))
-  ))
-)
-gpt(msgs, provider = "openai", model = "gpt-4o-mini")
-
-# Forcing JSON with a schema
-schema <- list(
-  type = "object",
-  properties = list(ok = list(type = "boolean")),
-  required = list("ok"),
-  additionalProperties = FALSE
-)
-gpt(
-  "Return {\"ok\": true|false} after checking: fever >= 38C?",
-  provider = "openai",
-  response_format = list(
-    type = "json_schema",
-    json_schema = list(name = "result", schema = schema)
-  )
-)
-
-# LM Studio (local): ensure the server is running and the port matches.
-options(gptcolumnr.provider = "lmstudio")
-gpt("hi")
-}
-
-}
-\seealso{
-\code{\link{gpt_messages}} for a focused help topic on message formats.
+Minimal front-door that delegates to provider-specific helpers.
+Returns plain text (character scalar). Usage is attached as an attribute.
 }

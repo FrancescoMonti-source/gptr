@@ -20,13 +20,15 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Imports:
     httr,
-    httr2,
+    httr2 (>= 0.2.3),
     tidyverse,
     jsonlite,
     stringr,
     purrr,
     tools,
-    cli
+    cli,
+    curl (>= 5.0.0),
+    rlang (>= 1.0.0)
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
