@@ -15,14 +15,14 @@ gpt_column(
   image_path = NULL,
   coerce_types = TRUE,
   coerce_when = NULL,
-  final_types = c("schema", "infer", "as_is"),
+  infer_types = FALSE,
   na_values = c("NA", "N/A", "null", "None", ""),
   auto_correct_keys = getOption("gptr.auto_correct_keys", TRUE),
   keep_unexpected_keys = getOption("gptr.keep_unexpected_keys", FALSE),
   fuzzy_model = getOption("gptr.fuzzy_model", "lev_ratio"),
   fuzzy_threshold = getOption("gptr.fuzzy_threshold", 0.3),
   relaxed = FALSE,
-  return_debug = FALSE,
+  return_debug = TRUE,
   verbose = FALSE,
   ...
 )
@@ -42,35 +42,26 @@ gpt_column(
 
 \item{coerce_types}{Row-level coercion toggle (default TRUE).}
 
-\item{coerce_when}{Optional predicate function(key, value, spec, row_index) -> TRUE/FALSE for per-value control.}
+\item{coerce_when}{Optional named list of per-key target types used for row-level coercion.}
 
-\item{final_types}{Final column typing: "schema" (default), "infer", or "as_is".}
+\item{infer_types}{Logical; when no schema is provided, infer column types (default FALSE).
+If a schema (\code{keys}) is provided, it is always used for final typing.}
 
 \item{na_values}{Values treated as NA at multiple stages.}
 
-\item{auto_correct_keys}{Logical; fuzzy-correct unexpected key names (unique match only). Fuzzy key correction is handled by json_keys_align(). You can control it by passing fuzzy_model ("lev_ratio" or "lev") and fuzzy_threshold via .... Defaults: fuzzy_model = "lev_ratio", fuzzy_threshold = 0.3.}
+\item{auto_correct_keys}{Logical; fuzzy-correct unexpected key names (unique match only).
+Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_model}
+("lev_ratio" or "lev") and \code{fuzzy_threshold}.}
 
 \item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
 \item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 
-\item{return_debug}{If TRUE, add \code{.raw_output} and \code{.invalid_rows}.}
+\item{return_debug}{If TRUE, add \code{.raw_output}, \code{.invalid_rows}, and \code{.invalid_detail}. Default TRUE.}
 
 \item{verbose}{Print repair/validation messages.}
 
-\item{...}{Extra args passed to \code{gpt()}.}
-
-\item{max.distance}{Max distance for fuzzy key matching (agrep).}
-
-\item{show_invalid_rows}{Print offending inputs (by index) if validation fails.}
-
-\item{parallel}{If TRUE, use \code{furrr} to parallelize.}
-
-\item{max_tokens}{Token limit for trim_text().}
-
-\item{token_mode}{"words", "chars", or "custom" for trim_text().}
-
-\item{custom_tokenizer}{Optional custom tokenizer for trim_text().}
+\item{...}{Extra args passed to \code{gpt()} (e.g., \code{model}, \code{response_format}).}
 }
 \description{
 Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,
