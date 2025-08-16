@@ -7,7 +7,7 @@
 #' @param expected_keys Character vector of expected keys (can be NULL).
 #' @return A one-row tibble.
 #' @export
-row_to_tibble <- function(x, expected_keys = NULL) {
+safe_row_to_tibble <- function(x, expected_keys = NULL) {
     # Happy path: named list -> one-row tibble, fill/order expected keys
     if (is.list(x) && !is.data.frame(x) && !is.null(names(x))) {
         if (!is.null(expected_keys)) {
