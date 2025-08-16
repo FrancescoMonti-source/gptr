@@ -5,29 +5,35 @@
 #'
 #' @param x Named list ready to become a row; or a scalar (relaxed mode).
 #' @param expected_keys Character vector of expected keys (can be NULL).
-#' @param raw_col_name Name to use when x is an unnamed scalar (default ".parsed").
 #' @return A one-row tibble.
 #' @export
-row_to_tibble <- function(x, expected_keys, raw_col_name = ".parsed") {
-    # 0) Empty list + schema → fill schema with NA
-    if (is.list(x) && length(x) == 0L && !is.null(expected_keys)) {
-        x <- setNames(rep(NA, length(expected_keys)), expected_keys)
+row_to_tibble <- function(x, expected_keys = NULL) {
+    # Happy path: named list -> one-row tibble, fill/order expected keys
+    if (is.list(x) && !is.data.frame(x) && !is.null(names(x))) {
+        if (!is.null(expected_keys)) {
+            miss <- setdiff(expected_keys, names(x))
+            if (length(miss)) x[miss] <- NA
+            x <- x[expected_keys]
+        }
+        return(tibble::as_tibble(x, .name_repair = "minimal"))
     }
-
-    # 1) Unnamed atomic scalar (relaxed mode): give it a name
-    if (is.atomic(x) && (is.null(names(x)) || length(names(x)) == 0L)) {
-        x <- setNames(list(x), raw_col_name)
+    # Relaxed/no-schema path: keep whatever we got in a .parsed col
+    if (is.character(x) && length(x) == 1L) {
+        return(tibble::tibble(.parsed = x))
     }
+    tibble::tibble(.parsed = list(x))
+}
 
-    # 2) If names missing but we have expected keys, fill them
-    if ((is.null(names(x)) || any(names(x) == "")) && !is.null(expected_keys)) {
-        x <- setNames(rep(NA, length(expected_keys)), expected_keys)
-    }
+parsed_df <- purrr::map_dfr(parsed_results, safe_row_to_tibble, expected_keys = expected_keys)
 
-    # 3) Scalarize multi-length elements
-    x2 <- lapply(x, function(v) {
-        if (is.null(v) || length(v) == 0L) return(NA)
-        if (length(v) > 1L) v[[1L]] else v
-    })
-    tibble::as_tibble_row(x2)
+# Only finalize when scalar columns really exist
+has_scalar <- !is.null(expected_keys) && all(expected_keys %in% names(parsed_df))
+if (has_scalar) {
+    parsed_df <- finalize_columns(
+        parsed_df,
+        expected_keys = expected_keys,
+        key_specs     = key_specs,
+        mode          = if (!is.null(key_specs)) "schema" else "as_is"  # or your 'mode' variable
+    )
+    parsed_df$.parsed <- NULL  # drop helper if present
 }
