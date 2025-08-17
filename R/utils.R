@@ -89,7 +89,8 @@ is_na_like <- function(x, na_vals = c("NA", "null", "", "[]", "{}", "None")) {
 tidy_json <- function(x,
                       na_values = c("NA", "null", "", "[]", "{}", "None"),
                       aggressive = FALSE) {
-    strip_fences <- function(s) {
+
+        strip_fences <- function(s) {
         s <- gsub("^\\s*```[a-zA-Z0-9_-]*\\s*", "", s)
         gsub("```\\s*$", "", s)
     }
@@ -105,6 +106,15 @@ tidy_json <- function(x,
         vals <- vals[vals != ""]
         paste(vapply(vals, escape_rx, character(1)), collapse = "|")
     }
+
+    # If x itself is a JSON string *containing* JSON, unwrap it first
+    if (is.character(x) && length(x) == 1L) {
+        inner_try <- try(jsonlite::fromJSON(x, simplifyVector = TRUE), silent = TRUE)
+        if (!inherits(inner_try, "try-error") && is.character(inner_try) && length(inner_try) == 1L) {
+            x <- inner_try
+        }
+    }
+
 
     log <- character(0)
     if (is.null(x) || !nzchar(x)) return(list(txt = "", log = log))
@@ -124,9 +134,26 @@ tidy_json <- function(x,
     s  <- extract_json_blob(s)
     if (!identical(s, s0)) log <- c(log, "cleaned")
 
-    # Early parse
-    parsed <- tryCatch(jsonlite::fromJSON(s, simplifyVector = TRUE), error = function(e) NULL)
-    if (!is.null(parsed)) return(list(txt = s, log = log))
+    ## Early parse (with unwrap of JSON string-literal)
+    # Early parse (with unwrap for JSON string-literal)
+    parsed1 <- tryCatch(jsonlite::fromJSON(s, simplifyVector = FALSE), error = function(e) e)
+
+    if (!inherits(parsed1, "error")) {
+        if (is.character(parsed1) && length(parsed1) == 1L) {
+            inner <- trimws(parsed1)
+            if ((startsWith(inner, "{") && grepl("}\\s*$", inner)) ||
+                (startsWith(inner, "[") && grepl("\\]\\s*$", inner))) {
+                parsed2 <- tryCatch(jsonlite::fromJSON(inner, simplifyVector = TRUE), error = function(e) NULL)
+                if (!is.null(parsed2)) {
+                    log <- c(log, "unwrapped-json-string")
+                    return(list(txt = inner, log = log))
+                }
+            }
+        } else {
+            return(list(txt = s, log = log))  # already a bare JSON object/array
+        }
+    }
+
 
     # Pass 1: conservative repairs
     re_vals <- na_vals_pattern(na_values)

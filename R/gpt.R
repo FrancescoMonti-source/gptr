@@ -71,41 +71,63 @@ gpt <- function(
     }
 
     # ------------ provider == "local" ------------
-    # Case A: user forces a base_url  -> validate model, if possible
+    ## ---- Case A: user forces a base_url  -> validate model, if possible ----
     if (!is.null(base_url) && nzchar(base_url)) {
-        # optional: validate model by probing /models
+        # normalize to the /v1 root (accept .../v1 or .../v1/chat/completions)
+        normalize_base <- function(u) {
+            u <- sub("/chat/completions/?$", "", u)
+            sub("/v1/?$", "/v1", u)
+        }
+        base_norm <- normalize_base(base_url)
+
         requested_model <- model
-        if (!is.null(requested_model) && nzchar(requested_model)) {
-            ids <- .models_from_base_url(base_url)
-            if (length(ids) && !tolower(requested_model) %in% tolower(ids)) {
+
+        # Try to fetch available model ids from this server (non-fatal if it fails)
+        ids <- character(0)
+        ms  <- try(list_models(base_url = base_norm), silent = TRUE)
+        if (!inherits(ms, "try-error") && !is.null(ms) && NROW(ms) && "id" %in% names(ms)) {
+            ids <- unname(ms$id)
+        }
+
+        # If a model was provided, validate it only if we successfully fetched ids
+        if (!is.null(requested_model) && nzchar(requested_model) && length(ids)) {
+            if (!tolower(requested_model) %in% tolower(ids)) {
                 stop(sprintf(
                     "Model '%s' not found on this server.\nTo list models on this server:\n  list_models(base_url = %s)",
-                    requested_model, shQuote(base_url)
+                    requested_model, shQuote(base_norm)
                 ), call. = FALSE)
             }
         }
 
-        model <- requested_model %||% getOption("gpt.local_model", "mistralai/mistral-7b-instruct-v0.3")
+        # If no model was provided, pick one:
+        if (is.null(requested_model) || !nzchar(requested_model)) {
+            requested_model <- getOption("gpt.local_model", NULL)
+            if (is.null(requested_model) || !nzchar(requested_model)) {
+                requested_model <- if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3"
+            }
+        }
 
+        # Compose & send
         msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
         payload <- openai_compose_payload(
-            messages = msgs,
-            model = model,
-            temperature = temperature,
-            seed = seed,
+            messages        = msgs,
+            model           = requested_model,
+            temperature     = temperature,
+            seed            = seed,
             response_format = response_format,
-            extra = list(...)
+            extra           = list(...)
         )
-        res <- request_local(payload, base_url = base_url)
+        res <- request_local(payload, base_url = base_norm)
         parsed <- openai_parse_text(res$body)
         out <- parsed$text
-        attr(out, "usage") <- parsed$usage
+        attr(out, "usage")   <- parsed$usage
         attr(out, "backend") <- backend %||% "custom-local"
-        attr(out, "model") <- model
+        attr(out, "model")   <- requested_model
         return(out)
     }
 
-    # Case B: auto-detect backends and pick one (optionally by model)
+
+    ## ---- Case B: auto-detect backends and pick one (optionally by model) ----
     avail <- .detect_local_backends()
     if (!nrow(avail)) {
         stop("No local OpenAI-compatible backend detected. Set a base_url or start LM Studio/Ollama/LocalAI.", call. = FALSE)

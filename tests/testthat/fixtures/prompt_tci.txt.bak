@@ -1,0 +1,28 @@
+prompt_tci <- paste(
+  "SYSTEM:
+    Tu es un assistant spécialisé dans l’analyse de textes médicaux.",
+  
+  "Ta tâche : déterminer si l’extrait d’un dossier de patient atteint de maladie de Parkinson mentionne l’un des TROUBLES suivants.",
+  
+  "TROUBLES CIBLES – clé « définition synthétique » \n",
+  "• \"impulsivite\"          – actes irréfléchis / compulsifs (achats, propos, gestes, ...)\n",
+  "• \"hypersexualite\"       – libido excessive, comportements sexuels impulsifs\n",
+  "• \"trouble_alimentaire\"  – compulsions alimentaires : ex . hyperphagie, boulimie, grignotage\n",  
+  "• \"jeu_pathologique\"     – jeu pathologique (jeux d’argent, jeux vidéo, « addiction ordinateur »)\n",
+  
+  "Réponds UNIQUEMENT avec une **chaîne JSON** (pas de bloc Markdown) au format :",
+    "{{
+      \"impulsivite\": 0 | 1 | NA,
+      \"hypersexualite\": 0 | 1 | NA,
+      \"trouble_alimentaire\": 0 | 1 | NA,
+      \"jeu_pathologique\": 0 | 1 | NA
+    }}",
+  
+  "Contraintes :
+  - Si aucune information n’est disponible pour un trouble, retourne NA.
+  - N’utilise que les valeurs **0**, **1** ou **NA**.
+  - Aucune clé supplémentaire, aucun commentaire, aucun saut de ligne en dehors du JSON.",
+  "USER:",
+  "Voici le texte :\n\"{text}\"\n\n",
+  sep = ""
+)

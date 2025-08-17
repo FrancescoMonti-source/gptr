@@ -2,22 +2,29 @@
 % Please edit documentation in R/providers_local.R
 \name{request_local}
 \alias{request_local}
-\title{Perform a Chat Completions request to a local OpenAI-compatible server (httr2)}
+\title{Call a local OpenAI-compatible backend using httr2}
 \usage{
-request_local(payload, base_url = NULL, timeout = getOption("gpt.timeout", 30))
+request_local(
+  payload,
+  base_url,
+  timeout_sec = 30,
+  max_tries = 2,
+  user_agent = paste0("gptr/", as.character(utils::packageVersion("gptr"))),
+  debug_http = getOption("gptr.debug_http", FALSE)
+)
 }
 \arguments{
-\item{payload}{list as created by openai_compose_payload()}
+\item{payload}{List already shaped like OpenAI chat payload, or a JSON string}
 
-\item{base_url}{e.g. http://127.0.0.1:1234/v1/chat/completions}
+\item{base_url}{Base URL of the server. Accepts ".../v1" or ".../v1/chat/completions"}
 
-\item{timeout}{seconds}
+\item{timeout_sec}{Numeric timeout in seconds}
+
+\item{max_tries}{Retries (total tries = max_tries)}
 }
 \value{
-list(body, resp)
-Perform a Chat Completions request to a local OpenAI-compatible server (httr2)
+list(status = \if{html}{\out{<int>}}, body = \if{html}{\out{<parsed json list>}})
 }
 \description{
-Perform a Chat Completions request to a local OpenAI-compatible server (httr2)
+Call a local OpenAI-compatible backend using httr2
 }
-\keyword{internal}

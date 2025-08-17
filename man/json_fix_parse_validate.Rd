@@ -5,18 +5,16 @@
 \title{Fix, parse, and (optionally) validate/coerce a JSON string (one row)}
 \usage{
 json_fix_parse_validate(
-  out,
-  key_specs,
-  na_values,
+  text,
+  key_specs = NULL,
+  na_values = c("NA", "N/A", "null", "None", ""),
   verbose = FALSE,
-  i = NA_integer_,
-  coerce_types = TRUE,
+  i = NULL,
+  coerce_types = FALSE,
   coerce_when = NULL
 )
 }
 \arguments{
-\item{out}{Raw model output (character).}
-
 \item{key_specs}{Named list of specs from parse_key_spec() or NULL.}
 
 \item{na_values}{Character vector treated as NA.}
@@ -29,6 +27,8 @@ json_fix_parse_validate(
 
 \item{coerce_when}{Optional predicate function(key, value, spec, row_index) -> TRUE/FALSE,
 overrides coerce_types per value when provided.}
+
+\item{out}{Raw model output (character).}
 }
 \value{
 list(ok = TRUE/FALSE, value = parsed list or raw string, note = "parsed"/"not-json"/"NA-like")
