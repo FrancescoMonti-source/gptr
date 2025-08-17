@@ -21,7 +21,7 @@
 #' @param coerce_when Optional named list of per-key target types used for row-level coercion.
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
 #'   If a schema (`keys`) is provided, it is always used for final typing.
-#' @param ... Extra args passed to `gpt()` (e.g., `model`, `response_format`).
+#' @param ... Extra args passed to `gpt()` (e.g., `model`, `provider`,`response_format`).
 #' @export
 
 gpt_column <- function(

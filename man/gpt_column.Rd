@@ -61,7 +61,7 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{verbose}{Print repair/validation messages.}
 
-\item{...}{Extra args passed to \code{gpt()} (e.g., \code{model}, \code{response_format}).}
+\item{...}{Extra args passed to \code{gpt()} (e.g., \code{model}, \code{provider},\code{response_format}).}
 }
 \description{
 Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,

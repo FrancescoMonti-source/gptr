@@ -8,7 +8,7 @@ gpt(
   prompt,
   model = NULL,
   temperature = 0.2,
-  provider = c("local", "openai"),
+  provider = c("auto", "lmstudio", "openai", "ollama", "local"),
   base_url = NULL,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
   image_path = NULL,
