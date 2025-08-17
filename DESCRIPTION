@@ -24,11 +24,12 @@ Imports:
     tidyverse,
     jsonlite,
     stringr,
+    glue,
     purrr,
     tools,
     cli,
     curl (>= 5.0.0),
-    rlang (>= 1.0.0)
+    rlang
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

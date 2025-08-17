@@ -18,6 +18,7 @@ gpt(
   backend = NULL,
   strict_model = getOption("gpt.strict_model", TRUE),
   allow_backend_autoswitch = getOption("gpt.local_autoswitch", TRUE),
+  print_raw = FALSE,
   ...
 )
 }
@@ -41,6 +42,8 @@ gpt(
 \item{seed}{Optional integer for determinism (when supported).}
 
 \item{response_format}{NULL, "json_object", or a full list (OpenAI API shape).}
+
+\item{print_raw}{Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.}
 
 \item{...}{Extra fields passed through to the provider payload (e.g. \code{max_tokens}, \code{stop}).}
 }

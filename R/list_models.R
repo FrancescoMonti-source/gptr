@@ -116,6 +116,7 @@
 #' @return A tibble with at least columns `backend` and `id`. Additional columns
 #'   are returned when the server exposes richer model metadata.
 #' @export
+
 list_models <- function(
         provider = c("any","lmstudio","ollama","localai","openai"),
         url = NULL,

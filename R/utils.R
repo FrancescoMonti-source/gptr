@@ -4,6 +4,7 @@ browse_openai_documentation = function(url = "https://platform.openai.com/docs/"
 }
 
 
+
 match_arg_tol <- function(x, choices, several.ok = FALSE, max.distance = .2) {
     match_vec <- vapply(x, function(k) {
         matched <- agrep(k, choices, value = TRUE, ignore.case = TRUE, max.distance = max.distance)
@@ -186,3 +187,6 @@ tidy_json <- function(x,
     list(txt = s1c, log = c(log, "unparsed-after-repair"))
 }
 
+# ---- %||% -----
+#' @importFrom rlang %||%
+NULL

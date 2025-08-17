@@ -27,7 +27,7 @@
 #' @param file_paths Optional character vector of file paths. Each will be embedded
 #'   as "type": "input_file" with a data URL (base64). Requires `base64enc`.
 #' @return A list suitable for OpenAI `messages`
-#' @export.
+#' @export
 openai_make_messages <- function(system = NULL, user = NULL,
                                  image_paths = NULL, file_paths = NULL,
                                  on_missing = c("warn","skip","error")) {
