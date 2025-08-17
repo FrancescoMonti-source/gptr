@@ -7,7 +7,7 @@
 #'   - "lev_ratio": compare edit distance as a proportion of target length.
 #'   - "lev": compare raw edit distance (absolute number of edits).
 #' @param fuzzy_threshold Numeric; interpretation depends on `fuzzy_model`:
-#'   - if "lev_ratio": a proportion in [0,1], e.g. 0.3.
+#'   - if "lev_ratio": a proportion in `[0,1]`, e.g. 0.3.
 #'   - if "lev": an integer number of edits, e.g. 2.
 #' @param keep_unexpected Logical; keep keys not in `expected_keys`.
 #' @return Named list over expected_keys (plus extras if kept).

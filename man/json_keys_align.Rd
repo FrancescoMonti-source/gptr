@@ -28,7 +28,7 @@ json_keys_align(
 
 \item{fuzzy_threshold}{Numeric; interpretation depends on \code{fuzzy_model}:
 \itemize{
-\item if "lev_ratio": a proportion in \link{0,1}, e.g. 0.3.
+\item if "lev_ratio": a proportion in \verb{[0,1]}, e.g. 0.3.
 \item if "lev": an integer number of edits, e.g. 2.
 }}
 
