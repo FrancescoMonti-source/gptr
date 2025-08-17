@@ -20,14 +20,14 @@
 # -- Message helpers --------------------------------------------------------
 
 #' Build a Chat Completions message list (text, images, files)
-#' @keywords internal
 #' @param system Optional system prompt (character scalar).
 #' @param user   User prompt (character scalar).
 #' @param image_paths Optional character vector of image file paths. Each will be
 #'   embedded as "type": "input_image" with a data URL (base64).
 #' @param file_paths Optional character vector of file paths. Each will be embedded
 #'   as "type": "input_file" with a data URL (base64). Requires `base64enc`.
-#' @return A list suitable for OpenAI `messages`.
+#' @return A list suitable for OpenAI `messages`
+#' @export.
 openai_make_messages <- function(system = NULL, user = NULL,
                                  image_paths = NULL, file_paths = NULL,
                                  on_missing = c("warn","skip","error")) {

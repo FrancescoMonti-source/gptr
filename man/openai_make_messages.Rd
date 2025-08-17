@@ -24,9 +24,8 @@ embedded as "type": "input_image" with a data URL (base64).}
 as "type": "input_file" with a data URL (base64). Requires \code{base64enc}.}
 }
 \value{
-A list suitable for OpenAI \code{messages}.
+A list suitable for OpenAI \code{messages}
 }
 \description{
 Build a Chat Completions message list (text, images, files)
 }
-\keyword{internal}
