@@ -246,10 +246,26 @@ gpt <- function(
         )
         res <- request_local(payload, base_url = base_norm)
 
+        # --- NEW: enforce the model actually used by the server ---
+        used_model <- tryCatch({
+            b <- if (is.character(res$body)) jsonlite::fromJSON(res$body, simplifyVector = FALSE) else res$body
+            b$model %||% (b$meta$model %||% NULL)
+        }, error = function(e) NULL)
+
+        if (!is.null(requested_model) && nzchar(requested_model) && !is.null(used_model) && nzchar(used_model)) {
+            if (!identical(tolower(requested_model), tolower(used_model))) {
+                msg <- sprintf("Server used model '%s' instead of requested '%s'. " %+%
+                                   "Pin the correct server with `base_url=` or set options(gpt.local_base_url=...).",
+                               used_model, requested_model)
+                if (isTRUE(strict_model)) stop(msg, call. = FALSE) else warning(msg, call. = FALSE)
+            }
+        }
+
         return(.handle_return(
             res,
-            backend_name = backend %||% provider,  # keep your `backend` arg if provided
+            backend_name = backend %||% provider,
             model_name   = requested_model
         ))
+
     }
 }
