@@ -23,7 +23,7 @@ gpt <- function(
         prompt,
         model = NULL,
         temperature = 0.2,
-        provider = c("local", "openai"),
+        provider = c("auto", "lmstudio", "openai", "ollama", "local"),
         base_url = NULL,
         openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
         image_path = NULL,
@@ -37,6 +37,12 @@ gpt <- function(
         ...
 ) {
     provider <- match.arg(provider)
+    provider <- .normalize_provider(provider)   # "local" -> "auto"
+    # normalize to API root (…/v1) when calling request_local()
+    normalize_base <- function(u) {
+        u <- sub("/chat/completions/?$", "", u)
+        sub("/v1/?$", "/v1", u)
+        }
     image_paths <- if (is.null(image_path)) NULL else as.character(image_path)
 
     # --- tiny local helpers (self-contained; no new globals) ---------------- # NEW
@@ -195,73 +201,55 @@ gpt <- function(
     }
 
     ## ---- Case B: auto-detect backends and pick one (optionally by model) ----
-    avail <- .detect_local_backends()
-    if (!nrow(avail)) {
-        stop("No local OpenAI-compatible backend detected. Set a base_url or start LM Studio/Ollama/LocalAI.", call. = FALSE)
-    }
+    # local-like providers (auto / lmstudio / ollama / localai)
+    if (provider %in% c("auto", "lmstudio", "ollama", "localai")) {
+        # Resolve a default (prefers options(gpt.local_base_url)) and ping once.
+        local_base <- .resolve_base_url(provider, base_url)   # returns .../v1/chat/completions
+        .ensure_backend_up(local_base, provider)              # fast cached /models ping
+        base_norm <- normalize_base(local_base)               # pass root .../v1 to request_local()
 
-    if (!is.null(backend) && nzchar(backend)) {
-        avail <- avail[avail$backend == backend, , drop = FALSE]
-        if (!nrow(avail)) stop(sprintf(
-            "Requested backend '%s' is not running.\nTo see running backends and models:\n  list_models(provider = c(\"any\",\"lmstudio\",\"ollama\",\"localai\",\"openai\"))",
-            backend
-        ), call. = FALSE)
-    }
+        # Choose model: take user arg > option > sensible default
+        requested_model <- model
+        if (is.null(requested_model) || !nzchar(requested_model)) {
+            requested_model <- getOption("gpt.local_model", "mistralai/mistral-7b-instruct-v0.3")
+        }
 
-    chosen <- NULL
-    requested_model <- model
-
-    if (!is.null(requested_model) && nzchar(requested_model)) {
-        has <- vapply(avail$models, function(vec) is.character(vec) && any(tolower(vec) == tolower(requested_model)), FALSE)
-        if (any(has)) {
-            chosen <- avail[which(has)[1L], , drop = FALSE]
-        } else {
-            if (!any(has)) {
-                if (isTRUE(strict_model)) {
-                    stop(sprintf(
-                        "Model '%s' not found on any running local backend.\nTo list available models:\n  list_models(provider = c(\"any\",\"lmstudio\",\"ollama\",\"localai\",\"openai\"))",
-                        requested_model
-                    ), call. = FALSE)
-                } else {
-                    warning(sprintf(
-                        "Model '%s' not found; falling back to a default model.",
-                        requested_model
-                    ), call. = FALSE)
-                    requested_model <- NULL
+        # Optional one-time friendly check; skip for maximum speed if FALSE
+        if (isTRUE(getOption("gpt.check_model_once", FALSE)) && nzchar(requested_model)) {
+            ids <- try(.get_model_ids(local_base), silent = TRUE)  # ok if not present
+            if (!inherits(ids, "try-error") && length(ids)) {
+                if (!tolower(requested_model) %in% tolower(ids)) {
+                    if (isTRUE(strict_model)) {
+                        stop(sprintf(
+                            "Model '%s' not found on %s.\nEither load it there, pass `base_url=`, or set options(gpt.local_base_url=...).",
+                            requested_model, sub("/chat/completions$", "", local_base)
+                        ), call. = FALSE)
+                    } else {
+                        warning(sprintf(
+                            "Model '%s' not found on %s; continuing (strict_model=FALSE).",
+                            requested_model, sub("/chat/completions$", "", local_base)
+                        ), call. = FALSE)
+                    }
                 }
             }
         }
+
+        # Build + call
+        msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
+        payload <- openai_compose_payload(
+            messages        = msgs,
+            model           = requested_model,
+            temperature     = temperature,
+            seed            = seed,
+            response_format = response_format,
+            extra           = list(...)
+        )
+        res <- request_local(payload, base_url = base_norm)
+
+        return(.handle_return(
+            res,
+            backend_name = backend %||% provider,  # keep your `backend` arg if provided
+            model_name   = requested_model
+        ))
     }
-
-    if (is.null(chosen)) {
-        chosen <- .pick_local_backend(avail, require_model = NULL)
-    }
-
-    base_url <- chosen$base_url
-    if (is.null(requested_model) || !nzchar(requested_model)) {
-        requested_model <- getOption("gpt.local_model", NULL)
-        if (is.null(requested_model) || !nzchar(requested_model)) {
-            mods <- chosen$models[[1L]]
-            if (is.character(mods) && length(mods)) {
-                requested_model <- mods[[1L]]
-            } else {
-                requested_model <- "mistralai/mistral-7b-instruct-v0.3"
-            }
-        }
-    }
-
-    msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
-    payload <- openai_compose_payload(
-        messages = msgs,
-        model = requested_model,
-        temperature = temperature,
-        seed = seed,
-        response_format = response_format,
-        extra = list(...)
-    )
-    res <- request_local(payload, base_url = base_url)
-
-    return(.handle_return(res,
-                          backend_name = chosen$backend,
-                          model_name   = requested_model))                                         # NEW
 }
