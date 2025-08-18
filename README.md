@@ -26,35 +26,28 @@ remotes::install_github("FrancescoMonti-source/gptr")
 
 ## 🚀 Quick start
 
-``` r
+```r
 library(gptr)
 library(tibble)
 
-# Define a prompt template
-template <- "Extract age and diagnosis from:\n{text}\nFormat: {json_format}"
+# Minimal structured extraction
+df <- tibble(text = 'Patient is 64 years old; dx: type 2 diabetes.')
 
-# Example data
-df <- tibble(
-  id   = 1,
-  note = "Patient is 64 years old, diagnosed with type 2 diabetes."
-)
-
-# Run extraction
 res <- gpt_column(
   data   = df,
-  col    = note,
-  prompt = template,  # placeholders {text} and {json_format} are filled automatically
-  keys   = list(
-    age       = "integer",
-    diagnosis = "character"
-  ),
-  provider     = "openai",       # or "lmstudio"
-  model        = "gpt-4o-mini",  # change to your model
-  temperature  = 0.2,
-  return_debug = TRUE
+  col    = text,
+  keys   = list(age = "integer", diagnosis = "character"),
+  prompt = 'Extract the following as JSON:
+{json_format}
+
+Text: "{text}"',
+  provider = "auto"   # try local; fallback to OpenAI if available
 )
 
 res
+
+# Inspect a raw response quickly (debugging)
+gpt("Reply exactly: pong", model = "gpt-4o-mini", provider = "openai", print_raw = TRUE)
 ```
 
 ------------------------------------------------------------------------
@@ -219,9 +212,24 @@ Multi-turn chat works with all supported providers (see below).
 
 ## 🔗 Supported providers
 
--   **LM Studio** (local inference server, OpenAI-compatible API)
--   **OpenAI** (`gpt-4o`, `gpt-4o-mini`, `gpt-3.5-turbo`, `gpt-4.1`, etc.)
--   Any OpenAI-compatible endpoint (self-hosted models, fine-tuned endpoints, etc.)
+`gptr` can talk to both cloud-hosted LLMs and local inference servers. Use the `provider` argument:
+
+- `auto` — try a local backend first; if none is running and `OPENAI_API_KEY` is set, fall back to OpenAI.
+- `openai` — use OpenAI (e.g., `gpt-4o-mini`). Requires `OPENAI_API_KEY`.
+- `local` — use a local OpenAI-compatible server. Auto-detects LM Studio / Ollama / LocalAI unless you pin:
+  - `backend = "lmstudio" | "ollama" | "localai"` to choose a brand
+  - or `base_url = "http://127.0.0.1:1234/v1"` to pin a specific server
+- Shorthands: `lmstudio`, `ollama`, `localai` are equivalent to `provider="local"` with `backend` pre-set.
+
+Examples:
+```r
+gpt("ping", provider = "auto", print_raw = TRUE)
+
+gpt("ping", provider = "openai", model = "gpt-4o-mini")
+
+gpt("ping", provider = "lmstudio", model = "mistralai/mistral-7b-instruct-v0.3")
+# same as: provider = "local", backend = "lmstudio"
+```
 
 ------------------------------------------------------------------------
 
