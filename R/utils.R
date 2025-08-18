@@ -187,6 +187,10 @@ tidy_json <- function(x,
     list(txt = s1c, log = c(log, "unparsed-after-repair"))
 }
 
+`%+%` <- function(a,b) paste0(a,b)
+
 # ---- %||% -----
 #' @importFrom rlang %||%
 NULL
+
+

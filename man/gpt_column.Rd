@@ -9,7 +9,9 @@ gpt_column(
   col,
   prompt,
   keys = NULL,
-  provider = c("local", "openai"),
+  provider = c("auto", "local", "openai", "lmstudio", "ollama", "localai"),
+  backend = NULL,
+  base_url = NULL,
   temperature = 0.2,
   file_path = NULL,
   image_path = NULL,
@@ -36,6 +38,8 @@ gpt_column(
 
 \item{keys}{Optional named list defining expected JSON keys and their type or allowed set.}
 
+\item{base_url}{(now accepted by gpt_column() too): “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”}
+
 \item{temperature}{Sampling temperature for the model.}
 
 \item{file_path, image_path}{Optional file paths passed to the model call.}
@@ -61,7 +65,9 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{verbose}{Print repair/validation messages.}
 
-\item{...}{Extra args passed to \code{gpt()} (e.g., \code{model}, \code{response_format}).}
+\item{...}{Extra args passed to \code{gpt()} (e.g., \code{model}, \code{provider},\code{response_format}).}
+
+\item{Provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".}
 }
 \description{
 Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,

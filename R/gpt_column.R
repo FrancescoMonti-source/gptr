@@ -11,6 +11,8 @@
 #'   Fuzzy key correction is handled by json_keys_align(); control with `fuzzy_model`
 #'   ("lev_ratio" or "lev") and `fuzzy_threshold`.
 #' @param keep_unexpected_keys Keep keys not listed in `keys`.
+#' @param Provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
+#' @param base_url (now accepted by gpt_column() too): “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”
 #' @param na_values Values treated as NA at multiple stages.
 #' @param file_path,image_path Optional file paths passed to the model call.
 #' @param temperature Sampling temperature for the model.
@@ -21,7 +23,7 @@
 #' @param coerce_when Optional named list of per-key target types used for row-level coercion.
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
 #'   If a schema (`keys`) is provided, it is always used for final typing.
-#' @param ... Extra args passed to `gpt()` (e.g., `model`, `response_format`).
+#' @param ... Extra args passed to `gpt()` (e.g., `model`, `provider`,`response_format`).
 #' @export
 
 gpt_column <- function(
@@ -29,12 +31,14 @@ gpt_column <- function(
         col,
         prompt,
         keys                 = NULL,
-        provider             = c("local", "openai"),
+        provider             = c("auto","local","openai","lmstudio","ollama","localai"),
+        backend              = NULL,
+        base_url             = NULL,
         temperature          = 0.2,
         file_path            = NULL,
         image_path           = NULL,
         coerce_types         = TRUE,     # row-level cast_one convenience
-        coerce_when          = NULL,     # optional per-key override for row-level casting
+        coerce_when          = NULL,     # optional per-key override for row-level casting (which column to coerce)
         infer_types          = FALSE,    # used only when keys = NULL and we do a union-of-keys (not default here)
         na_values            = c("NA", "N/A", "null", "None", ""),
         auto_correct_keys    = getOption("gptr.auto_correct_keys", TRUE),
@@ -47,6 +51,11 @@ gpt_column <- function(
         ...
 ) {
     provider <- match.arg(provider)
+    # Map shorthand local providers to (provider="local", backend="<name>")
+    if (provider %in% c("lmstudio","ollama","localai")) {
+        backend  <- provider
+        provider <- "local"
+    }
 
     # ---------- Helpers ----------------------------------------------------------
     .force_schema_shape <- function(x, expected_keys) {
@@ -92,8 +101,10 @@ gpt_column <- function(
         as.character(val)
     }
 
-    # Resolve backend
-    gpt_fun <- .gptr_resolve_backend(provider)
+    # Resolve backend: always call current gpt() with normalized provider/base/backend
+    gpt_fun <- function(...) {
+        gpt(provider = provider, base_url = base_url, backend = backend, ...)
+    }
 
     # Ungroup; validate column
     if (dplyr::is_grouped_df(data)) data <- dplyr::ungroup(data)
