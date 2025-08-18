@@ -6,8 +6,9 @@
 #' @param prompt Character scalar user message. Ignored if `messages` is supplied upstream.
 #' @param model Optional model id. If NULL, resolved per provider defaults.
 #' @param temperature Numeric scalar (default 0.2).
-#' @param provider One of "local", "openai".
-#' @param base_url Optional override of the chat completions endpoint.
+#' @param provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
+#' @param base_url “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”
+#' @param backend “Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').”
 #' @param openai_api_key Optional API key for OpenAI; defaults to env var.
 #' @param image_path Optional path or vector of paths to images to include.
 #' @param system Optional system prompt.
@@ -23,52 +24,47 @@ gpt <- function(
         prompt,
         model = NULL,
         temperature = 0.2,
-        provider = c("auto", "lmstudio", "openai", "ollama", "local"),
+        provider = c("auto","lmstudio","openai","ollama","local","localai"),  # + localai
         base_url = NULL,
         openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
         image_path = NULL,
         system = NULL,
         seed = NULL,
         response_format = NULL,
-        backend = NULL,   # already added earlier
+        backend = NULL,
         strict_model = getOption("gpt.strict_model", TRUE),
         allow_backend_autoswitch = getOption("gpt.local_autoswitch", TRUE),
-        print_raw = FALSE,                                   # NEW
+        print_raw = FALSE,
         ...
 ) {
     provider <- match.arg(provider)
-    provider <- .normalize_provider(provider)   # "local" -> "auto"
+
     # normalize to API root (…/v1) when calling request_local()
     normalize_base <- function(u) {
         u <- sub("/chat/completions/?$", "", u)
         sub("/v1/?$", "/v1", u)
-        }
+    }
+
     image_paths <- if (is.null(image_path)) NULL else as.character(image_path)
 
-    # --- tiny local helpers (self-contained; no new globals) ---------------- # NEW
     .compact <- function(lst) lst[!vapply(lst, is.null, logical(1L))]
-
     .to_skeleton <- function(body) {
         x <- if (is.character(body)) jsonlite::fromJSON(body, simplifyVector = FALSE) else body
-
         usage <- x$usage %||% list()
         usage <- .compact(list(
             prompt_tokens     = usage$prompt_tokens,
             completion_tokens = usage$completion_tokens,
             total_tokens      = usage$total_tokens
         ))
-
         choices <- x$choices %||% list()
         choices_skel <- lapply(choices, function(ch) {
             msg <- ch$message %||% ch$delta %||% list()
-
             content <- msg$content
             if (is.list(content)) {
                 parts <- unlist(lapply(content, function(p) p$text %||% p$content %||% NULL), use.names = FALSE)
                 content <- if (length(parts)) paste(parts, collapse = "") else NULL
             }
             content <- content %||% msg$text %||% ch$text %||% x$output_text %||% NULL
-
             tc <- msg$tool_calls %||% ch$tool_calls %||% NULL
             tool_calls <- NULL
             if (!is.null(tc) && length(tc)) {
@@ -86,7 +82,6 @@ gpt <- function(
                     ))
                 })
             }
-
             .compact(list(
                 index         = ch$index %||% NULL,
                 finish_reason = ch$finish_reason %||% NULL,
@@ -95,9 +90,7 @@ gpt <- function(
                 tool_calls    = tool_calls
             ))
         })
-
         model_id <- x$model %||% (x$meta$model %||% NULL)
-
         .compact(list(
             id      = x$id %||% NULL,
             created = x$created %||% NULL,
@@ -120,9 +113,8 @@ gpt <- function(
         attr(out, "model")   <- model_name
         out
     }
-    # ----------------------------------------------------------------------- # NEW
 
-    # ------------ provider == "openai" ------------
+    # ---------------- provider == "openai" ----------------
     if (provider == "openai") {
         msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
@@ -139,27 +131,20 @@ gpt <- function(
         }
 
         payload <- openai_compose_payload(
-            messages = msgs,
-            model = defs$model,
-            temperature = temperature,
-            seed = seed,
+            messages        = msgs,
+            model           = defs$model,
+            temperature     = temperature,
+            seed            = seed,
             response_format = response_format,
-            extra = list(...)
+            extra           = list(...)
         )
         res <- request_openai(payload, base_url = defs$base_url, api_key = defs$api_key)
-
-        return(.handle_return(res, backend_name = "openai", model_name = defs$model))  # NEW
+        return(.handle_return(res, backend_name = "openai", model_name = defs$model))
     }
 
-    # ------------ provider == "local" ------------
-    ## ---- Case A: user forces a base_url  -> validate model, if possible ----
+    # ---------------- provider == "local" with explicit base_url ----------------
     if (!is.null(base_url) && nzchar(base_url)) {
-        normalize_base <- function(u) {
-            u <- sub("/chat/completions/?$", "", u)
-            sub("/v1/?$", "/v1", u)
-        }
         base_norm <- normalize_base(base_url)
-
         requested_model <- model
 
         ids <- character(0)
@@ -194,34 +179,24 @@ gpt <- function(
             extra           = list(...)
         )
         res <- request_local(payload, base_url = base_norm)
-
-        return(.handle_return(res,
-                              backend_name = backend %||% "custom-local",
-                              model_name   = requested_model))                                     # NEW
+        return(.handle_return(res, backend_name = backend %||% "custom-local", model_name = requested_model))
     }
 
-    ## ---- Case B: auto-detect backends and pick one (optionally by model) ----
-    # local-like providers (auto / lmstudio / ollama / localai)
-    if (provider %in% c("auto", "lmstudio", "ollama", "localai")) {
-        # Resolve a default (prefers options(gpt.local_base_url)) and ping once.
-        local_base <- .resolve_base_url(provider, base_url)   # returns .../v1/chat/completions
-        .ensure_backend_up(local_base, provider)              # fast cached /models ping
-        base_norm <- normalize_base(local_base)               # pass root .../v1 to request_local()
+    # ---------------- local-like providers: auto / lmstudio / ollama / localai ----------------
+    if (provider %in% c("auto","local","lmstudio","ollama","localai")) {
+        local_base <- .resolve_base_url(provider, base_url)   # returns …/v1/chat/completions
+        .ensure_backend_up(local_base, provider)              # cached /models ping
+        base_norm <- normalize_base(local_base)
 
-        # Choose model: take user arg > option > sensible default
-        requested_model <- model
-        if (is.null(requested_model) || !nzchar(requested_model)) {
-            requested_model <- getOption("gpt.local_model", "mistralai/mistral-7b-instruct-v0.3")
-        }
+        requested_model <- model %||% getOption("gpt.local_model", "mistralai/mistral-7b-instruct-v0.3")
 
-        # Optional one-time friendly check; skip for maximum speed if FALSE
         if (isTRUE(getOption("gpt.check_model_once", FALSE)) && nzchar(requested_model)) {
-            ids <- try(.get_model_ids(local_base), silent = TRUE)  # ok if not present
+            ids <- try(.get_model_ids(local_base), silent = TRUE)
             if (!inherits(ids, "try-error") && length(ids)) {
                 if (!tolower(requested_model) %in% tolower(ids)) {
                     if (isTRUE(strict_model)) {
                         stop(sprintf(
-                            "Model '%s' not found on %s.\nEither load it there, pass `base_url=`, or set options(gpt.local_base_url=...).",
+                            "Model '%s' not found on %s.\nEither load it there, pass base_url=, or set options(gpt.local_base_url=...).",
                             requested_model, sub("/chat/completions$", "", local_base)
                         ), call. = FALSE)
                     } else {
@@ -234,7 +209,6 @@ gpt <- function(
             }
         }
 
-        # Build + call
         msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
         payload <- openai_compose_payload(
             messages        = msgs,
@@ -244,9 +218,28 @@ gpt <- function(
             response_format = response_format,
             extra           = list(...)
         )
-        res <- request_local(payload, base_url = base_norm)
 
-        # --- NEW: enforce the model actually used by the server ---
+        looks_openai <- function(m) is.character(m) && nzchar(m) && grepl("^(gpt-|o[0-9])", m)
+
+        # Try local, optionally fall back to OpenAI if provider == "auto"
+        res <- tryCatch(
+            request_local(payload, base_url = base_norm),
+            error = function(e) {
+                if (provider != "auto" || !nzchar(openai_api_key) || (!is.null(model) && !looks_openai(model)))
+                    stop(e)
+                # fallback to OpenAI defaults (model can be NULL or an OpenAI id)
+                defs2 <- .resolve_openai_defaults(model = model, base_url = NULL, api_key = openai_api_key)
+                request_openai(payload = openai_compose_payload(
+                    messages        = msgs,
+                    model           = defs2$model,
+                    temperature     = temperature,
+                    seed            = seed,
+                    response_format = response_format,
+                    extra           = list(...)
+                ), base_url = defs2$base_url, api_key = defs2$api_key)
+            }
+        )
+
         used_model <- tryCatch({
             b <- if (is.character(res$body)) jsonlite::fromJSON(res$body, simplifyVector = FALSE) else res$body
             b$model %||% (b$meta$model %||% NULL)
@@ -254,18 +247,14 @@ gpt <- function(
 
         if (!is.null(requested_model) && nzchar(requested_model) && !is.null(used_model) && nzchar(used_model)) {
             if (!identical(tolower(requested_model), tolower(used_model))) {
-                msg <- sprintf("Server used model '%s' instead of requested '%s'. " %+%
-                                   "Pin the correct server with `base_url=` or set options(gpt.local_base_url=...).",
-                               used_model, requested_model)
+                msg <- sprintf(
+                    "Server used model '%s' instead of requested '%s'. Pin the correct server with base_url= or set options(gpt.local_base_url=...).",
+                    used_model, requested_model
+                )
                 if (isTRUE(strict_model)) stop(msg, call. = FALSE) else warning(msg, call. = FALSE)
             }
         }
 
-        return(.handle_return(
-            res,
-            backend_name = backend %||% provider,
-            model_name   = requested_model
-        ))
-
+        return(.handle_return(res, backend_name = backend %||% provider, model_name = requested_model))
     }
 }
