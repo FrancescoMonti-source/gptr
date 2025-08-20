@@ -34,24 +34,27 @@ gpt_column <- function(
         provider             = c("auto","local","openai","lmstudio","ollama","localai"),
         backend              = NULL,
         base_url             = NULL,
+        model                = NULL,          # <-- new
         temperature          = 0.2,
         file_path            = NULL,
         image_path           = NULL,
-        coerce_types         = TRUE,     # row-level cast_one convenience
-        coerce_when          = NULL,     # optional per-key override for row-level casting (which column to coerce)
-        infer_types          = FALSE,    # used only when keys = NULL and we do a union-of-keys (not default here)
+        coerce_types         = TRUE,
+        coerce_when          = NULL,
+        infer_types          = FALSE,
         na_values            = c("NA", "N/A", "null", "None", ""),
         auto_correct_keys    = getOption("gptr.auto_correct_keys", TRUE),
         keep_unexpected_keys = getOption("gptr.keep_unexpected_keys", FALSE),
         fuzzy_model          = getOption("gptr.fuzzy_model", "lev_ratio"),
         fuzzy_threshold      = getOption("gptr.fuzzy_threshold", 0.25),
-        relaxed              = FALSE,    # allows raw output when parse fails and no schema
-        return_debug         = TRUE,     # attach .raw_output / .invalid_* columns
+        relaxed              = FALSE,
+        return_debug         = TRUE,
         verbose              = FALSE,
         ...
 ) {
+    # capture all user extras once
+    dots <- rlang::list2(...)             # <-- new
+
     provider <- match.arg(provider)
-    # Map shorthand local providers to (provider="local", backend="<name>")
     if (provider %in% c("lmstudio","ollama","localai")) {
         backend  <- provider
         provider <- "local"
@@ -112,7 +115,6 @@ gpt_column <- function(
     col_name <- rlang::as_name(col_quo)
     if (!col_name %in% names(data)) stop("Column '", col_name, "' not found in `data`.", call. = FALSE)
 
-    # Extract texts as character
     texts <- dplyr::pull(data, !!col_quo)
     if (!is.character(texts)) texts <- as.character(texts)
     n <- length(texts)
@@ -160,19 +162,38 @@ gpt_column <- function(
         if (is.function(prompt)) prompt(.x_trim, keys) else build_prompt(prompt, text = .x_trim, keys = keys)
     }
 
-    # ---------- 3) Per-row: call model, repair/parse, align, row-coerce ----------
-    raw_outputs   <- vapply(seq_len(n), function(i) {
+    # --- build a stable forward-args list for gpt() ---
+    forward_args <- Filter(
+        Negate(is.null),
+        list(
+            provider = provider,
+            backend  = backend,
+            base_url = base_url,
+            model    = model
+        )
+    )
+
+    # --- 3) PER-ROW CALL ----
+    raw_outputs <- vapply(seq_len(n), function(i) {
         txt <- texts[[i]]
         if (is.na(txt) || !nzchar(trimws(txt))) return(NA_character_)
         input_prompt <- make_prompt_for(txt)
-        gpt_fun(
-            prompt      = input_prompt,
-            temperature = temperature,
-            file_path   = file_path,
-            image_path  = image_path,
-            ...
+
+        # VERY IMPORTANT: user-supplied dots win last
+        do.call(
+            gpt,
+            c(
+                list(
+                    prompt      = input_prompt,
+                    temperature = temperature,
+                    file_path   = file_path,
+                    image_path  = image_path
+                ),
+                forward_args,
+                dots
+            )
         )
-    }, FUN.VALUE = character(1))
+    }, FUN.VALUE = character(1), USE.NAMES = FALSE)
 
     parsed_results <- vector("list", n)  # list of named lists (schema) or scalars/lists (no schema)
     invalid_flags  <- logical(n)         # TRUE when row invalid (parse/validate failures)
