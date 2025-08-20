@@ -24,7 +24,7 @@ gpt <- function(
         prompt,
         model = NULL,
         temperature = 0.2,
-        provider = c("auto","lmstudio","openai","ollama","local","localai"),  # + localai
+        provider = c("auto","lmstudio","openai","ollama","local","localai"),
         base_url = NULL,
         openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
         image_path = NULL,
@@ -38,6 +38,19 @@ gpt <- function(
         ...
 ) {
     provider <- match.arg(provider)
+    provider_orig <- provider  # remember if the user asked for "auto"
+
+    # normalise provider/backend/base_url
+    resolved <- .resolve_provider_backend(
+        provider = provider,
+        backend  = backend,
+        base_url = base_url,
+        model    = model,
+        openai_api_key = openai_api_key
+    )
+    provider <- resolved$provider
+    backend  <- resolved$backend
+    base_url <- resolved$base_url
 
     # normalize to API root (…/v1) when calling request_local()
     normalize_base <- function(u) {

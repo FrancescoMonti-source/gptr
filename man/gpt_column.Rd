@@ -12,6 +12,7 @@ gpt_column(
   provider = c("auto", "local", "openai", "lmstudio", "ollama", "localai"),
   backend = NULL,
   base_url = NULL,
+  model = NULL,
   temperature = 0.2,
   file_path = NULL,
   image_path = NULL,

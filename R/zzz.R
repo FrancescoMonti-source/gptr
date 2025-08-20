@@ -7,9 +7,9 @@
         gpt.local_model = "mistralai/mistral-7b-instruct-v0.3",
         # backend-specific overrides (optional)
         gpt.lmstudio_model    = "mistralai/mistral-7b-instruct-v0.3",
-        gpt.lmstudio_base_url = "http://127.0.0.1:1234/v1/chat/completions",
-        gpt.ollama_base_url   = "http://127.0.0.1:11434/v1/chat/completions",
-        gpt.localai_base_url  = "http://127.0.0.1:8080/v1/chat/completions",
+        gpt.lmstudio_base_url = "http://127.0.0.1:1234/v1",
+        gpt.ollama_base_url   = "http://127.0.0.1:11434/v1",
+        gpt.localai_base_url  = "http://127.0.0.1:8080/v1",
         # OpenAI
         gpt.openai_model = "gpt-4o-mini",
         # misc
