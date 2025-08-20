@@ -10,6 +10,13 @@
 * Key alignment & coercion. Fuzzy key alignment and per-row type coercion kept; extras captured via .extras_json when requested.
 * Tests. Added coverage for provider/model combos and explicit base_url behavior; docs/comments clarify expected routing.
 
+## Migration notes
+
+* Prefer provider="openai" or provider="lmstudio" explicitly when you want to pin a side.
+* If you override OpenAI base_url, use the full path: https://api.openai.com/v1/chat/completions.
+* In gpt_column(), set keys + {json_format} in the prompt when you expect strict JSON; otherwise use raw/relaxed mode.
+
+
 # gptr 0.2.0
 
 * Added a `NEWS.md` file to track changes to the package.
