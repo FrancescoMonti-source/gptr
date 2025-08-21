@@ -7,8 +7,8 @@
 request_local(
   payload,
   base_url,
-  timeout_sec = 30,
-  max_tries = 2,
+  timeout_sec = getOption("gpt.timeout_sec", 180),
+  max_tries = getOption("gpt.max_tries", 2),
   user_agent = paste0("gptr/", as.character(utils::packageVersion("gptr"))),
   debug_http = getOption("gptr.debug_http", FALSE)
 )

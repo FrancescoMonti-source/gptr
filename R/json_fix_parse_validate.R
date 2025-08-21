@@ -22,26 +22,15 @@ json_fix_parse_validate <- function(text,
                                     coerce_when  = NULL) {
     looks_like_json <- function(s) {
         s <- trimws(s)
-        (startsWith(s, "{") && grepl("}\\s*$", s)) || (startsWith(s, "\\[") && grepl("\\]\\s*$", s))
+        (startsWith(s, "{") && grepl("\\}\\s*$", s)) || (startsWith(s, "[") && grepl("\\]\\s*$", s))
     }
     parse_try <- function(z, simplify = FALSE) {
         try(jsonlite::fromJSON(z, simplifyVector = simplify), silent = TRUE)
     }
 
     # A) Try RAW text first (pre-tidy): unwrap quoted JSON string literal
-    raw_txt <- as.character(text)
-    val0 <- parse_try(raw_txt, simplify = FALSE)
+    # removed, baked into tidy_json
 
-    if (!inherits(val0, "try-error") && is.character(val0) && length(val0) == 1L) {
-        inner <- trimws(val0)
-        if (looks_like_json(inner)) {
-            if (isTRUE(verbose)) message("Row ", if (is.null(i)) "" else i, ": unwrapped JSON string literal (pre-tidy)")
-            val <- parse_try(inner, simplify = FALSE)
-            if (!inherits(val, "try-error") && is.list(val) && !is.null(names(val))) {
-                return(list(ok = TRUE, value = val, meta = NULL))
-            }
-        }
-    }
 
     # B) Light cleanup via tidy_json()
     tj <- tidy_json(text, na_values = na_values)
@@ -66,7 +55,7 @@ json_fix_parse_validate <- function(text,
         }
     }
 
-    # D) Last resort: extract first {...} or [...] again and try
+    # D) extract first {...} or [...] again and try
     m <- regexpr("\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\]", s, perl = TRUE)
     if (m[1] != -1L) {
         s2  <- substr(s, m[1], m[1] + attr(m, "match.length") - 1L)
@@ -74,6 +63,12 @@ json_fix_parse_validate <- function(text,
         if (!inherits(val3, "try-error") && is.list(val3) && !is.null(names(val3))) {
             return(list(ok = TRUE, value = val3, meta = NULL))
         }
+    }
+
+    # E) last resord
+    val4 <- try(repair_json4(s), silent = TRUE)
+    if (!inherits(val4, "try-error") && is.list(val4)) {
+        return(list(ok = TRUE, value = val4, meta = NULL))
     }
 
     meta <- data.frame(stage = "parse",

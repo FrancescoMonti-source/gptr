@@ -183,8 +183,8 @@ list_local_backends <- function() {
 #' @importFrom httr2 req_user_agent req_timeout req_retry req_perform resp_status resp_body_json
 request_local <- function(payload,
                           base_url,
-                          timeout_sec = 30,
-                          max_tries   = 2,
+                          timeout_sec = getOption("gpt.timeout_sec", 180),
+                          max_tries   = getOption("gpt.max_tries", 2),
                           user_agent  = paste0("gptr/", as.character(utils::packageVersion("gptr"))),
                           debug_http  = getOption("gptr.debug_http", FALSE)) {
     # Build a clean root: strip any /v1 or /chat/completions; we'll append explicitly
@@ -193,10 +193,13 @@ request_local <- function(payload,
 
     req <- httr2::request(root) |>
         httr2::req_url_path_append("v1", "chat", "completions") |>
-        httr2::req_headers("Content-Type" = "application/json") |>
+        httr2::req_headers("Content-Type" = "application/json",
+                           "Accept"       = "application/json") |>
         httr2::req_user_agent(user_agent) |>
         httr2::req_timeout(timeout_sec) |>
-        httr2::req_retry(max_tries = max_tries, backoff = function(attempt) 0.2 * (2^(attempt - 1)))
+        httr2::req_retry(max_tries = max_tries,
+                         backoff = function(attempt) 0.2 * (2^(attempt - 1))) |>
+        httr2::req_error(is_error = function(resp) FALSE)   # patched
 
     # Payload: list -> JSON; character -> raw JSON
     if (is.list(payload)) {
@@ -209,22 +212,25 @@ request_local <- function(payload,
 
     if (isTRUE(debug_http)) httr2::req_dry_run(req)
 
-    resp <- httr2::req_perform(req)
+    resp   <- httr2::req_perform(req)
     status <- httr2::resp_status(resp)
 
-    # Parse JSON (don't simplify to keep OpenAI shape)
+    # Try parsing JSON; if it fails, fall back to raw string
     j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
-
-    # Handle HTTP errors with helpful messages
     if (inherits(j, "try-error")) {
         body_txt <- try(httr2::resp_body_string(resp), silent = TRUE)
+        # safer url: fall back to base_url if req_url() fails
+        url_str <- try(httr2::req_url(req), silent = TRUE)
+        if (inherits(url_str, "try-error") || is.null(url_str)) url_str <- base_url
         stop(sprintf("Local backend HTTP %s at %s\nBody: %s",
-                     status, httr2::req_url(req), as.character(body_txt)), call. = FALSE)
+                     status, url_str, as.character(body_txt)), call. = FALSE)
     }
 
     if (!is.null(j$error)) {
         msg <- if (is.character(j$error)) j$error else (j$error$message %||% "Unknown error")
-        stop("Local backend error: ", msg, " (", httr2::req_url(req), ")", call. = FALSE)
+        url_str <- try(httr2::req_url(req), silent = TRUE)
+        if (inherits(url_str, "try-error") || is.null(url_str)) url_str <- base_url
+        stop("Local backend error: ", msg, " (", url_str, ")", call. = FALSE)
     }
 
     # Sanity: ensure text content exists
@@ -235,12 +241,11 @@ request_local <- function(payload,
     }
     if (is.null(txt) || !nzchar(as.character(txt))) {
         body_txt <- try(httr2::resp_body_string(resp), silent = TRUE)
+        url_str  <- try(httr2::req_url(req), silent = TRUE)
+        if (inherits(url_str, "try-error") || is.null(url_str)) url_str <- base_url
         stop("Local backend returned empty content. Check `model` and backend response shape.\n",
-             "URL: ", httr2::req_url(req), "\nBody: ", as.character(body_txt), call. = FALSE)
+             "URL: ", url_str, "\nBody: ", as.character(body_txt), call. = FALSE)
     }
 
     list(status = status, body = j)
 }
-
-
-

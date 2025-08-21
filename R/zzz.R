@@ -1,6 +1,7 @@
 .onLoad <- function(libname, pkgname) {
     op <- options()
     op.gptr <- list(
+        gpt.context_window = 4096,
         gpt.provider = "auto",
         # generic local defaults (can be redirected to Ollama/LocalAI by changing options)
         gpt.local_base_url = NULL,  # let autodetect fill this if NULL
@@ -13,7 +14,8 @@
         # OpenAI
         gpt.openai_model = "gpt-4o-mini",
         # misc
-        gpt.timeout = 5,                 # short timeout for snappy local probes
+        gpt.timeout_sec = 180,                 # short timeout for snappy local probes
+        gpt.max_tries = 2,
         gpt.local_verbose = FALSE,        # set TRUE to message which backend was detected
         gpt.check_model_once  = FALSE,
         gpt.verbose_preflight = FALSE
