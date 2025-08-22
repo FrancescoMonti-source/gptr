@@ -88,13 +88,36 @@
 ))
 
 test_that("no direct httr2 calls outside wrappers", {
+    # Files to scan
     files <- list.files("R", pattern = "\\.R$", full.names = TRUE)
-    files <- setdiff(files, "R/http_wrappers.R")
-    txt <- unlist(lapply(files, readLines, warn = FALSE))
-    offenders <- grep("httr2::", txt, value = TRUE)
-    expect_length(offenders, 0L,
-                  info = paste("Found direct httr2 calls:\n", paste(offenders, collapse = "\n")))
+    files <- setdiff(files, file.path("R", "http_wrappers.R"))  # allow wrappers
+
+    offenders <- character()
+
+    for (f in files) {
+        lines <- readLines(f, warn = FALSE)
+        lines <- lines[!grepl("^#'", lines)]  # ignore roxygen comments
+
+        hits_idx <- grep("\\bhttr2::", lines)
+        if (length(hits_idx)) {
+            # include file + line number + the offending line
+            offenders <- c(
+                offenders,
+                paste0(basename(f), ":", hits_idx, ": ", trimws(lines[hits_idx]))
+            )
+        }
+    }
+
+    msg <- if (length(offenders)) {
+        paste0("Found direct httr2 calls (use .http_* wrappers):\n",
+               paste(offenders, collapse = "\n"))
+    } else {
+        ""
+    }
+
+    expect(length(offenders) == 0L, msg)   # edition-agnostic assertion
 })
+
 
 
 

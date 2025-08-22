@@ -1,0 +1,8 @@
+- [ ] Bump DESCRIPTION Version
+- [ ] devtools::document()
+- [ ] devtools::test()
+- [ ] Rscript dev/structure/generate.R
+- [ ] Review diffs in dev/structure/*.txt (API surface changes)
+- [ ] Update NEWS.md
+- [ ] devtools::check()
+- [ ] Commit + tag
