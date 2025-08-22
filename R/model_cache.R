@@ -1,4 +1,4 @@
-#' @keywords internal
+#' @keywords internal, likely obsolete
 .get_model_ids <- function(base_url, force = FALSE) {
     root <- sub("/chat/completions$", "", base_url)
     if (!force && identical(.gptr_state$models_base, root) && !is.null(.gptr_state$models_cache)) {
