@@ -27,7 +27,7 @@ Imports:
     glue,
     purrr,
     tools,
-    pkgnet
+    pkgnet,
     cli,
     curl (>= 5.0.0),
     rlang
