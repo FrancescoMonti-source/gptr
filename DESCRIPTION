@@ -1,7 +1,7 @@
 Package: gptr
 Type: Package
 Title: High-Level R Interface to LLM APIs for Structured Text Extraction
-Version: 0.2.1
+Version: 0.4.0
 Author: Francesco Monti
 Maintainer: Francesco Monti <francesco.monti@outlook.it>
 Description: Provides a set of high-level helper functions to interact with 
@@ -27,6 +27,7 @@ Imports:
     glue,
     purrr,
     tools,
+    pkgnet
     cli,
     curl (>= 5.0.0),
     rlang
