@@ -175,7 +175,7 @@ patch_failed_rows <- function(
     retry_results <- dplyr::bind_rows(all_results)
     if (isTRUE(print_retry)) {
         print(retry_results, n = min(nrow(retry_results), 50))
-        if (nrow(retry_results) > 50) message("… output truncated.")
+        if (nrow(retry_results) > 50) message("... output truncated.")
     }
 
     # --- update invalid_rows attribute on the returned data ---
