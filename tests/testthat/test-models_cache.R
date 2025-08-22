@@ -129,15 +129,15 @@ mock_http_openai <- function(status = 200L,
     # mocks for your wrapper layer
     binds <- list(
         .http_request   = function(url) list(.url = url),
-        .http_headers   = function(req, ...) req,
-        .http_timeout   = function(req, ...) req,
-        .http_retry     = function(req, ...) req,
-        .http_perform   = if (perform_throws)
+        .http_req_headers   = function(req, ...) req,
+        .http_req_timeout   = function(req, ...) req,
+        .http_req_retry     = function(req, ...) req,
+        .http_req_perform   = if (perform_throws)
             function(req, ...) stop("network fail")
         else
             function(req, ...) structure(list(.url = req$.url), class = "httr2_response"),
-        .http_status    = function(resp) status,
-        .http_body_json = if (json_throws)
+        .http_resp_status    = function(resp) status,
+        .http_resp_body_json = if (json_throws)
             function(...) stop("boom")
         else
             function(resp, simplifyVector = FALSE) json

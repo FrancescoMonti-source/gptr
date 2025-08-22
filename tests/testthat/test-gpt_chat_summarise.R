@@ -13,13 +13,13 @@ test_that("gpt_chat_summarise uses wrappers and handles errors", {
 
     testthat::local_mocked_bindings(
         .http_request       = function(url) list(.url = url),
-        .http_headers       = function(req, ...) req,
-        .http_timeout       = function(req, ...) req,
-        .http_retry         = function(req, ...) req,
-        .http_body_json_req = function(req, body) { req$body <- body; req },
-        .http_perform       = function(req, ...) structure(list(), class = "httr2_response"),
-        .http_status        = function(resp) 200L,
-        .http_body_json     = function(resp, simplifyVector = FALSE) payload,
+        .http_req_headers       = function(req, ...) req,
+        .http_req_timeout       = function(req, ...) req,
+        .http_req_retry         = function(req, ...) req,
+        .http_req_body_json = function(req, body) { req$body <- body; req },
+        .http_req_perform       = function(req, ...) structure(list(), class = "httr2_response"),
+        .http_resp_status        = function(resp) 200L,
+        .http_resp_body_json     = function(resp, simplifyVector = FALSE) payload,
         .env = asNamespace("gptr")
     )
 

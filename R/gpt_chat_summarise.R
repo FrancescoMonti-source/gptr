@@ -70,25 +70,25 @@ gpt_chat_summarise <- function(
 
     # Build and perform request via wrappers (no direct httr2 calls here)
     req <- .http_request(url) |>
-        .http_headers(`Content-Type` = "application/json") |>
-        .http_timeout(timeout) |>
-        .http_retry(max_tries = 3, backoff = function(i) 0.2 * i) |>
-        .http_body_json_req(list(
+        .http_req_headers(`Content-Type` = "application/json") |>
+        .http_req_timeout(timeout) |>
+        .http_req_retry(max_tries = 3, backoff = function(i) 0.2 * i) |>
+        .http_req_body_json(list(
             model = model,
             messages = messages,
             temperature = temperature
         ))
 
-    resp <- try(.http_perform(req), silent = TRUE)
+    resp <- try(.http_req_perform(req), silent = TRUE)
     if (inherits(resp, "try-error")) {
         warning("Summarization failed: network unreachable.")
         return(invisible(NULL))
     }
 
-    sc <- .http_status(resp)
+    sc <- .http_resp_status(resp)
     if (!identical(sc, 200L)) {
         # Safe plain-text body fetch
-        body <- try(.http_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+        body <- try(.http_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
         msg <- if (!inherits(body, "try-error")) {
             # best-effort extraction
             tryCatch(
@@ -102,7 +102,7 @@ gpt_chat_summarise <- function(
         return(invisible(NULL))
     }
 
-    j <- try(.http_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+    j <- try(.http_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
     if (inherits(j, "try-error")) {
         warning("Summarization failed: non-JSON response.")
         return(invisible(NULL))

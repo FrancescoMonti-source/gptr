@@ -87,30 +87,30 @@
     url <- "https://api.openai.com/v1/models"
     resp <- try(
         .http_request(url) |>
-            .http_headers(Authorization = paste("Bearer", openai_api_key)) |>
-            .http_timeout(timeout) |>
-            .http_retry(
+            .http_req_headers(Authorization = paste("Bearer", openai_api_key)) |>
+            .http_req_timeout(timeout) |>
+            .http_req_retry(
                 max_tries = 3,
                 backoff = function(i) 0.2 * i,
                 is_transient = function(r) {
-                    sc <- try(.http_status(r), silent = TRUE)
+                    sc <- try(.http_resp_status(r), silent = TRUE)
                     if (inherits(sc, "try-error")) return(TRUE)
                     sc %in% c(408, 429, 500, 502, 503, 504)
                 }
             ) |>
-            .http_perform(),
+            .http_req_perform(),
         silent = TRUE
     )
     if (inherits(resp, "try-error")) {
         return(list(df = data.frame(id = character(0), created = numeric(0)), status = "unreachable"))
     }
 
-        sc <- .http_status(resp)
+        sc <- .http_resp_status(resp)
     if (sc == 401L) return(list(df = data.frame(id=character(0), created=numeric(0)), status = "auth_error"))
     if (sc >= 400L) return(list(df = data.frame(id=character(0), created=numeric(0)), status = paste0("http_", sc)))
 
     # ⬇️ wrap JSON body read
-    j <- try(.http_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+    j <- try(.http_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
     if (inherits(j, "try-error")) {
         return(list(df = data.frame(id=character(0), created=numeric(0)), status = "non_json"))
     }
