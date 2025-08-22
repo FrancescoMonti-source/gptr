@@ -87,6 +87,16 @@
     }
 ))
 
+test_that("no direct httr2 calls outside wrappers", {
+    files <- list.files("R", pattern = "\\.R$", full.names = TRUE)
+    files <- setdiff(files, "R/http_wrappers.R")
+    txt <- unlist(lapply(files, readLines, warn = FALSE))
+    offenders <- grep("httr2::", txt, value = TRUE)
+    expect_length(offenders, 0L,
+                  info = paste("Found direct httr2 calls:\n", paste(offenders, collapse = "\n")))
+})
+
+
 
 # 2) Airtight httr2 mock for OpenAI model listing
 mock_http_openai <- function(status = 200L,
