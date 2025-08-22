@@ -341,6 +341,16 @@ repair_json4 <- repair_text_rewritten_json <- function(raw) {
 #' @keywords internal
 `%+%` <- function(a,b) paste0(a,b)
 
-# ---- %||% -----
+#' Coalesce operator (re-export from rlang)
+#'
+#' See [rlang::%||%].
+#' @name %||%
+#' @rdname coalesce-operator
+#' @export
 #' @importFrom rlang %||%
+NULL
+
+
+#' @importFrom stats na.omit runif setNames
+#' @importFrom utils adist browseURL head tail
 NULL
