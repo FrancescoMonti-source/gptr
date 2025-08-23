@@ -1,4 +1,3 @@
-#' ------------------------------------------------------------------------------
 #' Why do we have tiny HTTP wrappers (.http_request, .http_perform, etc.)?
 #'
 #' 1) Testability: one seam to mock
@@ -29,7 +28,7 @@
 #'   * Production code ONLY calls the .http_* wrappers (never httr2 directly).
 #'   * Tests mock the .http_* wrappers; no need to patch httr2 or fight with `::`.
 #'
-#' @example
+#' @examples
 #' Example (prod):
 #'   resp <- .http_request(url) |>
 #'           .http_headers(Authorization = paste("Bearer", key)) |>
@@ -52,11 +51,7 @@
 #'   )
 #'   #' now .list_openai_live("sk") yields status = "auth_error" without real I/O.
 
-
-# ----------------------
-# Request-side wrappers
-# ----------------------
-
+#' Request-side wrappers
 #' @keywords internal
 .http_request        <- function(url)                  httr2::request(url)
 #' @keywords internal
@@ -70,21 +65,15 @@
 #' @keywords internal
 .http_req_perform    <- function(req, ...)             httr2::req_perform(req, ...)
 
-# ----------------------
-# Response-side wrappers
-# ----------------------
-
+#' Response-side wrappers
 #' @keywords internal
 .http_resp_status    <- function(resp)                 httr2::resp_status(resp)
 #' @keywords internal
 .http_resp_body_json <- function(resp, simplifyVector = FALSE)
     httr2::resp_body_json(resp, simplifyVector = simplifyVector)
 
-# --------------------------------
-# Back-compat aliases (soft-deprec)
-# --------------------------------
-# Keep these so existing code/tests don’t break immediately.
-
+#' Back-compat aliases (soft-deprec)
+#' Keep these so existing code/tests don’t break immediately.
 #' @keywords internal
 .http_headers        <- function(req, ...)             .http_req_headers(req, ...)
 #' @keywords internal

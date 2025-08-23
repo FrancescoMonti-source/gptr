@@ -49,4 +49,28 @@ Practical upshot:
 \item Tests mock the .http_* wrappers; no need to patch httr2 or fight with \code{::}.
 }
 }
+\examples{
+Example (prod):
+  resp <- .http_request(url) |>
+          .http_headers(Authorization = paste("Bearer", key)) |>
+          .http_timeout(timeout) |>
+          .http_retry(max_tries = 3, backoff = function(i) 0.2*i, ...) |>
+          .http_perform()
+  sc <- .http_status(resp)
+  j  <- .http_body_json(resp, simplifyVector = FALSE)
+
+Example (test):
+  testthat::local_mocked_bindings(
+    .http_request   = function(url) list(.url = url),
+    .http_headers   = function(req, ...) req,
+    .http_timeout   = function(req, ...) req,
+    .http_retry     = function(req, ...) req,
+    .http_perform   = function(req, ...) structure(list(.url = req$.url), class="httr2_response"),
+    .http_status    = function(resp) 401L,
+    .http_body_json = function(...) stop("boom"),
+    .env = asNamespace("gptr")
+  )
+  #' now .list_openai_live("sk") yields status = "auth_error" without real I/O.
+Request-side wrappers
+}
 \keyword{internal}
