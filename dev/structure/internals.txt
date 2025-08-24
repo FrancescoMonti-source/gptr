@@ -1,3 +1,4 @@
+$.gpt_chat_callable
 %+%
 .__DEVTOOLS__
 .__NAMESPACE__.
@@ -15,9 +16,17 @@
 .gptr_registry
 .gptr_state
 .http_body_json
+.http_body_json_req
 .http_headers
 .http_perform
+.http_req_body_json
+.http_req_headers
+.http_req_perform
+.http_req_retry
+.http_req_timeout
 .http_request
+.http_resp_body_json
+.http_resp_status
 .http_retry
 .http_status
 .http_timeout
@@ -40,7 +49,6 @@ browse_openai_documentation
 coalesce_blank
 coalesce_len0
 coerce_type
-gpt_chat_summarise
 in_allowed
 is_na_like
 match_arg_tol

@@ -1,3 +1,15 @@
+# gptr 0.4.1
+
+* gpt_chat$summarise() added:
+    Summarises the current conversation history via gpt().
+    By default replaces the history with a single user message prefixed "Chat summary :".
+    With replace = FALSE, appends the summary as an assistant message while keeping full history.
+* Dropped the old gpt_chat_summarise() helper (now redundant).
+* Documentation updated to include summarise() in the method list.
+* Cleaner API: all chat lifecycle operations (show_history, reset, save, load, replace_history, summarise) now live under gpt_chat$….
+* Less duplicated code: summarisation leverages the main gpt() call path, ensuring provider/URL resolution and options work consistently.
+* Tests updated → all passing ✅
+
 # gptr 0.2.1
 
 * Unified backend resolution. New internal .resolve_provider_backend() centralizes all “auto” logic (provider/backend/base_url). gpt() now calls this, so callers don’t need to guess.
