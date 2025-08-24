@@ -2,79 +2,52 @@
 % Please edit documentation in R/gpt_chat.R
 \name{gpt_chat}
 \alias{gpt_chat}
+\alias{$.gpt_chat_callable}
 \title{Stateful chat with OpenAI-compatible servers (LM Studio, OpenAI, etc.)}
 \usage{
 gpt_chat(
   prompt = NULL,
-  image_path = NULL,
-  file_path = NULL,
-  reset = FALSE,
-  show_history = FALSE,
-  show_history_as_text = TRUE,
-  model = "mistralai/mistral-7b-instruct-v0.3",
-  base_url = "http://127.0.0.1:1234/v1",
-  api_key = NULL,
+  model = NULL,
   temperature = 0.2,
-  system = NULL,
-  trim_max_chars = NULL,
+  provider = c("auto", "lmstudio", "openai", "ollama", "local", "localai"),
+  base_url = NULL,
+  openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
   save_path = NULL,
   load_path = NULL,
-  timeout = getOption("gptr.request_timeout", 15)
+  trim_max_chars = NULL,
+  ...
 )
+
+gpt_chat$<method>
 }
 \arguments{
-\item{prompt}{Character. Your user message for this turn. If \code{NULL}, the
-function only performs actions like \code{reset}, \code{show_history}, \code{load_path}, etc.}
+\item{prompt}{Character scalar, the new user input. Required unless showing
+or resetting history.}
 
-\item{image_path}{Optional path to an image file to include (sent as a
-base64 data URL; MIME type auto-detected).}
+\item{model}{Character scalar. Model identifier to use (provider-specific).}
 
-\item{file_path}{Optional path to a text/PDF/Word file whose extracted text
-will be appended to the prompt. Very large files are truncated (~100k chars).}
+\item{temperature}{Numeric. Sampling temperature (default 0.2).}
 
-\item{reset}{Logical. If \code{TRUE}, clears the in-memory history and returns.}
+\item{provider}{One of \code{"auto"}, \code{"lmstudio"}, \code{"openai"}, \code{"ollama"},
+\code{"local"}, \code{"localai"}. Default \code{"auto"}.}
 
-\item{show_history}{Logical. If \code{TRUE}, shows the current conversation history
-and returns (no API call).}
+\item{base_url}{Override base URL for the provider (optional).}
 
-\item{show_history_as_text}{Logical. When showing history, print a readable
-transcript (\code{TRUE}) or return a tibble with \code{role}/\code{message} (\code{FALSE}).}
+\item{openai_api_key}{API key for OpenAI (default reads from env var).}
 
-\item{model}{Character. Model id (e.g., \code{"mistralai/mistral-7b-instruct-v0.3"},
-\code{"gpt-4o-mini"}).}
+\item{save_path}{File path. If given, conversation history is saved after
+each turn as pretty-printed JSON.}
 
-\item{base_url}{Character. Base URL to the API, default \code{"http://127.0.0.1:1234/v1"}.
-For OpenAI use \code{"https://api.openai.com/v1"}.}
+\item{load_path}{File path. If given, conversation history is loaded from
+JSON on disk before proceeding.}
 
-\item{api_key}{Optional character. Bearer token for providers that require it
-(e.g., \code{Sys.getenv("OPENAI_API_KEY")}). Not needed for LM Studio.}
+\item{trim_max_chars}{Integer. If given, trims history to fit within this
+approximate character budget.}
 
-\item{temperature}{Numeric. Sampling temperature.}
-
-\item{system}{Optional character. A system message to prime behavior. If
-provided and the history is empty, it is inserted once at the top.}
-
-\item{trim_max_chars}{Optional integer. If set, oldest turns are dropped
-before sending so that the serialized message contents stay under this
-character budget (keeps the first system message).}
-
-\item{save_path}{Optional file path. If provided, the updated history is
-written as pretty JSON after this call.}
-
-\item{load_path}{Optional file path. If provided, history is loaded from this
-JSON file before processing this call.}
+\item{...}{Passed to \code{\link[=gpt]{gpt()}}.}
 }
 \value{
-\itemize{
-\item On a normal chat turn: \strong{invisibly} returns the assistant's text reply
-(character scalar), and also prints it to the console.
-\item If \code{show_history = TRUE} and \code{show_history_as_text = TRUE}: prints a
-transcript and returns \code{NULL} (invisibly).
-\item If \code{show_history = TRUE} and \code{show_history_as_text = FALSE}: returns a
-tibble with columns \code{role} and \code{message}.
-\item On error (HTTP failure): returns \code{NULL} and emits a warning containing the
-server's response text.
-}
+Invisibly returns the model reply (character scalar) for normal turns.
 }
 \description{
 \code{gpt_chat()} provides a persistent, multi-turn chat interface that keeps
@@ -83,13 +56,28 @@ OpenAI Chat Completions API, so it works with local servers like \strong{LM Stud
 as well as hosted providers such as \strong{OpenAI} (set \code{api_key}).
 }
 \details{
-The function keeps conversation state in a private closure variable (\code{history}).
-Each call can add a new user message, send the full history to the Chat
-Completions endpoint (\code{{base_url}/chat/completions}), and append the assistant
-reply back into \code{history}. File inputs are converted to text (\code{pdftools},
-\code{officer}) and concatenated. Images are sent as \code{image_url} content blocks
-using a base64 data URL. When \code{trim_max_chars} is set, the oldest messages
-(except the first system message if present) are dropped until the budget is met.
+\strong{Available methods} (call with \code{gpt_chat$method(...)}):
+\itemize{
+\item \code{show_history(as_text = TRUE)} – Print (or return tibble when \code{FALSE}).
+\item \code{reset()} – Clear the in-memory history.
+\item \code{get_history()} – Return the raw list of messages.
+\item \code{save(path)} / \code{load(path)} – Persist/restore history as JSON.
+\item \code{replace_history(x)} – Overwrite history with \code{x} (list of messages).
+\item \verb{summarise(model=..., provider=..., base_url=..., temperature=..., replace=TRUE, prefix=\\"Chat summary : \\")}
+– Summarise the current history via \code{gpt()}; by default replaces history with the summary message.
+}
+
+\strong{Available methods} (call with \code{gpt_chat$method(...)}):
+\itemize{
+\item \code{show_history(as_text = TRUE)}
+Print the conversation (or return a tibble when \code{as_text = FALSE}).
+\item \code{reset()}
+Clear the in-memory history.
+\item \code{get_history()}
+Return the raw list of message objects.
+\item \code{save(path)} / \code{load(path)}
+Persist or restore the history as JSON.
+}
 }
 \section{What it does}{
 
@@ -102,57 +90,18 @@ using a base64 data URL. When \code{trim_max_chars} is set, the oldest messages
 }
 }
 
-\section{Dependencies}{
-
-\code{httr}, \code{jsonlite}, \code{purrr}, \code{tibble}, \code{base64enc}, \code{pdftools}, \code{officer}, \code{mime}, \code{stringi}.
-The helper attempts to install missing packages interactively; in non-interactive
-contexts it errors with a clear message.
-}
-
-\section{Compatibility}{
-
-\itemize{
-\item \strong{LM Studio}: Works out of the box with the default \code{base_url} and no \code{api_key}.
-\item \strong{OpenAI}: Set \code{base_url = "https://api.openai.com/v1"} and pass \code{api_key}.
-Make sure \code{model} is one available to your account.
-}
-}
-
 \examples{
 \dontrun{
-# --- LM Studio, local chat ---
-gpt_chat(reset = TRUE)
-gpt_chat(system = "You are a concise medical data assistant.")
-gpt_chat("Ciao! Facciamo un test?")
-gpt_chat("Ricordati che lavoro in sanità pubblica.")
-gpt_chat(show_history = TRUE) # print transcript
-gpt_chat(show_history = TRUE, show_history_as_text = FALSE) # tibble
+# Normal usage (callable):
+gpt_chat("Hello, who are you?")
 
-# With a PDF attached (text extracted and appended):
-gpt_chat("Riassumi il documento.", file_path = "note.pdf")
+# Methods:
+gpt_chat$show_history()
+gpt_chat$reset()
 
-# Save conversation to disk:
-gpt_chat("Ok, salva lo stato.", save_path = "chat_history.json")
-
-# Reload later and continue:
-gpt_chat(load_path = "chat_history.json")
-gpt_chat("Riprendiamo da dove eravamo rimasti.")
-
-# --- OpenAI (requires API key) ---
-Sys.setenv(OPENAI_API_KEY = "sk-...") # or pass api_key explicitly
-gpt_chat(
-  base_url = "https://api.openai.com/v1",
-  api_key  = Sys.getenv("OPENAI_API_KEY"),
-  model    = "gpt-4o-mini",
-  system   = "You are terse and precise."
-)
-gpt_chat("Summarize mixed-effects models in 3 bullets.")
-}
-
-}
-\seealso{
-\itemize{
-\item OpenAI Chat Completions API.
-\item LM Studio API (OpenAI-compatible).
+# Save/load:
+gpt_chat$save("chat.json")
+gpt_chat$load("chat.json")
+gpt_chat$show_history()
 }
 }

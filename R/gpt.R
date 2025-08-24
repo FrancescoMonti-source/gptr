@@ -31,8 +31,8 @@ gpt <- function(prompt,
                 seed = NULL,
                 response_format = NULL,
                 backend = NULL,
-                strict_model = getOption("gpt.strict_model", TRUE),
-                allow_backend_autoswitch = getOption("gpt.local_autoswitch", TRUE),
+                strict_model = getOption("gptr.strict_model", TRUE),
+                allow_backend_autoswitch = getOption("gptr.local_autoswitch", TRUE),
                 print_raw = FALSE,
                 ...) {
   provider <- match.arg(provider)
@@ -175,7 +175,7 @@ gpt <- function(prompt,
     }
 
     if (is.null(requested_model) || !nzchar(requested_model)) {
-      requested_model <- getOption("gpt.local_model", NULL)
+      requested_model <- getOption("gptr.local_model", NULL)
       if (is.null(requested_model) || !nzchar(requested_model)) {
         requested_model <- if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3"
       }
@@ -195,31 +195,37 @@ gpt <- function(prompt,
   }
 
   # ---------------- local-like providers: auto / lmstudio / ollama / localai ----------------
-  if (provider %in% c("auto", "local", "lmstudio", "ollama", "localai")) {
-    local_base <- .resolve_base_url(provider, base_url) # returns …/v1/chat/completions
-    .ensure_backend_up(local_base, provider) # cached /models ping
-    base_norm <- normalize_base(local_base)
+  if (provider %in% c("auto","local","lmstudio","ollama","localai")) {
+      local_base <- .resolve_base_url(provider, base_url)  # e.g. http://127.0.0.1:1234/v1/chat/completions
+      .ensure_backend_up(local_base, provider)             # ping /v1/models once per session
+      base_norm <- normalize_base(local_base)
 
-    requested_model <- model %||% getOption("gpt.local_model", "mistralai/mistral-7b-instruct-v0.3")
+      # pick requested model (fall back to default)
+      requested_model <- model %||% getOption("gptr.local_model", "mistralai/mistral-7b-instruct-v0.3")
 
-    if (isTRUE(getOption("gpt.check_model_once", FALSE)) && nzchar(requested_model)) {
-      ids <- try(.get_model_ids(local_base), silent = TRUE)
-      if (!inherits(ids, "try-error") && length(ids)) {
-        if (!tolower(requested_model) %in% tolower(ids)) {
-          if (isTRUE(strict_model)) {
-            stop(sprintf(
-              "Model '%s' not found on %s.\nEither load it there, pass base_url=, or set options(gpt.local_base_url=...).",
-              requested_model, sub("/chat/completions$", "", local_base)
-            ), call. = FALSE)
-          } else {
-            warning(sprintf(
-              "Model '%s' not found on %s; continuing (strict_model=FALSE).",
-              requested_model, sub("/chat/completions$", "", local_base)
-            ), call. = FALSE)
+      # get installed model IDs from the server using the cache-aware helper
+      ms  <- try(list_models(base_url = local_base), silent = TRUE)
+      ids <- if (!inherits(ms, "try-error") && NROW(ms) && "id" %in% names(ms)) ms$id else character(0)
+
+      # enforce or warn if the requested model is missing
+      if (!is.null(requested_model) && nzchar(requested_model) && length(ids)) {
+          if (!tolower(requested_model) %in% tolower(ids)) {
+              if (isTRUE(strict_model)) {
+                  stop(sprintf(
+                      "Model '%s' not found on %s. Either load it there, pass base_url=, or set options(gpt.local_base_url=...).",
+                      requested_model, sub("/chat/completions$", "", local_base)
+                  ), call.=FALSE)
+              } else {
+                  warning(sprintf(
+                      "Model '%s' not found on %s; continuing (strict_model=FALSE).",
+                      requested_model, sub("/chat/completions$", "", local_base)
+                  ), call.=FALSE)
+              }
           }
-        }
       }
-    }
+      # … proceed to compose payload and call request_local()
+  }
+
 
     msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
     payload <- openai_compose_payload(
@@ -272,5 +278,5 @@ gpt <- function(prompt,
     }
 
     return(.handle_return(res, backend_name = backend %||% provider, model_name = requested_model))
-  }
 }
+
