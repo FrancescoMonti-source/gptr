@@ -29,63 +29,65 @@
 #'   * Tests mock the .http_* wrappers; no need to patch httr2 or fight with `::`.
 #'
 #' @examples
-#' Example (prod):
-#'   resp <- .http_request(url) |>
-#'           .http_headers(Authorization = paste("Bearer", key)) |>
-#'           .http_timeout(timeout) |>
-#'           .http_retry(max_tries = 3, backoff = function(i) 0.2*i, ...) |>
-#'           .http_perform()
-#'   sc <- .http_status(resp)
-#'   j  <- .http_body_json(resp, simplifyVector = FALSE)
+#' Example(prod):
+#' resp <- .http_request(url) |>
+#'   .http_headers(Authorization = paste("Bearer", key)) |>
+#'   .http_timeout(timeout) |>
+#'   .http_retry(max_tries = 3, backoff = function(i) 0.2 * i, ...) |>
+#'   .http_perform()
+#' sc <- .http_status(resp)
+#' j <- .http_body_json(resp, simplifyVector = FALSE)
 #'
-#' Example (test):
-#'   testthat::local_mocked_bindings(
-#'     .http_request   = function(url) list(.url = url),
-#'     .http_headers   = function(req, ...) req,
-#'     .http_timeout   = function(req, ...) req,
-#'     .http_retry     = function(req, ...) req,
-#'     .http_perform   = function(req, ...) structure(list(.url = req$.url), class="httr2_response"),
-#'     .http_status    = function(resp) 401L,
-#'     .http_body_json = function(...) stop("boom"),
-#'     .env = asNamespace("gptr")
-#'   )
-#'   #' now .list_openai_live("sk") yields status = "auth_error" without real I/O.
+#' Example(test):
+#' testthat::local_mocked_bindings(
+#'   .http_request = function(url) list(.url = url),
+#'   .http_headers = function(req, ...) req,
+#'   .http_timeout = function(req, ...) req,
+#'   .http_retry = function(req, ...) req,
+#'   .http_perform = function(req, ...) structure(list(.url = req$.url), class = "httr2_response"),
+#'   .http_status = function(resp) 401L,
+#'   .http_body_json = function(...) stop("boom"),
+#'   .env = asNamespace("gptr")
+#' )
+#' #' now .list_openai_live("sk") yields status = "auth_error" without real I/O.
 
 #' Request-side wrappers
 #' @keywords internal
-.http_request        <- function(url)                  httr2::request(url)
+.http_request <- function(url) httr2::request(url)
 #' @keywords internal
-.http_req_headers    <- function(req, ...)             httr2::req_headers(req, ...)
+.http_req_headers <- function(req, ...) httr2::req_headers(req, ...)
 #' @keywords internal
-.http_req_timeout    <- function(req, ...)             httr2::req_timeout(req, ...)
+.http_req_timeout <- function(req, ...) httr2::req_timeout(req, ...)
 #' @keywords internal
-.http_req_retry      <- function(req, ...)             httr2::req_retry(req, ...)
+.http_req_retry <- function(req, ...) httr2::req_retry(req, ...)
 #' @keywords internal
-.http_req_body_json  <- function(req, body)            httr2::req_body_json(req, body)
+.http_req_body_json <- function(req, body) httr2::req_body_json(req, body)
 #' @keywords internal
-.http_req_perform    <- function(req, ...)             httr2::req_perform(req, ...)
+.http_req_perform <- function(req, ...) httr2::req_perform(req, ...)
 
 #' Response-side wrappers
 #' @keywords internal
-.http_resp_status    <- function(resp)                 httr2::resp_status(resp)
+.http_resp_status <- function(resp) httr2::resp_status(resp)
 #' @keywords internal
-.http_resp_body_json <- function(resp, simplifyVector = FALSE)
-    httr2::resp_body_json(resp, simplifyVector = simplifyVector)
+.http_resp_body_json <- function(resp, simplifyVector = FALSE) {
+  httr2::resp_body_json(resp, simplifyVector = simplifyVector)
+}
 
 #' Back-compat aliases (soft-deprec)
 #' Keep these so existing code/tests don’t break immediately.
 #' @keywords internal
-.http_headers        <- function(req, ...)             .http_req_headers(req, ...)
+.http_headers <- function(req, ...) .http_req_headers(req, ...)
 #' @keywords internal
-.http_timeout        <- function(req, ...)             .http_req_timeout(req, ...)
+.http_timeout <- function(req, ...) .http_req_timeout(req, ...)
 #' @keywords internal
-.http_retry          <- function(req, ...)             .http_req_retry(req, ...)
+.http_retry <- function(req, ...) .http_req_retry(req, ...)
 #' @keywords internal
-.http_body_json_req  <- function(req, body)            .http_req_body_json(req, body)
+.http_body_json_req <- function(req, body) .http_req_body_json(req, body)
 #' @keywords internal
-.http_perform        <- function(req, ...)             .http_req_perform(req, ...)
+.http_perform <- function(req, ...) .http_req_perform(req, ...)
 #' @keywords internal
-.http_status         <- function(resp)                 .http_resp_status(resp)
+.http_status <- function(resp) .http_resp_status(resp)
 #' @keywords internal
-.http_body_json      <- function(resp, simplifyVector = FALSE)
-    .http_resp_body_json(resp, simplifyVector = simplifyVector)
+.http_body_json <- function(resp, simplifyVector = FALSE) {
+  .http_resp_body_json(resp, simplifyVector = simplifyVector)
+}

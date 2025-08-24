@@ -20,18 +20,18 @@ when you explicitly want to treat the empty string as “unset”.
 
 \examples{
 # NULL-only (handled by rlang::\%||\%):
-NULL \%||\% "default"        # "default"
-"x"  \%||\% "default"        # "x"
+NULL \%||\% "default" # "default"
+"x" \%||\% "default" # "x"
 
 # Length-0 coalescing:
-coalesce_len0(character(0), "fallback")  # "fallback"
-coalesce_len0(numeric(0),  42)           # 42
-coalesce_len0("x",         "fallback")   # "x"
+coalesce_len0(character(0), "fallback") # "fallback"
+coalesce_len0(numeric(0), 42) # 42
+coalesce_len0("x", "fallback") # "x"
 
 # Blank-string coalescing:
-coalesce_blank("",      "fallback")      # "fallback"
-coalesce_blank("  ",    "fallback")      # "  " (not trimmed!)
-coalesce_blank("text",  "fallback")      # "text"
-coalesce_blank(NULL,    "fallback")      # "fallback"
+coalesce_blank("", "fallback") # "fallback"
+coalesce_blank("  ", "fallback") # "  " (not trimmed!)
+coalesce_blank("text", "fallback") # "text"
+coalesce_blank(NULL, "fallback") # "fallback"
 coalesce_blank(character(0), "fallback") # "fallback"
 }

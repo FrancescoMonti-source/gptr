@@ -76,8 +76,8 @@
 #' gpt_chat(system = "You are a concise medical data assistant.")
 #' gpt_chat("Ciao! Facciamo un test?")
 #' gpt_chat("Ricordati che lavoro in sanità pubblica.")
-#' gpt_chat(show_history = TRUE)                   # print transcript
-#' gpt_chat(show_history = TRUE, show_history_as_text = FALSE)  # tibble
+#' gpt_chat(show_history = TRUE) # print transcript
+#' gpt_chat(show_history = TRUE, show_history_as_text = FALSE) # tibble
 #'
 #' # With a PDF attached (text extracted and appended):
 #' gpt_chat("Riassumi il documento.", file_path = "note.pdf")
@@ -90,7 +90,7 @@
 #' gpt_chat("Riprendiamo da dove eravamo rimasti.")
 #'
 #' # --- OpenAI (requires API key) ---
-#' Sys.setenv(OPENAI_API_KEY = "sk-...")  # or pass api_key explicitly
+#' Sys.setenv(OPENAI_API_KEY = "sk-...") # or pass api_key explicitly
 #' gpt_chat(
 #'   base_url = "https://api.openai.com/v1",
 #'   api_key  = Sys.getenv("OPENAI_API_KEY"),
@@ -106,7 +106,6 @@
 #'
 #' @export
 
-
 gpt_chat <- local({
     history <- list()
 
@@ -118,14 +117,17 @@ gpt_chat <- local({
         }
     }
 
-    purrr::walk(c("base64enc","pdftools","tibble","officer","purrr","mime","httr","jsonlite","stringi"), .require_package)
+    # keep your runtime deps; drop 'httr' (we don't use it anymore here)
+    purrr::walk(
+        c("base64enc","pdftools","tibble","officer","purrr","mime","stringi"),
+        .require_package
+    )
 
-    # small helper
+    # small helper (unchanged, just base/purrr)
     .trim_history_chars <- function(hist, max_chars = 12000) {
-        # keep the first system message if present; then drop oldest until under budget
-        total <- sum(nchar(purrr::map_chr(hist, ~{
+        total <- sum(nchar(purrr::map_chr(hist, ~ {
             x <- .x$content
-            if (is.character(x)) x else paste(purrr::map_chr(x, ~ifelse(isTRUE(.x$type == "text"), .x$text, "")), collapse="\n")
+            if (is.character(x)) x else paste(purrr::map_chr(x, ~ ifelse(isTRUE(.x$type == "text"), .x$text, "")), collapse = "\n")
         })), na.rm = TRUE)
         if (total <= max_chars) return(hist)
 
@@ -135,7 +137,7 @@ gpt_chat <- local({
         i <- drop_from
         while (length(hist) >= drop_from && total > max_chars) {
             txt <- hist[[i]]$content
-            chars <- if (is.character(txt)) nchar(txt) else nchar(paste(purrr::map_chr(txt, ~ifelse(isTRUE(.x$type=="text"), .x$text, "")), collapse="\n"))
+            chars <- if (is.character(txt)) nchar(txt) else nchar(paste(purrr::map_chr(txt, ~ ifelse(isTRUE(.x$type == "text"), .x$text, "")), collapse = "\n"))
             total <- total - chars
             hist <- hist[-i]
             if (i > length(hist)) break
@@ -143,38 +145,46 @@ gpt_chat <- local({
         hist
     }
 
-    function(
-        prompt = NULL,
-        image_path = NULL,
-        file_path = NULL,
-        reset = FALSE,
-        show_history = FALSE,
-        show_history_as_text = TRUE,
-        model = "mistralai/mistral-7b-instruct-v0.3",
-        base_url = "http://127.0.0.1:1234/v1",
-        api_key = NULL,                # for OpenAI-compatible remote servers, else NULL
-        temperature = 0.2,
-        system = NULL,                 # optional system prompt (set once when starting)
-        trim_max_chars = NULL,         # e.g., 12000 to auto-trim before sending
-        save_path = NULL,              # e.g., "chat_history.json" to save after this turn
-        load_path = NULL               # e.g., "chat_history.json" to load before this turn
-    ){
+    # normalize base_url → endpoint
+    .chat_endpoint <- function(base_url) {
+        u <- sub("/+$", "", base_url)
+        # allow root ".../v1" or full ".../v1/chat/completions"
+        if (grepl("/v1/chat/completions$", u)) return(u)
+        if (grepl("/v1$", u)) return(paste0(u, "/chat/completions"))
+        paste0(u, "/v1/chat/completions")
+    }
+
+    function(prompt = NULL,
+             image_path = NULL,
+             file_path = NULL,
+             reset = FALSE,
+             show_history = FALSE,
+             show_history_as_text = TRUE,
+             model = "mistralai/mistral-7b-instruct-v0.3",
+             base_url = "http://127.0.0.1:1234/v1",
+             api_key = NULL,    # for OpenAI-compatible remote servers, else NULL
+             temperature = 0.2,
+             system = NULL,     # optional system prompt (set once when starting)
+             trim_max_chars = NULL,      # e.g., 12000 to auto-trim before sending
+             save_path = NULL,           # e.g., "chat_history.json" to save after this turn
+             load_path = NULL,           # e.g., "chat_history.json" to load before this turn
+             timeout = getOption("gptr.request_timeout", 15)
+    ) {
         if (reset) {
             history <<- list()
             cat("History reset.\n")
             return(invisible(NULL))
         }
 
-        # Lazy-load existing history
+        # Load history from disk (if requested)
         if (!is.null(load_path)) {
             if (!file.exists(load_path)) stop("History file not found: ", load_path)
             txt <- readLines(load_path, warn = FALSE)
             history <<- jsonlite::fromJSON(paste(txt, collapse = "\n"), simplifyVector = FALSE)
             cat("History loaded from ", load_path, ".\n", sep = "")
-            if (show_history && is.null(prompt)) show_history <- TRUE  # allow immediate print
         }
 
-        # Print history and bail if requested
+        # Show history and bail (if requested)
         if (show_history) {
             if (length(history) == 0) {
                 cat("No conversation history yet.\n")
@@ -216,12 +226,12 @@ gpt_chat <- local({
             return(invisible(NULL))
         }
 
-        # Ensure system message exists once, at start
+        # Ensure one-time system message
         if (!is.null(system) && (length(history) == 0 || history[[1]]$role != "system")) {
-            history <<- append(history, list(list(role = "system", content = list(list(type="text", text = system)))))
+            history <<- append(history, list(list(role = "system", content = list(list(type = "text", text = system)))))
         }
 
-        # Handle file input (cap size to avoid blowing context)
+        # Optional file attachment (extract text)
         file_text <- NULL
         if (!is.null(file_path)) {
             if (!file.exists(file_path)) stop("File not found: ", file_path)
@@ -232,77 +242,93 @@ gpt_chat <- local({
                 file_text <- paste(pdftools::pdf_text(file_path), collapse = "\n")
             } else if (ext == "docx") {
                 doc <- officer::read_docx(file_path)
-                file_text <- officer::docx_summary(doc)$text |> na.omit() |> paste(collapse = "\n")
+                file_text <- officer::docx_summary(doc)$text |> stats::na.omit() |> paste(collapse = "\n")
             } else {
                 stop("Unsupported file type: ", ext)
             }
-            # soft cap ~100k chars
             if (nchar(file_text) > 100000) {
-                file_text <- substr(file_text, 1, 100000)
-                file_text <- paste0(file_text, "\n\n[Truncated to 100k chars]")
+                file_text <- paste0(substr(file_text, 1, 100000), "\n\n[Truncated to 100k chars]")
             }
         }
 
-        # Handle image input (detect MIME)
+        # Optional image attachment (data URL)
         image_block <- NULL
         if (!is.null(image_path)) {
             if (!file.exists(image_path)) stop("Image file not found: ", image_path)
-            mime <- mime::guess_type(image_path)
-            if (is.na(mime)) mime <- "image/png"
+            mime <- mime::guess_type(image_path); if (is.na(mime)) mime <- "image/png"
             image_b64 <- base64enc::base64encode(image_path)
             image_uri <- paste0("data:", mime, ";base64,", image_b64)
             image_block <- list(type = "image_url", image_url = list(url = image_uri))
         }
 
-        # Build message content
+        # Compose the user message
         content_blocks <- list(list(type = "text", text = prompt))
-        if (!is.null(file_text)) content_blocks <- append(content_blocks, list(list(type = "text", text = paste0("\n\n[File content]\n", file_text))))
+        if (!is.null(file_text))  content_blocks <- append(content_blocks, list(list(type = "text", text = paste0("\n\n[File content]\n", file_text))))
         if (!is.null(image_block)) content_blocks <- append(content_blocks, list(image_block))
-
-        # Update history with user message
         history <<- append(history, list(list(role = "user", content = content_blocks)))
 
-        # Optional trimming before send
+        # Optional trimming
         if (!is.null(trim_max_chars) && is.finite(trim_max_chars)) {
             history <<- .trim_history_chars(history, max_chars = as.integer(trim_max_chars))
         }
 
-        # Prepare request
-        endpoint <- paste0(sub("/+$","", base_url), "/chat/completions")
-        headers <- c("Content-Type" = "application/json")
+        # ---- Network (httr2 via wrappers) ----
+        endpoint <- .chat_endpoint(base_url)
+        headers  <- c("Content-Type" = "application/json")
         if (!is.null(api_key)) headers <- c(headers, Authorization = paste("Bearer", api_key))
 
-        payload <- list(
-            model = model,
-            messages = history,
-            temperature = temperature
-        )
+        payload <- list(model = model, messages = history, temperature = temperature)
 
-        response <- httr::POST(
-            url = endpoint,
-            httr::add_headers(.headers = headers),
-            body = jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null"),
-            encode = "json"
-        )
+        req <- .http_request(endpoint) |>
+            .http_req_headers(.headers = headers) |>
+            .http_req_timeout(timeout) |>
+            .http_req_retry(max_tries = 3, backoff = function(i) 0.2 * i) |>
+            .http_req_body_json(payload)
 
-        if (httr::status_code(response) != 200) {
-            warning("Request failed: ", httr::content(response, "text", encoding = "UTF-8"))
+        resp <- try(.http_req_perform(req), silent = TRUE)
+        if (inherits(resp, "try-error")) {
+            warning("Request failed: network unreachable.")
             return(NULL)
         }
 
-        parsed <- httr::content(response, "parsed", encoding = "UTF-8")
-        reply_content <- parsed$choices[[1]]$message$content
+        sc <- .http_resp_status(resp)
+        body <- NULL
+        if (identical(sc, 200L)) {
+            body <- try(.http_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+            if (inherits(body, "try-error")) {
+                warning("Request failed: non-JSON response.")
+                return(NULL)
+            }
+        } else {
+            # best-effort error message
+            j <- try(.http_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+            msg <- if (!inherits(j, "try-error")) {
+                tryCatch(
+                    as.character(j$error$message %||% j$message %||% paste0("HTTP ", sc)),
+                    error = function(e) paste0("HTTP ", sc)
+                )
+            } else paste0("HTTP ", sc)
+            warning("Request failed: ", msg)
+            return(NULL)
+        }
 
+        # Extract assistant message
+        reply_content <- tryCatch(body$choices[[1]]$message$content, error = function(e) NULL)
         assistant_content <- if (is.character(reply_content)) {
             list(list(type = "text", text = reply_content))
         } else {
             reply_content
         }
+        if (is.null(assistant_content)) {
+            warning("Empty assistant response.")
+            return(NULL)
+        }
+
         history <<- append(history, list(list(role = "assistant", content = assistant_content)))
 
-        # Optional persistence after this turn
+        # Persist after this turn (optional)
         if (!is.null(save_path)) {
-            writeLines(jsonlite::toJSON(history, auto_unbox = TRUE, pretty = TRUE), save_path)
+            writeLines(jsonlite::toJSON(history, auto_unbox = TRUE, pretty = TRUE, null = "null"), save_path)
             cat("History saved to ", save_path, "\n", sep = "")
         }
 

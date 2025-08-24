@@ -12,19 +12,19 @@
 #'
 #' @examples
 #' # NULL-only (handled by rlang::%||%):
-#' NULL %||% "default"        # "default"
-#' "x"  %||% "default"        # "x"
+#' NULL %||% "default" # "default"
+#' "x" %||% "default" # "x"
 #'
 #' # Length-0 coalescing:
-#' coalesce_len0(character(0), "fallback")  # "fallback"
-#' coalesce_len0(numeric(0),  42)           # 42
-#' coalesce_len0("x",         "fallback")   # "x"
+#' coalesce_len0(character(0), "fallback") # "fallback"
+#' coalesce_len0(numeric(0), 42) # 42
+#' coalesce_len0("x", "fallback") # "x"
 #'
 #' # Blank-string coalescing:
-#' coalesce_blank("",      "fallback")      # "fallback"
-#' coalesce_blank("  ",    "fallback")      # "  " (not trimmed!)
-#' coalesce_blank("text",  "fallback")      # "text"
-#' coalesce_blank(NULL,    "fallback")      # "fallback"
+#' coalesce_blank("", "fallback") # "fallback"
+#' coalesce_blank("  ", "fallback") # "  " (not trimmed!)
+#' coalesce_blank("text", "fallback") # "text"
+#' coalesce_blank(NULL, "fallback") # "fallback"
 #' coalesce_blank(character(0), "fallback") # "fallback"
 #' @name gptr-coalesce
 NULL
@@ -35,7 +35,7 @@ NULL
 #' @return Either x or default.
 #' @keywords internal
 coalesce_len0 <- function(x, default) {
-    if (is.null(x) || length(x) == 0L) default else x
+  if (is.null(x) || length(x) == 0L) default else x
 }
 
 #' Coalesce “blank” strings (NULL, character(0), or "")
@@ -48,10 +48,14 @@ coalesce_len0 <- function(x, default) {
 #' @return Either x or default.
 #' @keywords internal
 coalesce_blank <- function(x, default) {
-    if (is.null(x)) return(default)
-    if (is.character(x) && length(x) == 0L) return(default)
-    if (is.character(x) && length(x) == 1L && !nzchar(x)) return(default)
-    x
+  if (is.null(x)) {
+    return(default)
+  }
+  if (is.character(x) && length(x) == 0L) {
+    return(default)
+  }
+  if (is.character(x) && length(x) == 1L && !nzchar(x)) {
+    return(default)
+  }
+  x
 }
-
-

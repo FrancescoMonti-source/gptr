@@ -54,9 +54,6 @@
 #' @importFrom purrr map_chr
 #' @importFrom rlang env
 #' @export
-
-
-
 build_prompt <- function(template, text, keys = NULL) {
     if (is.na(text) || is.null(text) || nchar(text) == 0) {
         return("Texte manquant")

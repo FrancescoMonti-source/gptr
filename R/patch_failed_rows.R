@@ -68,123 +68,121 @@
 #' @export
 
 
-patch_failed_rows <- function(
-        data,
-        prompt,
-        col,
-        id_col,
-        keys = NULL,
-        max_attempts = 3,
-        auto_correct_keys = TRUE,
-        relaxed = TRUE,
-        print_retry = TRUE,
+patch_failed_rows <- function(data,
+                              prompt,
+                              col,
+                              id_col,
+                              keys = NULL,
+                              max_attempts = 3,
+                              auto_correct_keys = TRUE,
+                              relaxed = TRUE,
+                              print_retry = TRUE,
+                              ...) {
+  # --- deps ---
+  for (pkg in c("dplyr", "purrr", "progressr", "rlang")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) stop("Missing package: ", pkg, call. = FALSE)
+  }
+
+  # --- quosures & names ---
+  col_quo <- rlang::enquo(col)
+  id_col_quo <- rlang::enquo(id_col)
+  col_name <- rlang::as_name(col_quo)
+  id_col_name <- rlang::as_name(id_col_quo)
+
+  # --- fetch rows to retry ---
+  invalid_rows <- attr(data, "invalid_rows")
+  if (is.null(invalid_rows) || length(invalid_rows) == 0) {
+    message("No failed rows to retry.")
+    return(data)
+  }
+
+  # Ensure key uniqueness (rows_update requires unique key)
+  if (anyDuplicated(dplyr::pull(data, !!id_col_quo))) {
+    stop("`", id_col_name, "` contains duplicates. `rows_update()` requires unique keys.", call. = FALSE)
+  }
+
+  rows_to_retry <- data[invalid_rows, c(id_col_name, col_name), drop = FALSE]
+
+  # --- runner (one row) ---
+  run_one <- function(row_df) {
+    out <- tryCatch(
+      gpt_column(
+        data = row_df,
+        col = !!col_quo,
+        prompt = prompt,
+        keys = keys,
+        auto_correct_keys = auto_correct_keys,
+        relaxed = relaxed,
+        return_debug = TRUE,
         ...
-) {
-    # --- deps ---
-    for (pkg in c("dplyr", "purrr", "progressr", "rlang")) {
-        if (!requireNamespace(pkg, quietly = TRUE)) stop("Missing package: ", pkg, call. = FALSE)
+      ),
+      error = function(e) {
+        tibble::as_tibble(row_df) |>
+          dplyr::mutate(.error = conditionMessage(e), .invalid_rows = 1L)
+      }
+    )
+    # Ensure id column is present for rows_update join
+    if (!id_col_name %in% names(out)) {
+      out[[id_col_name]] <- row_df[[id_col_name]]
     }
+    out
+  }
 
-    # --- quosures & names ---
-    col_quo     <- rlang::enquo(col)
-    id_col_quo  <- rlang::enquo(id_col)
-    col_name    <- rlang::as_name(col_quo)
-    id_col_name <- rlang::as_name(id_col_quo)
+  # --- progress + retries ---
+  n <- nrow(rows_to_retry)
+  all_results <- list()
+  remaining <- rows_to_retry
 
-    # --- fetch rows to retry ---
-    invalid_rows <- attr(data, "invalid_rows")
-    if (is.null(invalid_rows) || length(invalid_rows) == 0) {
-        message("No failed rows to retry.")
-        return(data)
+  progressr::handlers("progress")
+  progressr::with_progress({
+    p <- progressr::progressor(steps = n * max_attempts)
+
+    for (attempt in seq_len(max_attempts)) {
+      if (nrow(remaining) == 0) break
+
+      batch <- purrr::map(seq_len(nrow(remaining)), function(i) {
+        p(sprintf("Attempt %d | row %d/%d", attempt, i, nrow(remaining)))
+        run_one(remaining[i, , drop = FALSE])
+      })
+
+      batch_df <- dplyr::bind_rows(batch)
+      all_results[[attempt]] <- batch_df
+
+      # identify successes (expect .invalid_rows == 0)
+      successes <- dplyr::filter(batch_df, .invalid_rows == 0L || .invalid_rows == FALSE)
+      if (nrow(successes) > 0) {
+        # Apply successful patches immediately
+        data <- dplyr::rows_update(data, successes, by = id_col_name)
+      }
+
+      # compute who is still failing
+      failed_ids <- dplyr::anti_join(
+        remaining[, id_col_name, drop = FALSE],
+        successes[, id_col_name, drop = FALSE],
+        by = id_col_name
+      )[[id_col_name]]
+
+      remaining <- if (length(failed_ids)) {
+        dplyr::semi_join(rows_to_retry, tibble::tibble(!!id_col_name := failed_ids), by = id_col_name)
+      } else {
+        remaining[0, , drop = FALSE]
+      }
     }
+  })
 
-    # Ensure key uniqueness (rows_update requires unique key)
-    if (anyDuplicated(dplyr::pull(data, !!id_col_quo))) {
-        stop("`", id_col_name, "` contains duplicates. `rows_update()` requires unique keys.", call. = FALSE)
-    }
+  retry_results <- dplyr::bind_rows(all_results)
+  if (isTRUE(print_retry)) {
+    print(retry_results, n = min(nrow(retry_results), 50))
+    if (nrow(retry_results) > 50) message("... output truncated.")
+  }
 
-    rows_to_retry <- data[invalid_rows, c(id_col_name, col_name), drop = FALSE]
+  # --- update invalid_rows attribute on the returned data ---
+  if (nrow(remaining) > 0) {
+    idx_still_invalid <- which(dplyr::pull(data, !!id_col_quo) %in% remaining[[id_col_name]])
+  } else {
+    idx_still_invalid <- integer(0)
+  }
+  attr(data, "invalid_rows") <- idx_still_invalid
 
-    # --- runner (one row) ---
-    run_one <- function(row_df) {
-        out <- tryCatch(
-            gpt_column(
-                data             = row_df,
-                col              = !!col_quo,
-                prompt           = prompt,
-                keys             = keys,
-                auto_correct_keys= auto_correct_keys,
-                relaxed          = relaxed,
-                return_debug     = TRUE,
-                ...
-            ),
-            error = function(e) {
-                tibble::as_tibble(row_df) |>
-                    dplyr::mutate(.error = conditionMessage(e), .invalid_rows = 1L)
-            }
-        )
-        # Ensure id column is present for rows_update join
-        if (!id_col_name %in% names(out)) {
-            out[[id_col_name]] <- row_df[[id_col_name]]
-        }
-        out
-    }
-
-    # --- progress + retries ---
-    n <- nrow(rows_to_retry)
-    all_results <- list()
-    remaining   <- rows_to_retry
-
-    progressr::handlers("progress")
-    progressr::with_progress({
-        p <- progressr::progressor(steps = n * max_attempts)
-
-        for (attempt in seq_len(max_attempts)) {
-            if (nrow(remaining) == 0) break
-
-            batch <- purrr::map(seq_len(nrow(remaining)), function(i) {
-                p(sprintf("Attempt %d | row %d/%d", attempt, i, nrow(remaining)))
-                run_one(remaining[i, , drop = FALSE])
-            })
-
-            batch_df <- dplyr::bind_rows(batch)
-            all_results[[attempt]] <- batch_df
-
-            # identify successes (expect .invalid_rows == 0)
-            successes <- dplyr::filter(batch_df, .invalid_rows == 0L || .invalid_rows == FALSE)
-            if (nrow(successes) > 0) {
-                # Apply successful patches immediately
-                data <- dplyr::rows_update(data, successes, by = id_col_name)
-            }
-
-            # compute who is still failing
-            failed_ids <- dplyr::anti_join(
-                remaining[, id_col_name, drop = FALSE],
-                successes[, id_col_name, drop = FALSE],
-                by = id_col_name
-            )[[id_col_name]]
-
-            remaining <- if (length(failed_ids)) {
-                dplyr::semi_join(rows_to_retry, tibble::tibble(!!id_col_name := failed_ids), by = id_col_name)
-            } else {
-                remaining[0, , drop = FALSE]
-            }
-        }
-    })
-
-    retry_results <- dplyr::bind_rows(all_results)
-    if (isTRUE(print_retry)) {
-        print(retry_results, n = min(nrow(retry_results), 50))
-        if (nrow(retry_results) > 50) message("... output truncated.")
-    }
-
-    # --- update invalid_rows attribute on the returned data ---
-    if (nrow(remaining) > 0) {
-        idx_still_invalid <- which(dplyr::pull(data, !!id_col_quo) %in% remaining[[id_col_name]])
-    } else {
-        idx_still_invalid <- integer(0)
-    }
-    attr(data, "invalid_rows") <- idx_still_invalid
-
-    data
+  data
 }

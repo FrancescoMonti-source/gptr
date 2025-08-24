@@ -12,13 +12,13 @@
 #' show_gpt_options()
 #' @export
 show_gpt_options <- function() {
-    opts <- options()
-    gpt_opts <- opts[grep("^gpt\\.", names(opts))]
-    if (length(gpt_opts) == 0) {
-        cli::cli_warn("No gpt.* options are currently set.")
-        return(invisible(list()))
-    }
-    cli::cli_inform("Current gptr package options:")
-    print(gpt_opts)
-    invisible(gpt_opts)
+  opts <- options()
+  gpt_opts <- opts[grep("^gpt\\.", names(opts))]
+  if (length(gpt_opts) == 0) {
+    cli::cli_warn("No gpt.* options are currently set.")
+    return(invisible(list()))
+  }
+  cli::cli_inform("Current gptr package options:")
+  print(gpt_opts)
+  invisible(gpt_opts)
 }

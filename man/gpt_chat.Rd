@@ -124,8 +124,8 @@ gpt_chat(reset = TRUE)
 gpt_chat(system = "You are a concise medical data assistant.")
 gpt_chat("Ciao! Facciamo un test?")
 gpt_chat("Ricordati che lavoro in sanità pubblica.")
-gpt_chat(show_history = TRUE)                   # print transcript
-gpt_chat(show_history = TRUE, show_history_as_text = FALSE)  # tibble
+gpt_chat(show_history = TRUE) # print transcript
+gpt_chat(show_history = TRUE, show_history_as_text = FALSE) # tibble
 
 # With a PDF attached (text extracted and appended):
 gpt_chat("Riassumi il documento.", file_path = "note.pdf")
@@ -138,7 +138,7 @@ gpt_chat(load_path = "chat_history.json")
 gpt_chat("Riprendiamo da dove eravamo rimasti.")
 
 # --- OpenAI (requires API key) ---
-Sys.setenv(OPENAI_API_KEY = "sk-...")  # or pass api_key explicitly
+Sys.setenv(OPENAI_API_KEY = "sk-...") # or pass api_key explicitly
 gpt_chat(
   base_url = "https://api.openai.com/v1",
   api_key  = Sys.getenv("OPENAI_API_KEY"),
