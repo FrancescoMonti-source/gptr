@@ -18,7 +18,8 @@ gpt_chat(
   system = NULL,
   trim_max_chars = NULL,
   save_path = NULL,
-  load_path = NULL
+  load_path = NULL,
+  timeout = getOption("gptr.request_timeout", 15)
 )
 }
 \arguments{
