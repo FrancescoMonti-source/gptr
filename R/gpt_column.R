@@ -226,14 +226,14 @@ gpt_column <- function(data,
 
   use_progressr <- isTRUE(progress) && requireNamespace("progressr", quietly = TRUE)
 
-  # early return guard helps avoid 0-step progressors, edge cases
-  if (length(texts) == 0L) return(data)
+  # If there are zero rows, bail early to avoid 0-step progressors
+  if (n == 0L) return(data)
 
   if (use_progressr) {
-      raw_outputs <- NULL  # will be assigned inside block
+      raw_outputs <- NULL  # will be assigned inside
       progressr::with_progress({
-          # total steps: model calls (n) + parse/validate (n if schema, else 0)
-          total_steps <- if (is.null(keys)) length(texts) else 2L * length(texts)
+          # One bar for the entire job: model calls + parse/validate (if schema)
+          total_steps <- if (is.null(keys)) n else 2L * n
           p  <- progressr::progressor(steps = total_steps, label = sprintf("%s: job", progress_label))
           t0 <- Sys.time()
 
@@ -251,7 +251,7 @@ gpt_column <- function(data,
                   out <- raw_outputs[[i]]
 
                   # >>> your existing parse/align/coerce body for row i (unchanged) <<<
-                  # (from: if (is.na(out) || !nzchar(out)) { ... next }  up to:
+                  # (from: if (is.na(out) || !nzchar(out)) { ... next } up to:
                   #   parsed_results[[i]] <- x
                   #   invalid_flags[i]    <- invalid
                   #   invalid_detail[[i]] <- meta_df)
@@ -262,12 +262,14 @@ gpt_column <- function(data,
           }
       })
   } else {
+      # progress disabled or progressr not installed: silent execution
       if (isTRUE(progress) && !requireNamespace("progressr", quietly = TRUE)) {
           message("Tip: install.packages('progressr') to see a live progress bar.")
       }
       raw_outputs <- vapply(seq_len(n), call_one, FUN.VALUE = character(1), USE.NAMES = FALSE)
-      # parse loop continues below as you already have it
+      # keep your existing parse loop here (schema branch continues below)
   }
+
 
 
 
