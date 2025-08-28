@@ -208,7 +208,7 @@
 .cache_put <- function(provider, base_url, models) {
   .gptr_cache[[.cache_key(provider, base_url)]] <- list(
     models = models,
-    ts     = as.numeric(Sys.time())
+    ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
   )
 }
 
@@ -231,24 +231,55 @@
   list(provider = parts[[1]], base_url = parts[[2]])
 }
 
+#' @noRd
 #' @keywords internal
-.models_cache_snapshot <- function() {
-    keys <- ls(envir = .gptr_cache, all.names = TRUE)
-    if (!length(keys)) {
-        return(data.frame(provider=character(), base_url=character(),
-                          n_models=integer(), ts=numeric(), stringsAsFactors=FALSE))
+.list_models_cached <- function(provider = NULL, base_url = NULL) {
+    # Case A: both missing -> enumerate everything currently cached
+    if (is.null(provider) && is.null(base_url)) {
+        return(.models_cache_snapshot())
     }
-    rows <- lapply(keys, function(k) {
-        ent <- get(k, envir = .gptr_cache, inherits = FALSE)
-        parts <- strsplit(k, "::", fixed = TRUE)[[1]]
-        provider <- parts[[1]]
-        base_url <- parts[[2]]
-        n_models <- if (!is.null(ent$models)) length(ent$models) else 0L
-        ts_num <- if (!is.null(ent$ts)) as.numeric(ent$ts) else NA_real_
-        data.frame(provider=provider, base_url=base_url,
-                   n_models=n_models, ts=ts_num, stringsAsFactors=FALSE)
-    })
-    do.call(rbind, rows)
+
+    # Case B: only provider -> use configured default base URL
+    if (!is.null(provider) && is.null(base_url)) {
+        cands <- .list_local_backends()
+        cand <- cands[[provider]]
+        if (is.null(cand)) stop("Unknown provider '", provider, "'.")
+        base_url <- cand$base_url
+    }
+
+    # Case C: only base_url -> return union across any provider for that root (no refresh)
+    if (is.null(provider) && !is.null(base_url)) {
+        root <- .api_root(base_url)
+        keys <- ls(.gptr_cache, all.names = TRUE)
+        hits <- vapply(keys, function(k) .parse_cache_key(k)$base_url == root, logical(1))
+        if (!any(hits)) {
+            return(character(0))
+        }
+        models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache[[k]]$models), use.names = FALSE))
+        return(models %||% character(0))
+    }
+
+    # Case D: provider + base_url -> original behavior (get-or-refresh with TTL)
+    ent <- .cache_get(provider, base_url)
+    if (!is.null(ent)) {
+        if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
+            return(ent$models)
+        }
+        ttl <- getOption("gptr.model_cache_ttl", 3600)
+        if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) {
+            return(ent$models)
+        }
+    }
+    # refresh if not present or TTL expired
+    models <- .fetch_models_live(provider, base_url)
+    .cache_put(provider, base_url, models)
+    models
+}
+
+# legacy/readability alias
+#' @keywords internal
+.models_cache_snapshot <- function(tz = "Europe/Paris") {
+    .list_models_cached(NULL, NULL, tz = tz)
 }
 
 
@@ -296,7 +327,7 @@ list_models <- function(provider = NULL,
 
       if (isTRUE(refresh)) {
         refreshed <- refresh_models_cache(p, bu)
-        mods_vec <- list_models_cached(p, bu) # character vector (locals)
+        mods_vec <- .list_models_cached(p, bu) # character vector (locals)
         ts <- .cache_get(p, bu)$ts %||% as.numeric(Sys.time())
         src <- "live"
         if (p == "ollama" && length(mods_vec) == 0) {
@@ -310,7 +341,7 @@ list_models <- function(provider = NULL,
       } else {
         ent <- .cache_get(p, bu)
         if (is.null(ent)) {
-          mods_vec <- list_models_cached(p, bu)
+          mods_vec <- .list_models_cached(p, bu)
           ts <- .cache_get(p, bu)$ts %||% as.numeric(Sys.time())
           src <- "live"
           if (p == "ollama" && length(mods_vec) == 0) {
@@ -368,7 +399,7 @@ list_models <- function(provider = NULL,
 
   # Add human-readable timestamp (UTC) where 'created' is present
   out$created <- suppressWarnings(as.numeric(out$created))
-  out$created <- as.POSIXct(out$created, origin = "1970-01-01", tz = "UTC")
+  out$created <- as.POSIXct(out$created, origin = "1970-01-01", tz = "Europe/Paris")
 
   # Stable ordering: locals first, then by recency (where available), then model_id
   ord <- order(
@@ -380,39 +411,55 @@ list_models <- function(provider = NULL,
   out[ord, , drop = FALSE]
 }
 
-
 #' Force a live probe of /v1/models and update the cache immediately.
 #' Useful after adding/pulling a new model in LM Studio/Ollama.
 #' Returns a data.frame summarizing provider, base_url, count of models, refreshed_at, and status.
 #' @return data.frame: provider, base_url, models_count, refreshed_at, status
 #' @export
 refresh_models_cache <- function(provider = NULL, base_url = NULL) {
-  cands <- .list_local_backends()
-  keys <- if (is.null(provider)) names(cands) else provider
-  out <- list()
+    cands <- .list_local_backends()
+    keys  <- if (is.null(provider)) names(cands) else provider
+    out   <- list()
 
-  for (p in keys) {
-    cand <- cands[[p]]
-    if (is.null(cand)) next
-    bu <- base_url %||% cand$base_url
-    models <- .fetch_models_live(p, bu)
-    .cache_put(p, bu, models)
-    out[[length(out) + 1L]] <- data.frame(
-      provider = p,
-      base_url = .api_root(bu),
-      models_count = length(models),
-      refreshed_at = as.numeric(Sys.time()),
-      status = if (length(models)) "ok" else "unreachable_or_empty",
-      stringsAsFactors = FALSE
-    )
-  }
-  if (!length(out)) {
-    return(data.frame(
-      provider = character(), base_url = character(), models_count = integer(),
-      refreshed_at = numeric(), status = character(), stringsAsFactors = FALSE
-    ))
-  }
-  do.call(rbind, out)
+    for (p in keys) {
+        cand <- cands[[p]]
+        if (is.null(cand)) next
+
+        bu     <- base_url %||% cand$base_url
+        models <- .fetch_models_live(p, bu)
+        .cache_put(p, bu, models)
+
+        out[[length(out) + 1L]] <- data.frame(
+            provider     = p,
+            base_url     = .api_root(bu),
+            models_count = length(models),
+            # keep it POSIXct from the start
+            refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
+            status       = if (length(models)) "ok" else "unreachable_or_empty",
+            stringsAsFactors = FALSE
+        )
+    }
+
+    if (!length(out)) {
+        return(data.frame(
+            provider     = character(),
+            base_url     = character(),
+            models_count = integer(),
+            # zero-length POSIXct, not numeric
+            refreshed_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
+            status       = character(),
+            stringsAsFactors = FALSE
+        ))
+    }
+
+    out <- do.call(rbind, out)
+
+    # safety: if anything snuck in as numeric, reclass it here
+    if (!inherits(out$refreshed_at, "POSIXct")) {
+        out$refreshed_at <- as.POSIXct(out$refreshed_at, origin = "1970-01-01", tz = "Europe/Paris")
+    }
+
+    out
 }
 
 #' Clear cache entries so that the next run will re-probe the server.
@@ -420,102 +467,43 @@ refresh_models_cache <- function(provider = NULL, base_url = NULL) {
 #' Returns the number of entries removed.
 #' @return integer: number of entries removed
 #' @export
-#' @keywords internal
-invalidate_models_cache <- function(provider = NULL, base_url = NULL) {
-  snap <- .models_cache_snapshot() # whatever your cache returns
-
-  # helper to extract provider/base from a snapshot entry or its name
-  .pb <- function(k, v) {
-      parts <- .parse_cache_key(k)
-      p <- v$provider %||% parts$provider
-      b <- v$base_url %||% parts$base_url
-      list(provider=p, base_url=b)
-  }
-
-
-  # no args: nuke all
-  if (is.null(provider) && is.null(base_url)) {
-    for (k in names(snap)) {
-      pb <- .pb(k, snap[[k]])
-      .cache_del(pb$provider, pb$base_url)
-    }
-    return(invisible(TRUE))
-  }
-
-  # provider only: nuke all for that provider
-  if (!is.null(provider) && is.null(base_url)) {
-    for (k in names(snap)) {
-      pb <- .pb(k, snap[[k]])
-      if (identical(pb$provider, provider)) .cache_del(pb$provider, pb$base_url)
-    }
-    return(invisible(TRUE))
-  }
-
-  # base only: nuke all matching that root
-  if (is.null(provider) && !is.null(base_url)) {
-    root <- .api_root(base_url)
-    for (k in names(snap)) {
-      pb <- .pb(k, snap[[k]])
-      if (identical(.api_root(pb$base_url), root)) .cache_del(pb$provider, pb$base_url)
-    }
-    return(invisible(TRUE))
-  }
-
-  # both provided: clear exact pair
-  .cache_del(provider, .api_root(base_url))
-  invisible(TRUE)
-}
-
-
-
-#' Core lookup used inside gpt(): retrieve model IDs with caching policy.
-#' Honors gptr.check_model_once (reuse forever in session) and gptr.model_cache_ttl (refresh after TTL).
-#' If no cache or TTL expired, performs a live probe and refreshes the cache.
-#' Returns a character vector of model IDs.
-#' - with provider+base_url: returns character vector (as before), with TTL/check-once policy.
-#' - with neither: returns a data.frame snapshot of ALL cached entries (no refresh).
-#' - with only provider: uses configured default base_url for that provider.
-#' - with only base_url: returns character vector, union of cached models at that root (any provider).
-#' @export
-list_models_cached <- function(provider = NULL, base_url = NULL) {
-  # Case A: both missing -> enumerate everything currently cached
-  if (is.null(provider) && is.null(base_url)) {
-    return(.models_cache_snapshot())
-  }
-
-  # Case B: only provider -> use configured default base URL
-  if (!is.null(provider) && is.null(base_url)) {
-    cands <- .list_local_backends()
-    cand <- cands[[provider]]
-    if (is.null(cand)) stop("Unknown provider '", provider, "'.")
-    base_url <- cand$base_url
-  }
-
-  # Case C: only base_url -> return union across any provider for that root (no refresh)
-  if (is.null(provider) && !is.null(base_url)) {
-    root <- .api_root(base_url)
+delete_models_cache <- function(provider = NULL, base_url = NULL) {
     keys <- ls(.gptr_cache, all.names = TRUE)
-    hits <- vapply(keys, function(k) .parse_cache_key(k)$base_url == root, logical(1))
-    if (!any(hits)) {
-      return(character(0))
-    }
-    models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache[[k]]$models), use.names = FALSE))
-    return(models %||% character(0))
-  }
+    if (!length(keys)) return(invisible(TRUE))
 
-  # Case D: provider + base_url -> original behavior (get-or-refresh with TTL)
-  ent <- .cache_get(provider, base_url)
-  if (!is.null(ent)) {
-    if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
-      return(ent$models)
+    # no args: clear everything
+    if (is.null(provider) && is.null(base_url)) {
+        for (k in keys) {
+            parts <- .parse_cache_key(k)
+            .cache_del(parts$provider, parts$base_url)
+        }
+        return(invisible(TRUE))
     }
-    ttl <- getOption("gptr.model_cache_ttl", 3600)
-    if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) {
-      return(ent$models)
+
+    # provider only
+    if (!is.null(provider) && is.null(base_url)) {
+        for (k in keys) {
+            parts <- .parse_cache_key(k)
+            if (identical(parts$provider, provider))
+                .cache_del(parts$provider, parts$base_url)
+        }
+        return(invisible(TRUE))
     }
-  }
-  # refresh if not present or TTL expired
-  models <- .fetch_models_live(provider, base_url)
-  .cache_put(provider, base_url, models)
-  models
+
+    # base_url only
+    if (is.null(provider) && !is.null(base_url)) {
+        root <- .api_root(base_url)
+        for (k in keys) {
+            parts <- .parse_cache_key(k)
+            if (identical(.api_root(parts$base_url), root))
+                .cache_del(parts$provider, parts$base_url)
+        }
+        return(invisible(TRUE))
+    }
+
+    # both
+    .cache_del(provider, .api_root(base_url))
+    invisible(TRUE)
 }
+
+
