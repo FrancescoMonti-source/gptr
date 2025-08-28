@@ -127,14 +127,6 @@ gpt_column <- function(data,
     as.character(val)
   }
 
-
-  # CANDIDATE FOR DELITION
-
-  # Resolve backend: always call current gpt() with normalized provider/base/backend
-  # gpt_fun <- function(...) {
-  #   gpt(provider = provider, base_url = base_url, backend = backend, ...)
-  # }
-
   # Ungroup; validate column
   if (dplyr::is_grouped_df(data)) data <- dplyr::ungroup(data)
   col_quo <- rlang::enquo(col)
