@@ -24,7 +24,6 @@
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
 #'   If a schema (`keys`) is provided, it is always used for final typing.
 #' @param progress Logical. Progress Bar, defaults to TRUE.
-#' @param progress_label Progress bar label.
 #' @param ... Extra args passed to `gpt()` (e.g., `model`, `provider`,`response_format`).
 #' @export
 
@@ -51,7 +50,6 @@ gpt_column <- function(data,
                        return_debug = TRUE,
                        verbose = FALSE,
                        progress = TRUE,
-                       progress_label = "gpt_column",
                        ...) {
   # capture all user extras once
   dots <- rlang::list2(...) # <-- new
@@ -234,7 +232,7 @@ gpt_column <- function(data,
       progressr::with_progress({
           # One bar for the entire job: model calls + parse/validate (if schema)
           total_steps <- if (is.null(keys)) n else 2L * n
-          p  <- progressr::progressor(steps = total_steps, label = sprintf("%s: job", progress_label))
+          p  <- progressr::progressor(steps = total_steps)
           t0 <- Sys.time()
 
           # --- MODEL CALLS (tick n times) -----------------------------------------
