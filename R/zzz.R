@@ -35,7 +35,7 @@
 
     if (isTRUE(getOption("gptr.progress.force"))) {
         progressr::handlers(
-            progressr::handler_progress(format = ":spin :bar :percent :eta | :message")
+            progressr::handler_progress(format = ":label :spin :bar :percent :eta | :message")
         )
     }
 }
