@@ -35,8 +35,7 @@
     cur <- try(progressr::handlers(global = FALSE), silent = TRUE)
     if (!inherits(cur, "try-error") && length(cur) == 0L) {
         progressr::handlers(
-            progressr::handler_progress(format = ":spin :bar :percent :eta | :message"),
-            global = TRUE
+            progressr::handler_progress(format = ":spin :bar :percent :eta | :message")
         )
     }
 }
