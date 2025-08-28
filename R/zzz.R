@@ -19,7 +19,8 @@
     gptr.local_verbose = FALSE, # set TRUE to message which backend was detected
     gptr.verbose_preflight = FALSE,
     gptr.check_model_once = TRUE, # probe once per session (default)
-    gptr.model_cache_ttl = 3600 # seconds used when check_model_once = FALSE
+    gptr.model_cache_ttl = 3600, # seconds used when check_model_once = FALSE
+    gptr.progress.force = TRUE  # default: force "my" handler, set gptr.progress.force = FALSE in.Rprofile to nor override your own
   )
   toset <- !(names(op.gptr) %in% names(op))
   if (any(toset)) options(op.gptr[toset])
@@ -32,8 +33,7 @@
     if (!interactive()) return()
     if (!requireNamespace("progressr", quietly = TRUE)) return()
 
-    cur <- try(progressr::handlers(global = FALSE), silent = TRUE)
-    if (!inherits(cur, "try-error") && length(cur) == 0L) {
+    if (isTRUE(getOption("gptr.progress.force"))) {
         progressr::handlers(
             progressr::handler_progress(format = ":spin :bar :percent :eta | :message")
         )
