@@ -48,6 +48,8 @@ gpt_column <- function(data,
                        relaxed = FALSE,
                        return_debug = TRUE,
                        verbose = FALSE,
+                       progress = TRUE,
+                       progress_label = "gpt_column",
                        ...) {
   # capture all user extras once
   dots <- rlang::list2(...) # <-- new
@@ -195,28 +197,45 @@ gpt_column <- function(data,
   )
 
   # --- 3) PER-ROW CALL ----
-  raw_outputs <- vapply(seq_len(n), function(i) {
-    txt <- texts[[i]]
-    if (is.na(txt) || !nzchar(trimws(txt))) {
-      return(NA_character_)
-    }
-    input_prompt <- make_prompt_for(txt)
+  call_one <- function(i) {
+      txt <- texts[[i]]
+      if (is.na(txt) || !nzchar(trimws(txt))) {
+          return(NA_character_)
+      }
+      input_prompt <- make_prompt_for(txt)
 
-    # VERY IMPORTANT: user-supplied dots win last
-    do.call(
-      gpt,
-      c(
-        list(
-          prompt      = input_prompt,
-          temperature = temperature,
-          file_path   = file_path,
-          image_path  = image_path
-        ),
-        forward_args,
-        dots
+      do.call(
+          gpt,
+          c(
+              list(
+                  prompt      = input_prompt,
+                  temperature = temperature,
+                  file_path   = file_path,
+                  image_path  = image_path
+              ),
+              forward_args,
+              dots
+          )
       )
-    )
-  }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+  }
+
+  use_progressr <- isTRUE(progress) && requireNamespace("progressr", quietly = TRUE)
+
+  raw_outputs <- if (use_progressr) {
+      progressr::with_progress({
+          p <- progressr::progressor(steps = n, label = sprintf("%s: model calls", progress_label))
+          vapply(seq_len(n), function(i) {
+              out <- call_one(i)
+              p(message = sprintf("row %d/%d", i, n))
+              out
+          }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+      })
+  } else {
+      if (isTRUE(progress) && !requireNamespace("progressr", quietly = TRUE)) {
+          message("Tip: install.packages('progressr') to see a live progress bar.")
+      }
+      vapply(seq_len(n), call_one, FUN.VALUE = character(1), USE.NAMES = FALSE)
+  }
 
   parsed_results <- vector("list", n) # list of named lists (schema) or scalars/lists (no schema)
   invalid_flags <- logical(n) # TRUE when row invalid (parse/validate failures)

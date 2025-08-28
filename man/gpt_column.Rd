@@ -27,6 +27,8 @@ gpt_column(
   relaxed = FALSE,
   return_debug = TRUE,
   verbose = FALSE,
+  progress = TRUE,
+  progress_label = "gpt_column",
   ...
 )
 }
