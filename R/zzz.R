@@ -26,5 +26,19 @@
   #invisible()
 }
 
+#' Package startup: install a default progress handler if none is set
+#' (interactive sessions only; silent if user already configured one)
+.onAttach <- function(libname, pkgname) {
+    if (!interactive()) return()
+    if (!requireNamespace("progressr", quietly = TRUE)) return()
+
+    cur <- try(progressr::handlers(global = FALSE), silent = TRUE)
+    if (!inherits(cur, "try-error") && length(cur) == 0L) {
+        progressr::handlers(
+            progressr::handler_progress(format = ":spin :bar :percent :eta | :message"),
+            global = TRUE
+        )
+    }
+}
 
 

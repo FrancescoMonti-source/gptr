@@ -226,43 +226,49 @@ gpt_column <- function(data,
 
   use_progressr <- isTRUE(progress) && requireNamespace("progressr", quietly = TRUE)
 
+  # early return guard helps avoid 0-step progressors, edge cases
+  if (length(texts) == 0L) return(data)
+
   if (use_progressr) {
-      progressr::with_handlers(
-          progressr::handler_progress(format = ":spin :bar :percent :eta | :message"),
-          progressr::with_progress({
-              total_steps <- if (is.null(keys)) n else 2L * n  # include parse only when schema path
-              p <- progressr::progressor(steps = total_steps, label = sprintf("%s: job", progress_label))
+      raw_outputs <- NULL  # will be assigned inside block
+      progressr::with_progress({
+          # total steps: model calls (n) + parse/validate (n if schema, else 0)
+          total_steps <- if (is.null(keys)) length(texts) else 2L * length(texts)
+          p  <- progressr::progressor(steps = total_steps, label = sprintf("%s: job", progress_label))
+          t0 <- Sys.time()
 
-              # --- model calls (n ticks) ---
-              t0 <- Sys.time()
-              raw_outputs <- vapply(seq_len(n), function(i) {
-                  out <- call_one(i)
-                  elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
-                  p(message = sprintf("LLM %d/%d • elapsed %ds", i, n, round(elapsed)))
-                  out
-              }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+          # --- MODEL CALLS (tick n times) -----------------------------------------
+          raw_outputs <- vapply(seq_len(n), function(i) {
+              out <- call_one(i)
+              elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+              p(message = sprintf("LLM %d/%d • elapsed %ds", i, n, round(elapsed)))
+              out
+          }, FUN.VALUE = character(1), USE.NAMES = FALSE)
 
-              # --- parse/validate (n ticks only when schema path) ---
-              if (!is.null(keys)) {
-                  for (i in seq_len(n)) {
-                      out <- raw_outputs[[i]]
-                      # ... your existing parse/align/coerce body (unchanged) ...
-                      # at the end of each i:
-                      p(message = sprintf("Parse %d/%d", i, n))
-                  }
-              } else {
-                  # your existing no-schema branch continues below
+          # --- PARSE / VALIDATE (tick n times only when schema path) --------------
+          if (!is.null(keys)) {
+              for (i in seq_len(n)) {
+                  out <- raw_outputs[[i]]
+
+                  # >>> your existing parse/align/coerce body for row i (unchanged) <<<
+                  # (from: if (is.na(out) || !nzchar(out)) { ... next }  up to:
+                  #   parsed_results[[i]] <- x
+                  #   invalid_flags[i]    <- invalid
+                  #   invalid_detail[[i]] <- meta_df)
+
+                  # tick after finishing row i parsing:
+                  p(message = sprintf("Parse %d/%d", i, n))
               }
-          })
-      )
+          }
+      })
   } else {
       if (isTRUE(progress) && !requireNamespace("progressr", quietly = TRUE)) {
           message("Tip: install.packages('progressr') to see a live progress bar.")
       }
-      # model calls without progress
       raw_outputs <- vapply(seq_len(n), call_one, FUN.VALUE = character(1), USE.NAMES = FALSE)
-      # parse loop stays as you already have it
+      # parse loop continues below as you already have it
   }
+
 
 
   parsed_results <- vector("list", n) # list of named lists (schema) or scalars/lists (no schema)
