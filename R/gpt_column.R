@@ -23,6 +23,8 @@
 #' @param coerce_when Optional named list of per-key target types used for row-level coercion.
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
 #'   If a schema (`keys`) is provided, it is always used for final typing.
+#' @param progress Logical. Progress Bar, defaults to TRUE.
+#' @param progress_label Progress bar label.
 #' @param ... Extra args passed to `gpt()` (e.g., `model`, `provider`,`response_format`).
 #' @export
 
@@ -127,10 +129,13 @@ gpt_column <- function(data,
     as.character(val)
   }
 
+
+  # CANDIDATE FOR DELITION
+
   # Resolve backend: always call current gpt() with normalized provider/base/backend
-  gpt_fun <- function(...) {
-    gpt(provider = provider, base_url = base_url, backend = backend, ...)
-  }
+  # gpt_fun <- function(...) {
+  #   gpt(provider = provider, base_url = base_url, backend = backend, ...)
+  # }
 
   # Ungroup; validate column
   if (dplyr::is_grouped_df(data)) data <- dplyr::ungroup(data)
@@ -196,7 +201,7 @@ gpt_column <- function(data,
     )
   )
 
-  # --- 3) PER-ROW CALL ----
+  # --- ------ 3) PER-ROW CALL ----
   call_one <- function(i) {
       txt <- texts[[i]]
       if (is.na(txt) || !nzchar(trimws(txt))) {
@@ -221,21 +226,44 @@ gpt_column <- function(data,
 
   use_progressr <- isTRUE(progress) && requireNamespace("progressr", quietly = TRUE)
 
-  raw_outputs <- if (use_progressr) {
-      progressr::with_progress({
-          p <- progressr::progressor(steps = n, label = sprintf("%s: model calls", progress_label))
-          vapply(seq_len(n), function(i) {
-              out <- call_one(i)
-              p(message = sprintf("row %d/%d", i, n))
-              out
-          }, FUN.VALUE = character(1), USE.NAMES = FALSE)
-      })
+  if (use_progressr) {
+      progressr::with_handlers(
+          progressr::handler_progress(format = ":spin :bar :percent :eta | :message"),
+          progressr::with_progress({
+              total_steps <- if (is.null(keys)) n else 2L * n  # include parse only when schema path
+              p <- progressr::progressor(steps = total_steps, label = sprintf("%s: job", progress_label))
+
+              # --- model calls (n ticks) ---
+              t0 <- Sys.time()
+              raw_outputs <- vapply(seq_len(n), function(i) {
+                  out <- call_one(i)
+                  elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+                  p(message = sprintf("LLM %d/%d • elapsed %ds", i, n, round(elapsed)))
+                  out
+              }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+
+              # --- parse/validate (n ticks only when schema path) ---
+              if (!is.null(keys)) {
+                  for (i in seq_len(n)) {
+                      out <- raw_outputs[[i]]
+                      # ... your existing parse/align/coerce body (unchanged) ...
+                      # at the end of each i:
+                      p(message = sprintf("Parse %d/%d", i, n))
+                  }
+              } else {
+                  # your existing no-schema branch continues below
+              }
+          })
+      )
   } else {
       if (isTRUE(progress) && !requireNamespace("progressr", quietly = TRUE)) {
           message("Tip: install.packages('progressr') to see a live progress bar.")
       }
-      vapply(seq_len(n), call_one, FUN.VALUE = character(1), USE.NAMES = FALSE)
+      # model calls without progress
+      raw_outputs <- vapply(seq_len(n), call_one, FUN.VALUE = character(1), USE.NAMES = FALSE)
+      # parse loop stays as you already have it
   }
+
 
   parsed_results <- vector("list", n) # list of named lists (schema) or scalars/lists (no schema)
   invalid_flags <- logical(n) # TRUE when row invalid (parse/validate failures)

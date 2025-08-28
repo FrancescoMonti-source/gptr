@@ -68,6 +68,10 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{verbose}{Print repair/validation messages.}
 
+\item{progress}{Logical. Progress Bar, defaults to TRUE.}
+
+\item{progress_label}{Progress bar label.}
+
 \item{...}{Extra args passed to \code{gpt()} (e.g., \code{model}, \code{provider},\code{response_format}).}
 
 \item{Provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".}
