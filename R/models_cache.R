@@ -233,31 +233,22 @@
 
 #' @keywords internal
 .models_cache_snapshot <- function() {
-  # replace ".models_cache_env" with your actual cache env if different
-  env <- .models_cache_env
-  keys <- ls(envir = env, all.names = FALSE)
-  if (!length(keys)) {
-    return(data.frame(
-      provider = character(0),
-      base_url = character(0),
-      n_models = integer(0),
-      ts = numeric(0),
-      stringsAsFactors = FALSE
-    ))
-  }
-
-  rows <- lapply(keys, function(k) {
-    ent <- get(k, envir = env, inherits = FALSE)
-    data.frame(
-      provider = sub("@.*$", "", k, perl = TRUE),
-      base_url = sub("^.*@", "", k, perl = TRUE),
-      n_models = NROW(.as_models_df(ent$models)),
-      ts = suppressWarnings(as.numeric(ent$ts)),
-      stringsAsFactors = FALSE
-    )
-  })
-
-  do.call(rbind, rows)
+    keys <- ls(envir = .gptr_cache, all.names = TRUE)
+    if (!length(keys)) {
+        return(data.frame(provider=character(), base_url=character(),
+                          n_models=integer(), ts=numeric(), stringsAsFactors=FALSE))
+    }
+    rows <- lapply(keys, function(k) {
+        ent <- get(k, envir = .gptr_cache, inherits = FALSE)
+        parts <- strsplit(k, "::", fixed = TRUE)[[1]]
+        provider <- parts[[1]]
+        base_url <- parts[[2]]
+        n_models <- if (!is.null(ent$models)) length(ent$models) else 0L
+        ts_num <- if (!is.null(ent$ts)) as.numeric(ent$ts) else NA_real_
+        data.frame(provider=provider, base_url=base_url,
+                   n_models=n_models, ts=ts_num, stringsAsFactors=FALSE)
+    })
+    do.call(rbind, rows)
 }
 
 
@@ -435,15 +426,12 @@ invalidate_models_cache <- function(provider = NULL, base_url = NULL) {
 
   # helper to extract provider/base from a snapshot entry or its name
   .pb <- function(k, v) {
-    if (is.list(v)) {
-      p <- v$provider %||% sub("@.*$", "", k)
-      b <- v$base_url %||% sub("^.*@", "", k)
-    } else {
-      p <- sub("@.*$", "", k)
-      b <- sub("^.*@", "", k)
-    }
-    list(provider = p, base_url = b)
+      parts <- .parse_cache_key(k)
+      p <- v$provider %||% parts$provider
+      b <- v$base_url %||% parts$base_url
+      list(provider=p, base_url=b)
   }
+
 
   # no args: nuke all
   if (is.null(provider) && is.null(base_url)) {

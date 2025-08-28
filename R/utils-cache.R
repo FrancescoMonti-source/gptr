@@ -82,7 +82,7 @@ gpt_refresh_models <- function(base_url = getOption("gptr.local_base_url", NULL)
             model_id = NA_character_,
             created = NA_real_,
             availability = availability,
-            cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "UTC"),
+            cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "Europe/Paris"),
             source = src,
             status = status,
             stringsAsFactors = FALSE
@@ -94,7 +94,7 @@ gpt_refresh_models <- function(base_url = getOption("gptr.local_base_url", NULL)
         model_id = models_df$id,
         created = models_df$created,
         availability = availability,
-        cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "UTC"),
+        cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "Europe/Paris"),
         source = src,
         status = status,
         stringsAsFactors = FALSE
