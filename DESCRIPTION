@@ -33,7 +33,7 @@ Imports:
     stats,
     utils
 Suggests: 
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
     progressr
 Config/testthat/edition: 3
 URL: https://github.com/FrancescoMonti-source/gptr
