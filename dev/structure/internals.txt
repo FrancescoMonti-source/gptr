@@ -1,6 +1,5 @@
 $.gpt_chat_callable
 %+%
-.__DEVTOOLS__
 .__NAMESPACE__.
 .__S3MethodsTable__.
 .api_root
@@ -36,6 +35,7 @@ $.gpt_chat_callable
 .models_cache_snapshot
 .models_endpoint
 .ollama_tags_live
+.onAttach
 .onLoad
 .packageName
 .parse_cache_key

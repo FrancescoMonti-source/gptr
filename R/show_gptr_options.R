@@ -11,9 +11,9 @@
 #' @examples
 #' show_gpt_options()
 #' @export
-show_gpt_options <- function() {
+show_gptr_options <- function() {
   opts <- options()
-  gpt_opts <- opts[grep("^gpt\\.", names(opts))]
+  gpt_opts <- opts[grep("^gptr\\.", names(opts))]
   if (length(gpt_opts) == 0) {
     cli::cli_warn("No gpt.* options are currently set.")
     return(invisible(list()))
