@@ -1,6 +1,7 @@
 # gptr 0.4.2
 
-* Added a nice progress bar to gpt_column() showing time estimate, elapsed, etc
+* Added a nice progress bar to gpt_column() showing time estimate, elapsed
+, etc
 
 # gptr 0.4.1
 
