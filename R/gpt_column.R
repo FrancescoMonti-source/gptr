@@ -19,7 +19,7 @@
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.
 #' @param return_debug If TRUE, add `.raw_output`, `.invalid_rows`, and `.invalid_detail`. Default TRUE.
-#' @param coerce_types Row-level coercion toggle (default TRUE).
+#' @param .coerce_types Row-level coercion toggle (default TRUE).
 #' @param coerce_when Optional named list of per-key target types used for row-level coercion.
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
 #'   If a schema (`keys`) is provided, it is always used for final typing.
@@ -38,7 +38,7 @@ gpt_column <- function(data,
                        temperature = 0.2,
                        file_path = NULL,
                        image_path = NULL,
-                       coerce_types = TRUE,
+                       .coerce_types = TRUE,
                        coerce_when = NULL,
                        infer_types = FALSE,
                        na_values = c("NA", "N/A", "null", "None", ""),
@@ -155,8 +155,8 @@ gpt_column <- function(data,
   # )
   #
   # WHY key_specs: normalize each entry to a consistent shape per key:
-  #   parse_key_spec("integer") -> list(type="integer", allowed=NULL)
-  #   parse_key_spec(c("léger","modéré")) -> list(type=NULL, allowed=c(...))
+  #   .parse_key_spec("integer") -> list(type="integer", allowed=NULL)
+  #   .parse_key_spec(c("léger","modéré")) -> list(type=NULL, allowed=c(...))
   #
   # WHY expected_keys: the ordered vector of column names, used to pad/order and
   # drive json_keys_align() / row_to_tibble() / finalize_columns().
@@ -164,7 +164,7 @@ gpt_column <- function(data,
   expected_keys <- NULL # character vector of column names (order matters)
   if (!is.null(keys)) {
     stopifnot(is.list(keys), !is.null(names(keys)))
-    key_specs <- purrr::map(keys, parse_key_spec)
+    key_specs <- purrr::map(keys, .parse_key_spec)
     expected_keys <- names(keys)
   }
 
@@ -282,7 +282,7 @@ gpt_column <- function(data,
     }
 
 
-    # --- SHIM: unwrap quoted JSON early (even if parser/tidy_json miss) ---
+    # --- SHIM: unwrap quoted JSON early (even if parser/.tidy_json miss) ---
     if (is.character(out) && length(out) == 1L) {
       val0 <- try(jsonlite::fromJSON(out, simplifyVector = FALSE), silent = TRUE)
       if (!inherits(val0, "try-error") && is.character(val0) && length(val0) == 1L) {
@@ -302,7 +302,7 @@ gpt_column <- function(data,
         na_values    = na_values,
         verbose      = verbose,
         i            = i,
-        coerce_types = FALSE,
+        .coerce_types = FALSE,
         coerce_when  = NULL
       ),
       error = function(e) {
@@ -392,12 +392,12 @@ gpt_column <- function(data,
     x <- .force_schema_shape(x, expected_keys)
 
     # Row-level coercion for schema (or explicit coerce_when)
-    if (isTRUE(coerce_types) && !is.null(key_specs)) {
+    if (isTRUE(.coerce_types) && !is.null(key_specs)) {
       for (k in intersect(names(x), names(key_specs))) {
         tt <- key_specs[[k]]$type
         if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
       }
-    } else if (!is.null(coerce_when) && isTRUE(coerce_types)) {
+    } else if (!is.null(coerce_when) && isTRUE(.coerce_types)) {
       for (k in intersect(names(x), names(coerce_when))) {
         tt <- coerce_when[[k]]
         if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)

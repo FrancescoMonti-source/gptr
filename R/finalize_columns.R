@@ -1,7 +1,7 @@
 #' Final column typing after row binding
 #' @param df Data frame with extracted columns (already bound row-wise).
 #' @param expected_keys Character vector of expected keys.
-#' @param key_specs Named list of specs (from parse_key_spec()) or NULL.
+#' @param key_specs Named list of specs (from .parse_key_spec()) or NULL.
 #' @param mode One of "schema", "infer", "as_is".
 #' @return Data frame with harmonized column types.
 #' @export
