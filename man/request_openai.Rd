@@ -8,7 +8,7 @@ request_openai(
   payload,
   base_url = NULL,
   api_key = NULL,
-  timeout = getOption("gpt.timeout", 30)
+  timeout = getOption("gptr.timeout", 30)
 )
 }
 \arguments{

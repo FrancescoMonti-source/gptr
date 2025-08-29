@@ -3,7 +3,7 @@
 \name{.resolve_base_url}
 \alias{.resolve_base_url}
 \title{Encapsulates “given a provider and no explicit URL, what endpoint should we call?” logic.
-It also honours a global gpt.local_base_url override. Even with a central resolver,
+It also honours a global gptr.local_base_url override. Even with a central resolver,
 you still need a helper like this to construct a canonical URL for local calls.
 In fact, in the resolver we suggested calling .resolve_base_url("auto", NULL)
 to pick a generic local default when no backend is specified.
@@ -13,7 +13,7 @@ to pick a generic local default when no backend is specified.
 }
 \description{
 Encapsulates “given a provider and no explicit URL, what endpoint should we call?” logic.
-It also honours a global gpt.local_base_url override. Even with a central resolver,
+It also honours a global gptr.local_base_url override. Even with a central resolver,
 you still need a helper like this to construct a canonical URL for local calls.
 In fact, in the resolver we suggested calling .resolve_base_url("auto", NULL)
 to pick a generic local default when no backend is specified.

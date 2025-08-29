@@ -10,13 +10,13 @@ show_gptr_options()
 Invisibly returns a named list of package options.
 }
 \description{
-Prints all options that start with "gpt." along with their current values.
+Prints all options that start with "gptr." along with their current values.
 This is useful to inspect defaults set in \code{zzz.R} and any overrides applied
 in your \code{.Rprofile} or current session.
 }
 \details{
 In R, to change an option, you call options() with a name = value pair:
-options(gpt.lmstudio_base_url = "http://localhost:5678/v1/chat/completions")
+options(gptr.lmstudio_base_url = "http://localhost:5678/v1/chat/completions")
 }
 \examples{
 show_gptr_options()

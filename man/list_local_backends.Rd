@@ -17,12 +17,12 @@ user options, without checking whether they are actually running.
 To change defaults globally, set them via \code{options()} in your \code{.Rprofile}:
 \preformatted{
 options(
-  gpt.lmstudio_base_url = "http://localhost:1234/v1/chat/completions",
-  gpt.ollama_base_url   = "http://localhost:11434/v1/chat/completions"
+  gptr.lmstudio_base_url = "http://localhost:1234/v1/chat/completions",
+  gptr.ollama_base_url   = "http://localhost:11434/v1/chat/completions"
 )
 }
 
-Add custom backends via \code{options(gpt.extra_local_backends = list(...))}.
+Add custom backends via \code{options(gptr.extra_local_backends = list(...))}.
 }
 \examples{
 list_local_backends()
