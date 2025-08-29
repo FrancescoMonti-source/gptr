@@ -98,7 +98,7 @@
 }
 
 #' @keywords internal
-.list_openai_live <- function(openai_api_key, timeout = getOption("gpt.timeout", 5)) {
+.list_openai_live <- function(openai_api_key, timeout = getOption("gptr.timeout", 5)) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
   }

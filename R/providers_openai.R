@@ -11,8 +11,8 @@
 #' @keywords internal
 .resolve_openai_defaults <- function(base_url = NULL, model = NULL, api_key = NULL) {
   list(
-    base_url = base_url %||% getOption("gpt.openai_base_url", "https://api.openai.com/v1/chat/completions"),
-    model    = model %||% getOption("gpt.openai_model", "gpt-4o-mini"),
+    base_url = base_url %||% getOption("gptr.openai_base_url", "https://api.openai.com/v1/chat/completions"),
+    model    = model %||% getOption("gptr.openai_model", "gpt-4o-mini"),
     api_key  = api_key %||% Sys.getenv("OPENAI_API_KEY", unset = "")
   )
 }
@@ -207,7 +207,7 @@ openai_compose_payload <- function(messages,
 request_openai <- function(payload,
                            base_url = NULL,
                            api_key = NULL,
-                           timeout = getOption("gpt.timeout", 30)) {
+                           timeout = getOption("gptr.timeout", 30)) {
   defs <- .resolve_openai_defaults(base_url = base_url, api_key = api_key)
   if (!nzchar(defs$api_key)) {
     stop("OpenAI API key is missing. Set OPENAI_API_KEY or pass `api_key=`.", call. = FALSE)

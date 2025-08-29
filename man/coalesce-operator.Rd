@@ -2,7 +2,9 @@
 % Please edit documentation in R/utils.R
 \name{\%||\%}
 \alias{\%||\%}
-\title{Coalesce operator (re-export from rlang)}
+\title{Coalesce operator (re-export from rlang)
+See \link[rlang:op-null-default]{rlang::\%||\%}.}
 \description{
+Coalesce operator (re-export from rlang)
 See \link[rlang:op-null-default]{rlang::\%||\%}.
 }

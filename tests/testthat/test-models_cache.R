@@ -282,7 +282,7 @@ test_that("refresh writes cache and surfaces status", {
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     refresh_models_cache = function(provider, base_url) list(status = "refreshed"),
-    list_models_cached = function(...) character(0),
+    .list_models_cached = function(...) character(0),
     .api_root = function(x) x
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
@@ -395,8 +395,8 @@ test_that(".row_df repeats provider/base/url and status", {
 })
 
 
-test_that("list_models_cached - drops live probing", {
-  f <- getFromNamespace("list_models_cached", "gptr")
+test_that(".list_models_cached - drops live probing", {
+  f <- getFromNamespace(".list_models_cached", "gptr")
   put <- getFromNamespace(".cache_put", "gptr")
   put("openai", "https://api.openai.com", c("gpt-4o" = 1683))
   out <- f()
@@ -405,7 +405,7 @@ test_that("list_models_cached - drops live probing", {
 })
 
 test_that("invalidate clears cache for provider/base_url", {
-  inv <- getFromNamespace("invalidate_models_cache", "gptr")
+  inv <- getFromNamespace("delete_models_cache", "gptr")
   put <- getFromNamespace(".cache_put", "gptr")
   get <- getFromNamespace(".cache_get", "gptr")
 
@@ -468,7 +468,7 @@ test_that("list_models - second call uses cache when available", {
 
 
 test_that("invalidate by provider+base_url clears exactly one", {
-  inv <- getFromNamespace("invalidate_models_cache", "gptr")
+  inv <- getFromNamespace("delete_models_cache", "gptr")
   put <- getFromNamespace(".cache_put", "gptr")
   get <- getFromNamespace(".cache_get", "gptr")
 

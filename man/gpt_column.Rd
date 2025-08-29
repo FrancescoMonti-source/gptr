@@ -16,7 +16,7 @@ gpt_column(
   temperature = 0.2,
   file_path = NULL,
   image_path = NULL,
-  coerce_types = TRUE,
+  .coerce_types = TRUE,
   coerce_when = NULL,
   infer_types = FALSE,
   na_values = c("NA", "N/A", "null", "None", ""),
@@ -46,7 +46,7 @@ gpt_column(
 
 \item{file_path, image_path}{Optional file paths passed to the model call.}
 
-\item{coerce_types}{Row-level coercion toggle (default TRUE).}
+\item{.coerce_types}{Row-level coercion toggle (default TRUE).}
 
 \item{coerce_when}{Optional named list of per-key target types used for row-level coercion.}
 

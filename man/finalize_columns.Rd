@@ -16,7 +16,7 @@ finalize_columns(
 
 \item{expected_keys}{Character vector of expected keys.}
 
-\item{key_specs}{Named list of specs (from parse_key_spec()) or NULL.}
+\item{key_specs}{Named list of specs (from .parse_key_spec()) or NULL.}
 
 \item{mode}{One of "schema", "infer", "as_is".}
 }

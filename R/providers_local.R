@@ -4,15 +4,15 @@
 #' @keywords internal
 .local_candidates <- function() {
   lmstudio_base <- getOption(
-    "gpt.lmstudio_base_url",
+    "gptr.lmstudio_base_url",
     "http://127.0.0.1:1234/v1/chat/completions"
   )
   ollama_base <- getOption(
-    "gpt.ollama_base_url",
+    "gptr.ollama_base_url",
     "http://127.0.0.1:11434/v1/chat/completions"
   )
   localai_base <- getOption(
-    "gpt.localai_base_url",
+    "gptr.localai_base_url",
     "http://127.0.0.1:8080/v1/chat/completions"
   )
 
@@ -42,7 +42,7 @@
   )
 
   # User-extendable overrides
-  extras <- getOption("gpt.extra_local_backends", NULL)
+  extras <- getOption("gptr.extra_local_backends", NULL)
   if (is.list(extras) && length(extras)) {
     for (nm in names(extras)) builtins[[nm]] <- extras[[nm]]
   }
@@ -50,7 +50,7 @@
 }
 # Return all running local backends with model lists (data.frame + list-col)
 #' @keywords internal
-.detect_local_backends <- function(timeout = getOption("gpt.timeout", 5)) {
+.detect_local_backends <- function(timeout = getOption("gptr.timeout", 5)) {
   cand <- .local_candidates()
   out <- list()
 
@@ -106,7 +106,7 @@
 #' @keywords internal
 .pick_local_backend <- function(available_df,
                                 prefer = getOption(
-                                  "gpt.local_prefer",
+                                  "gptr.local_prefer",
                                   c("lmstudio", "ollama", "localai")
                                 ),
                                 require_model = NULL) {
@@ -132,7 +132,7 @@
 
 # Probe /v1/models and return a character vector of model ids
 #' @keywords internal
-.probe_models <- function(models_url, timeout = getOption("gpt.timeout", 5)) {
+.probe_models <- function(models_url, timeout = getOption("gptr.timeout", 5)) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(character(0))
   }
@@ -185,12 +185,12 @@
 #' To change defaults globally, set them via `options()` in your `.Rprofile`:
 #' \preformatted{
 #' options(
-#'   gpt.lmstudio_base_url = "http://localhost:1234/v1/chat/completions",
-#'   gpt.ollama_base_url   = "http://localhost:11434/v1/chat/completions"
+#'   gptr.lmstudio_base_url = "http://localhost:1234/v1/chat/completions",
+#'   gptr.ollama_base_url   = "http://localhost:11434/v1/chat/completions"
 #' )
 #' }
 #'
-#' Add custom backends via \code{options(gpt.extra_local_backends = list(...))}.
+#' Add custom backends via \code{options(gptr.extra_local_backends = list(...))}.
 #'
 #' @return A data frame with columns: backend, name, base_url, probe.
 #' @examples
@@ -224,8 +224,8 @@ list_local_backends <- function() {
 #' @importFrom httr2 req_user_agent req_timeout req_retry req_perform resp_status resp_body_json
 request_local <- function(payload,
                           base_url,
-                          timeout_sec = getOption("gpt.timeout_sec", 180),
-                          max_tries = getOption("gpt.max_tries", 2),
+                          timeout_sec = getOption("gptr.timeout_sec", 180),
+                          max_tries = getOption("gptr.max_tries", 2),
                           user_agent = paste0("gptr/", as.character(utils::packageVersion("gptr"))),
                           debug_http = getOption("gptr.debug_http", FALSE)) {
   # Build a clean root: strip any /v1 or /chat/completions; we'll append explicitly

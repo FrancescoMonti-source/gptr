@@ -10,12 +10,12 @@ json_fix_parse_validate(
   na_values = c("NA", "N/A", "null", "None", ""),
   verbose = FALSE,
   i = NULL,
-  coerce_types = FALSE,
+  .coerce_types = FALSE,
   coerce_when = NULL
 )
 }
 \arguments{
-\item{key_specs}{Named list of specs from parse_key_spec() or NULL.}
+\item{key_specs}{Named list of specs from .parse_key_spec() or NULL.}
 
 \item{na_values}{Character vector treated as NA.}
 
@@ -23,10 +23,10 @@ json_fix_parse_validate(
 
 \item{i}{Optional row index for logging (for messages).}
 
-\item{coerce_types}{Logical; if TRUE, coerce values by spec$type (default TRUE).}
+\item{.coerce_types}{Logical; if TRUE, coerce values by spec$type (default TRUE).}
 
 \item{coerce_when}{Optional predicate function(key, value, spec, row_index) -> TRUE/FALSE,
-overrides coerce_types per value when provided.}
+overrides .coerce_types per value when provided.}
 
 \item{out}{Raw model output (character).}
 }
@@ -35,7 +35,7 @@ list(ok = TRUE/FALSE, value = parsed list or raw string, note = "parsed"/"not-js
 }
 \description{
 \enumerate{
-\item Fix common JSON issues with tidy_json(); 2) parse via jsonlite; 3) validate
+\item Fix common JSON issues with .tidy_json(); 2) parse via jsonlite; 3) validate
 and optionally coerce values according to key_specs.
 }
 }

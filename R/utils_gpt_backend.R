@@ -36,7 +36,7 @@
     if (provider == "local" && (is.null(base_url) || !nzchar(base_url))) {
       # pick default base URL based on backend or options
       if (!is.null(backend) && backend %in% names(.gptr_registry)) {
-        opt_name <- paste0("gpt.", backend, "_base_url")
+        opt_name <- paste0("gptr.", backend, "_base_url")
         base_url <- getOption(opt_name, .gptr_registry[[backend]]$default_base)
       } else {
         base_url <- .resolve_base_url("auto", NULL)
@@ -72,7 +72,7 @@
 
   # explicit backend hint
   if (!is.null(backend) && nzchar(backend) && backend != "auto") {
-    opt_name <- paste0("gpt.", backend, "_base_url")
+    opt_name <- paste0("gptr.", backend, "_base_url")
     base <- getOption(opt_name, .gptr_registry[[backend]]$default_base)
     return(list(provider = "local", backend = backend, base_url = base))
   }
@@ -101,7 +101,7 @@
 
 
 #'  Encapsulates “given a provider and no explicit URL, what endpoint should we call?” logic.
-#'  It also honours a global gpt.local_base_url override. Even with a central resolver,
+#'  It also honours a global gptr.local_base_url override. Even with a central resolver,
 #'   you still need a helper like this to construct a canonical URL for local calls.
 #'  In fact, in the resolver we suggested calling .resolve_base_url("auto", NULL)
 #'   to pick a generic local default when no backend is specified.
@@ -113,7 +113,7 @@
     return(base_url)
   }
   if (provider %in% c("auto", "lmstudio", "ollama", "localai")) {
-    pinned <- getOption("gpt.local_base_url", "")
+    pinned <- getOption("gptr.local_base_url", "")
     if (nzchar(pinned)) {
       return(pinned)
     }
@@ -122,7 +122,7 @@
     return(.gptr_registry[[provider]]$default_base)
   }
   if (provider == "auto") {
-    return(getOption("gpt.lmstudio_base_url", .gptr_registry$lmstudio$default_base))
+    return(getOption("gptr.lmstudio_base_url", .gptr_registry$lmstudio$default_base))
   }
   stop(sprintf("Unknown provider '%s'.", provider))
 }
@@ -145,7 +145,7 @@
     }
     stop(attr(ok, "msg"), call. = FALSE)
   }
-  vmsg <- isTRUE(getOption("gpt.verbose_preflight", FALSE))
+  vmsg <- isTRUE(getOption("gptr.verbose_preflight", FALSE))
   ok <- tryCatch(
     {
       httr2::request(paste0(root, "/models")) |>
@@ -161,7 +161,7 @@
     return(invisible(TRUE))
   } else {
     msg <- sprintf(
-      "Could not reach '%s' at %s. Pass `base_url=` or set options(gpt.%s_base_url=...).",
+      "Could not reach '%s' at %s. Pass `base_url=` or set options(gptr.%s_base_url=...).",
       provider, base_url,
       if (provider %in% c("lmstudio", "ollama", "localai")) provider else "local"
     )

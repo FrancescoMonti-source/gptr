@@ -212,7 +212,7 @@ gpt <- function(prompt,
           if (!tolower(requested_model) %in% tolower(ids)) {
               if (isTRUE(strict_model)) {
                   stop(sprintf(
-                      "Model '%s' not found on %s. Either load it there, pass base_url=, or set options(gpt.local_base_url=...).",
+                      "Model '%s' not found on %s. Either load it there, pass base_url=, or set options(gptr.local_base_url=...).",
                       requested_model, sub("/chat/completions$", "", local_base)
                   ), call.=FALSE)
               } else {
@@ -270,7 +270,7 @@ gpt <- function(prompt,
     if (!is.null(requested_model) && nzchar(requested_model) && !is.null(used_model) && nzchar(used_model)) {
       if (!identical(tolower(requested_model), tolower(used_model))) {
         msg <- sprintf(
-          "Server used model '%s' instead of requested '%s'. Pin the correct server with base_url= or set options(gpt.local_base_url=...).",
+          "Server used model '%s' instead of requested '%s'. Pin the correct server with base_url= or set options(gptr.local_base_url=...).",
           used_model, requested_model
         )
         if (isTRUE(strict_model)) stop(msg, call. = FALSE) else warning(msg, call. = FALSE)

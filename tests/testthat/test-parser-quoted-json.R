@@ -5,9 +5,9 @@ test_that("json_fix_parse_validate unwraps quoted JSON", {
       impulsivite = "integer", hypersexualite = "integer",
       trouble_alimentaire = "integer", jeu_pathologique = "integer"
     ),
-    parse_key_spec
+    .parse_key_spec
   )
-  rp <- json_fix_parse_validate(bad, key_specs = specs, coerce_types = FALSE)
+  rp <- json_fix_parse_validate(bad, key_specs = specs, .coerce_types = FALSE)
   expect_true(rp$ok)
   expect_equal(
     sort(names(rp$value)),
