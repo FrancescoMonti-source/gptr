@@ -208,51 +208,50 @@ request_openai <- function(payload,
                            base_url = NULL,
                            api_key = NULL,
                            timeout = getOption("gptr.timeout", 30)) {
-    # --- Strict inputs (no internal defaulting/resolution) ---
-    if (is.null(base_url) || !nzchar(base_url)) {
-        stop("request_openai(): `base_url` is required and must be non-empty. Resolve it before calling (e.g., via .resolve_openai_defaults()).", call. = FALSE)
-    }
-    if (is.null(api_key) || !nzchar(api_key)) {
-        stop("request_openai(): `api_key` is required and must be non-empty. Set OPENAI_API_KEY or pass `api_key=`.", call. = FALSE)
-    }
+  defs <- .resolve_openai_defaults(base_url = base_url, api_key = api_key)
+  if (!nzchar(defs$api_key)) {
+    stop("OpenAI API key is missing. Set OPENAI_API_KEY or pass `api_key=`.", call. = FALSE)
+  }
 
-    ua <- sprintf("gptr/%s (+openai)", tryCatch(as.character(utils::packageVersion("gptr")), error = function(e) "0.0.0"))
+  ua <- sprintf("gptr/%s (+openai)", tryCatch(as.character(utils::packageVersion("gptr")), error = function(e) "0.0.0"))
 
-    req <- httr2::request(base_url) |>
-        httr2::req_user_agent(ua) |>
-        httr2::req_timeout(seconds = timeout) |>
-        httr2::req_headers(Authorization = paste("Bearer", api_key)) |>
-        httr2::req_body_json(payload, auto_unbox = TRUE) |>
-        httr2::req_retry(
-            max_tries = 4,
-            backoff = function(attempt) runif(1, 0.3, 1.2),
-            is_transient = function(resp) {
-                sc <- try(httr2::resp_status(resp), silent = TRUE)
-                if (inherits(sc, "try-error")) return(TRUE)
-                sc %in% c(408, 409, 429, 500, 502, 503, 504)
-            }
-        )
-
-    resp <- httr2::req_perform(req)
-    try(httr2::resp_check_status(resp), silent = TRUE)
-
-    body_txt <- httr2::resp_body_string(resp)
-    body <- tryCatch(jsonlite::fromJSON(body_txt, simplifyVector = FALSE), error = function(e) NULL)
-
-    if (httr2::resp_status(resp) >= 400) {
-        msg <- "OpenAI request failed"
-        if (is.list(body) && !is.null(body$error)) {
-            em <- body$error$message
-            et <- body$error$type
-            ec <- body$error$code
-            msg <- paste(na.omit(c(em, if (!is.null(et)) paste0("type=", et), if (!is.null(ec)) paste0("code=", ec))), collapse = " | ")
+  req <- httr2::request(defs$base_url) |>
+    httr2::req_user_agent(ua) |>
+    httr2::req_timeout(seconds = timeout) |>
+    httr2::req_headers(Authorization = paste("Bearer", defs$api_key)) |>
+    httr2::req_body_json(payload, auto_unbox = TRUE) |>
+    httr2::req_retry(
+      max_tries = 4,
+      backoff = function(attempt) runif(1, 0.3, 1.2),
+      is_transient = function(resp) {
+        sc <- try(httr2::resp_status(resp), silent = TRUE)
+        if (inherits(sc, "try-error")) {
+          return(TRUE)
         }
-        stop(msg, call. = FALSE)
+        sc %in% c(408, 409, 429, 500, 502, 503, 504)
+      }
+    )
+
+
+  resp <- httr2::req_perform(req)
+  try(httr2::resp_check_status(resp), silent = TRUE)
+
+  body_txt <- httr2::resp_body_string(resp)
+  body <- tryCatch(jsonlite::fromJSON(body_txt, simplifyVector = FALSE), error = function(e) NULL)
+
+  if (httr2::resp_status(resp) >= 400) {
+    msg <- "OpenAI request failed"
+    if (is.list(body) && !is.null(body$error)) {
+      em <- body$error$message
+      et <- body$error$type
+      ec <- body$error$code
+      msg <- paste(na.omit(c(em, if (!is.null(et)) paste0("type=", et), if (!is.null(ec)) paste0("code=", ec))), collapse = " | ")
     }
+    stop(msg, call. = FALSE)
+  }
 
-    list(body = body, resp = resp)
+  list(body = body, resp = resp)
 }
-
 
 #' Extract assistant text and metadata from OpenAI Chat response
 #' @keywords internal
