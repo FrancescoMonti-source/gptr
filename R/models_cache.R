@@ -7,7 +7,17 @@
 #   gptr.localai_base_url  = "http://127.0.0.1:8080"
 # )
 
-.gptr_cache <- new.env(parent = emptyenv())
+# memory cache for model lists
+.gptr_cache <- cachem::cache_mem()
+
+#' Snapshot of the current models cache
+#'
+#' Returns a named list of cache entries for testing/inspection.
+#' @keywords internal
+.models_cache_snapshot <- function() {
+  keys <- .gptr_cache$keys()
+  stats::setNames(lapply(keys, \(k) .gptr_cache$get(k)), keys)
+}
 
 # --- URL helpers -------------------------------------------------------------
 
@@ -200,24 +210,29 @@
 }
 
 # Look up a cached entry in .gptr_cache by provider+base_url.
-# Returns NULL if not cached.
+# Returns NULL if not cached or expired.
 .cache_get <- function(provider, base_url) {
-    root <- .api_root(base_url)
-    key  <- paste0(provider, "::", root)
-    .gptr_cache[[key]] %||% NULL
+  key <- .cache_key(provider, base_url)
+  .gptr_cache$get(key)
 }
 
 #' Save a cache entry for provider+base_url with a vector of model IDs and timestamp.
+#' The TTL is managed by cachem; if `gptr.check_model_once` is TRUE the entry
+#' never expires, otherwise `gptr.model_cache_ttl` (seconds) is used.
 #' @keywords internal
 .cache_put <- function(provider, base_url, models) {
-    root <- .api_root(base_url)
-    key  <- paste0(provider, "::", root)
-    .gptr_cache[[key]] <- list(models = models,
-                               ts = as.POSIXct(as.numeric(Sys.time()),
-                                               origin = "1970-01-01",
-                                               tz = "Europe/Paris")
-                               )
-    invisible(TRUE)
+  key <- .cache_key(provider, base_url)
+  ttl <- if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
+    Inf
+  } else {
+    getOption("gptr.model_cache_ttl", 3600)
+  }
+  ent <- list(
+    models = models,
+    ts = as.numeric(Sys.time())
+  )
+  .gptr_cache$set(key, ent, ttl = ttl)
+  invisible(TRUE)
 }
 
 #' Remove a cache entry for provider+base_url from .gptr_cache.
@@ -225,10 +240,10 @@
 #' @keywords internal
 .cache_del <- function(provider, base_url) {
   key <- .cache_key(provider, base_url)
-  if (!exists(key, envir = .gptr_cache, inherits = FALSE)) {
+  if (!.gptr_cache$exists(key)) {
     return(0L)
   }
-  rm(list = key, envir = .gptr_cache)
+  .gptr_cache$remove(key)
   1L
 }
 
@@ -244,7 +259,7 @@
 .list_models_cached <- function(provider = NULL, base_url = NULL) {
     # Case A: both missing -> enumerate everything currently cached (summary view)
     if (is.null(provider) && is.null(base_url)) {
-        keys <- ls(.gptr_cache, all.names = TRUE)
+        keys <- .gptr_cache$keys()
         if (!length(keys)) {
             return(data.frame(
                 provider   = character(),
@@ -255,7 +270,7 @@
             ))
         }
         rows <- lapply(keys, function(k) {
-            ent  <- .gptr_cache[[k]]
+            ent  <- .gptr_cache$get(k)
             meta <- .parse_cache_key(k)  # "<provider>::<base_url_root>"
             data.frame(
                 provider  = meta$provider,
@@ -283,20 +298,16 @@
     # Case C: only base_url
     if (is.null(provider) && !is.null(base_url)) {
         root <- .api_root(base_url)
-        keys <- ls(.gptr_cache, all.names = TRUE)
+        keys <- .gptr_cache$keys()
         hits <- vapply(keys, function(k) .parse_cache_key(k)$base_url == root, logical(1))
         if (!any(hits)) return(character(0))
-        models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache[[k]]$models), use.names = FALSE))
+        models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache$get(k)$models), use.names = FALSE))
         return(models %||% character(0))
     }
 
-    # Case D: provider + base_url with TTL behavior
+    # Case D: provider + base_url with cachem TTL
     ent <- .cache_get(provider, base_url)
-    if (!is.null(ent)) {
-        if (isTRUE(getOption("gptr.check_model_once", TRUE))) return(ent$models)
-        ttl <- getOption("gptr.model_cache_ttl", 3600)
-        if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(ent$models)
-    }
+    if (!is.null(ent)) return(ent$models)
     models <- .fetch_models_live(provider, base_url)
     .cache_put(provider, base_url, models)
     models
@@ -491,7 +502,7 @@ refresh_models_cache <- function(provider = NULL, base_url = NULL) {
 #' @return integer: number of entries removed
 #' @export
 delete_models_cache <- function(provider = NULL, base_url = NULL) {
-    keys <- ls(.gptr_cache, all.names = TRUE)
+    keys <- .gptr_cache$keys()
     if (!length(keys)) return(invisible(TRUE))
 
     # no args: clear everything
