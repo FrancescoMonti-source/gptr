@@ -58,11 +58,12 @@
 #' Returns a character vector of model IDs (may be empty if unreachable or malformed).
 #' @keywords internal
 .fetch_models_live <- function(provider, base_url, timeout = getOption("gptr.request_timeout", 5)) {
+    root <- .api_root(base_url)
   if (!requireNamespace("httr2", quietly = TRUE)) {
     warning("Package 'httr2' not available; cannot probe /v1/models.", call. = FALSE)
     return(character(0))
   }
-  url <- .models_endpoint(base_url)
+  url <- .models_endpoint(root)
   resp <- try(httr2::request(url) |> httr2::req_timeout(timeout) |> httr2::req_perform(),
     silent = TRUE
   )
@@ -200,16 +201,22 @@
 # Look up a cached entry in .gptr_cache by provider+base_url.
 # Returns NULL if not cached.
 .cache_get <- function(provider, base_url) {
-  .gptr_cache[[.cache_key(provider, base_url)]]
+    root <- .api_root(base_url)
+    key  <- paste0(provider, "::", root)
+    .gptr_cache[[key]] %||% NULL
 }
 
 #' Save a cache entry for provider+base_url with a vector of model IDs and timestamp.
 #' @keywords internal
 .cache_put <- function(provider, base_url, models) {
-  .gptr_cache[[.cache_key(provider, base_url)]] <- list(
-    models = models,
-    ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
-  )
+    root <- .api_root(base_url)
+    key  <- paste0(provider, "::", root)
+    .gptr_cache[[key]] <- list(models = models,
+                               ts = as.POSIXct(as.numeric(Sys.time()),
+                                               origin = "1970-01-01",
+                                               tz = "Europe/Paris")
+                               )
+    invisible(TRUE)
 }
 
 #' Remove a cache entry for provider+base_url from .gptr_cache.

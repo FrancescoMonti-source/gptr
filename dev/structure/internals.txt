@@ -1,4 +1,5 @@
 $.gpt_chat_callable
+.__DEVTOOLS__
 .__NAMESPACE__.
 .__S3MethodsTable__.
 .api_root
@@ -33,7 +34,6 @@ $.gpt_chat_callable
 .list_local_backends
 .list_models_cached
 .list_openai_live
-.models_cache_snapshot
 .models_endpoint
 .normalize_token
 .ollama_tags_live
