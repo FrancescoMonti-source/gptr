@@ -15,8 +15,9 @@
 # Strips trailing slashes and removes accidental inclusion of /v1, /chat/completions, etc.
 # Always returns just the root (e.g., "http://127.0.0.1:1234").
 .api_root <- function(x) {
-  x <- sub("(/v1/chat/completions)?$", "", x)
-  x <- sub("(/v1/models)?$", "", x)
+  # remove common API suffixes with or without trailing slash
+  x <- sub("(/v1/(chat/completions|models))/?$", "", x)
+  x <- sub("/v1/?$", "", x)
   x <- sub("/+$", "", x)
   x
 }
