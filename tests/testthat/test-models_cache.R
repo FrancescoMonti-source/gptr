@@ -182,6 +182,19 @@ test_that("cache put / get / del", {
   expect_null(get("openai", "https://api.openai.com"))
 })
 
+test_that("cache entries expire after TTL", {
+  get <- getFromNamespace(".cache_get", "gptr")
+  put <- getFromNamespace(".cache_put", "gptr")
+  del <- getFromNamespace(".cache_del", "gptr")
+
+  withr::local_options(list(gptr.check_model_once = FALSE, gptr.model_cache_ttl = 1))
+  put("openai", "https://api.openai.com", data.frame(id = "x", created = 1))
+  expect_false(is.null(get("openai", "https://api.openai.com")))
+  Sys.sleep(2)
+  expect_null(get("openai", "https://api.openai.com"))
+  del("openai", "https://api.openai.com")
+})
+
 # models cache snapshot immutability
 test_that("cache snapshot - immutability", {
   snap <- getFromNamespace(".models_cache_snapshot", "gptr")
