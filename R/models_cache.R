@@ -16,7 +16,10 @@
 #' @keywords internal
 .models_cache_snapshot <- function() {
   keys <- .gptr_cache$keys()
-  stats::setNames(lapply(keys, \(k) .gptr_cache$get(k)), keys)
+  entries <- lapply(keys, function(k) .gptr_cache$get(k))
+  names(entries) <- vapply(entries, function(e) paste0(e$provider, "::", e$base_url), character(1))
+  entries
+
 }
 
 # --- URL helpers -------------------------------------------------------------
@@ -206,7 +209,8 @@
 
 # Construct a unique cache key string from provider+base_url.
 .cache_key <- function(provider, base_url) {
-  paste0(provider, "::", .api_root(base_url))
+  raw <- paste0(provider, "::", .api_root(base_url))
+  digest::digest(raw, algo = "md5")
 }
 
 # Look up a cached entry in .gptr_cache by provider+base_url.
@@ -228,6 +232,9 @@
     getOption("gptr.model_cache_ttl", 3600)
   }
   ent <- list(
+    provider = provider,
+    base_url = .api_root(base_url),
+
     models = models,
     ts = as.numeric(Sys.time())
   )
@@ -247,13 +254,6 @@
   1L
 }
 
-#' @keywords internal
-.parse_cache_key <- function(key) {
-  # key format: "<provider>::<root>"
-  parts <- strsplit(key, "::", fixed = TRUE)[[1]]
-  list(provider = parts[[1]], base_url = parts[[2]])
-}
-
 #' @noRd
 #' @keywords internal
 .list_models_cached <- function(provider = NULL, base_url = NULL) {
@@ -271,10 +271,10 @@
         }
         rows <- lapply(keys, function(k) {
             ent  <- .gptr_cache$get(k)
-            meta <- .parse_cache_key(k)  # "<provider>::<base_url_root>"
+
             data.frame(
-                provider  = meta$provider,
-                base_url  = meta$base_url,
+                provider  = ent$provider,
+                base_url  = ent$base_url,
                 n_models  = length(ent$models %||% character(0)),
                 cached_at = if (!is.null(ent$ts)) {
                     as.POSIXct(ent$ts, origin = "1970-01-01", tz = "Europe/Paris")
@@ -299,7 +299,7 @@
     if (is.null(provider) && !is.null(base_url)) {
         root <- .api_root(base_url)
         keys <- .gptr_cache$keys()
-        hits <- vapply(keys, function(k) .parse_cache_key(k)$base_url == root, logical(1))
+        hits <- vapply(keys, function(k) .gptr_cache$get(k)$base_url == root, logical(1))
         if (!any(hits)) return(character(0))
         models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache$get(k)$models), use.names = FALSE))
         return(models %||% character(0))
@@ -505,38 +505,12 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
     keys <- .gptr_cache$keys()
     if (!length(keys)) return(invisible(TRUE))
 
-    # no args: clear everything
-    if (is.null(provider) && is.null(base_url)) {
-        for (k in keys) {
-            parts <- .parse_cache_key(k)
-            .cache_del(parts$provider, parts$base_url)
-        }
-        return(invisible(TRUE))
+    for (k in keys) {
+        ent <- .gptr_cache$get(k)
+        match_provider <- is.null(provider) || identical(ent$provider, provider)
+        match_base <- is.null(base_url) || identical(.api_root(ent$base_url), .api_root(base_url))
+        if (match_provider && match_base) .gptr_cache$remove(k)
     }
-
-    # provider only
-    if (!is.null(provider) && is.null(base_url)) {
-        for (k in keys) {
-            parts <- .parse_cache_key(k)
-            if (identical(parts$provider, provider))
-                .cache_del(parts$provider, parts$base_url)
-        }
-        return(invisible(TRUE))
-    }
-
-    # base_url only
-    if (is.null(provider) && !is.null(base_url)) {
-        root <- .api_root(base_url)
-        for (k in keys) {
-            parts <- .parse_cache_key(k)
-            if (identical(.api_root(parts$base_url), root))
-                .cache_del(parts$provider, parts$base_url)
-        }
-        return(invisible(TRUE))
-    }
-
-    # both
-    .cache_del(provider, .api_root(base_url))
     invisible(TRUE)
 }
 
