@@ -9,9 +9,11 @@ $.gpt_chat_callable
 .cache_key
 .cache_put
 .coerce_type
+.detect_local_backends
+.ensure_backend_up
 .fetch_models_live
-.finalize_columns
 .gptr_cache
+.gptr_registry
 .gptr_state
 .http_body_json
 .http_body_json_req
@@ -34,6 +36,8 @@ $.gpt_chat_callable
 .list_local_backends
 .list_models_cached
 .list_openai_live
+.local_candidates
+.models_cache_snapshot
 .models_endpoint
 .normalize_token
 .ollama_tags_live
@@ -42,7 +46,11 @@ $.gpt_chat_callable
 .packageName
 .parse_cache_key
 .parse_key_spec
+.pick_local_backend
+.probe_models
+.resolve_base_url
 .resolve_openai_defaults
+.resolve_provider_backend
 .row_df
 .tidy_json
 browse_openai_documentation
@@ -50,6 +58,7 @@ coalesce_blank
 coalesce_len0
 openai_compose_payload
 openai_parse_text
+request_local
 request_openai
 row_to_tibble
 trim_text

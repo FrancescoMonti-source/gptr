@@ -159,7 +159,7 @@ gpt_column <- function(data,
   #   .parse_key_spec(c("léger","modéré")) -> list(type=NULL, allowed=c(...))
   #
   # WHY expected_keys: the ordered vector of column names, used to pad/order and
-  # drive json_keys_align() / row_to_tibble() / .finalize_columns().
+  # drive json_keys_align() / row_to_tibble() / finalize_columns().
   key_specs <- NULL # named list: key -> list(type=..., allowed=...)
   expected_keys <- NULL # character vector of column names (order matters)
   if (!is.null(keys)) {
@@ -491,7 +491,7 @@ gpt_column <- function(data,
   # Column-level enforcement (types/allowed/NA policy). Set mode="as_is" if you
   # want to skip column coercion and rely only on row-level casting.
   mode <- "schema"
-  parsed_df <- .finalize_columns(
+  parsed_df <- finalize_columns(
     parsed_df,
     expected_keys = expected_keys,
     key_specs     = key_specs,

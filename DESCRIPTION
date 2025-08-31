@@ -31,13 +31,10 @@ Imports:
     curl (>= 5.0.0),
     rlang,
     stats,
-    utils,
-    cachem,
-    digest
-Suggests:
+    utils
+Suggests: 
     testthat (>= 3.0.0),
-    progressr,
-    withr
+    progressr
 Config/testthat/edition: 3
 URL: https://github.com/FrancescoMonti-source/gptr
 BugReports: https://github.com/FrancescoMonti-source/gptr/issues

@@ -4,8 +4,8 @@
 #' @param key_specs Named list of specs (from .parse_key_spec()) or NULL.
 #' @param mode One of "schema", "infer", "as_is".
 #' @return Data frame with harmonized column types.
-#' @keywords internal
-.finalize_columns <- function(df, expected_keys, key_specs, mode = c("schema", "infer", "as_is")) {
+#' @export
+finalize_columns <- function(df, expected_keys, key_specs, mode = c("schema", "infer", "as_is")) {
   mode <- match.arg(mode)
   if (is.null(expected_keys) || ncol(df) == 0L) {
     return(df)
