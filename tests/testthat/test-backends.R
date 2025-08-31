@@ -1,60 +1,219 @@
-test_that(".resolve_base_url prefers explicit base_url arg", {
-  expect_equal(
-    .resolve_base_url("lmstudio", "http://x:1/v1/chat/completions"),
-    "http://x:1/v1/chat/completions"
-  )
+fake_resp <- function(model = "dummy") {
+    # Minimal body that .to_skeleton() can digest when print_raw = FALSE
+    list(
+        body = list(
+            model = model,
+            choices = list(list(message = list(content = "ok")))
+        ),
+        resp = list()
+    )
+}
+
+test_that("auto + openai model routes to OpenAI", {
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            data.frame(
+                provider  = "openai",
+                base_url  = "https://api.openai.com/v1/chat/completions",
+                model_id  = "gpt-4o-mini",
+                stringsAsFactors = FALSE
+            )
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "gpt-4o-mini")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, "local")
+            fake_resp(model = payload$model %||% "local-model")
+        },
+        {
+            res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
+                       openai_api_key = "sk-test", print_raw = FALSE)
+            expect_identical(called, "openai")
+        }
+    )
 })
 
-test_that(".resolve_base_url respects pinned local_base_url for local-like providers", {
-  withr::with_options(list(gpt.local_base_url = "http://127.0.0.1:1234/v1"), {
-    expect_match(.resolve_base_url("auto", NULL), "1234")
-    expect_match(.resolve_base_url("lmstudio", NULL), "1234")
-    expect_match(.resolve_base_url("ollama", NULL), "1234")
-  })
+test_that("auto + local model routes to local", {
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            data.frame(
+                provider  = "lmstudio",
+                base_url  = "http://127.0.0.1:1234",
+                model_id  = "mistralai/mistral-7b-instruct-v0.3",
+                stringsAsFactors = FALSE
+            )
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, paste0("local@", base_url))
+            fake_resp(model = payload$model %||% "mistral")
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "gpt")
+        },
+        {
+            res <- gpt("hi", model = "mistralai/mistral-7b-instruct-v0.3",
+                       provider = "auto", print_raw = FALSE)
+            expect_true(length(called) == 1L)
+            expect_match(called, "^local@http://127\\.0\\.0\\.1:1234$")
+        }
+    )
 })
 
-test_that(".resolve_base_url falls back to provider defaults when not pinned", {
-  withr::with_options(list(gpt.local_base_url = NULL), {
-    expect_match(.resolve_base_url("lmstudio", NULL), "127.0.0.1:1234")
-    expect_match(.resolve_base_url("ollama", NULL), "127.0.0.1:11434")
-    expect_match(.resolve_base_url("localai", NULL), "127.0.0.1:8080")
-    expect_match(.resolve_base_url("openai", NULL), "openai.com")
-  })
+test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
+    old <- options(gptr.local_prefer = c("ollama","lmstudio","localai"))
+    on.exit(options(old), add = TRUE)
+
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            data.frame(
+                provider  = c("openai", "ollama"),
+                base_url  = c("https://api.openai.com/v1/chat/completions", "http://127.0.0.1:11434"),
+                model_id  = c("o1-mini", "o1-mini"),
+                stringsAsFactors = FALSE
+            )
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, paste0("local@", base_url))
+            fake_resp(model = payload$model %||% "o1-mini")
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "o1-mini")
+        },
+        {
+            res <- gpt("hi", model = "o1-mini", provider = "auto", print_raw = FALSE)
+            expect_identical(called, "local@http://127.0.0.1:11434")
+        }
+    )
 })
 
+test_that("auto + unknown model falls back to first preferred local", {
+    old <- options(gptr.local_prefer = c("lmstudio","ollama","localai"))
+    on.exit(options(old), add = TRUE)
 
-test_that("Sending pings to different combinations of providers and models", {
-  # OpenAI explicitly – should hit OpenAI regardless of local servers
-  expect_true(gpt(prompt = "hi", provider = "openai", model = "gpt-4o-mini") %>% nzchar())
-  expect_true(gpt(prompt = "hi", provider = "openai") %>% nzchar())
-
-  # Auto with an OpenAI-looking model – will prefer local if running
-  expect_true(gpt(prompt = "hi", model = "gpt-4o-mini") %>% nzchar())
-
-  # Force local – should succeed if any local backend is available
-  expect_true(gpt(prompt = "hi", provider = "local") %>% nzchar())
-  expect_true(gpt(prompt = "hi", provider = "lmstudio") %>% nzchar())
-  expect_true(gpt(prompt = "hi", provider = "local", backend = "lmstudio", base_url = NULL) %>% nzchar())
-
-  # Auto with a local model name – should pick the appropriate local backend
-  expect_true(gpt(prompt = "hi", provider = "auto", model = "mistralai/mistral-7b-instruct-v0.3") %>% nzchar())
-
-  # Auto with no model specified – will pick whichever is available; if both are
-  # available, local will generally win. This line is intentionally last
-  # because it’s the broadest case.
-  expect_true(gpt(prompt = "hi", provider = "auto") %>% nzchar())
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            # empty union forces fallback
+            data.frame(provider = character(), base_url = character(),
+                       model_id = character(), stringsAsFactors = FALSE)
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, paste0("local@", base_url))
+            fake_resp(model = payload$model %||% "fallback")
+        },
+        {
+            res <- gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE)
+            # default lmstudio root from options
+            expect_identical(called, "local@http://127.0.0.1:1234")
+        }
+    )
 })
 
-
-test_that("Explicit OpenAI base_url must include /chat/completions", {
-  # Should succeed – full endpoint specified
-  expect_true(gpt("hi",
-    provider = "openai",
-    base_url = "https://api.openai.com/v1/chat/completions"
-  ) %>% nzchar())
-  # Should error or return empty because /v1 alone is not a chat endpoint
-  expect_error(gpt("hi",
-    provider = "openai",
-    base_url = "https://api.openai.com/v1"
-  ))
+test_that("provider=openai routes to OpenAI even if locals have models", {
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            data.frame(
+                provider  = "lmstudio",
+                base_url  = "http://127.0.0.1:1234",
+                model_id  = "gpt-4o-mini", # even if someone mirrored the name
+                stringsAsFactors = FALSE
+            )
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "gpt-4o-mini")
+        },
+        {
+            res <- gpt("hi", model = "gpt-4o-mini", provider = "openai",
+                       openai_api_key = "sk-test", print_raw = FALSE)
+            expect_identical(called, "openai")
+        }
+    )
 })
+
+# If the user explicitly says provider = "local" and gives a base_url = "http://…"
+# then that exact URL must be used, not replaced by defaults or by whatever is in the cache.
+test_that("explicit local base_url is honored", {
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
+            # return something so strict_model won't explode
+            data.frame(
+                provider  = "lmstudio",
+                base_url  = base_url %||% "http://127.0.0.1:1234",
+                model_id  = "mistralai/mistral-7b-instruct-v0.3",
+                stringsAsFactors = FALSE
+            )
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, paste0("local@", base_url))
+            fake_resp(model = payload$model %||% "mistral")
+        },
+        {
+            res <- gpt("hi",
+                       provider = "local",
+                       base_url = "http://192.168.1.50:1234",
+                       model = "mistralai/mistral-7b-instruct-v0.3",
+                       print_raw = FALSE)
+            expect_identical(called, "local@http://192.168.1.50:1234")
+        }
+    )
+})
+
+test_that("strict_model errors when model not installed (local)", {
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
+            data.frame(
+                provider  = "lmstudio",
+                base_url  = "http://127.0.0.1:1234",
+                model_id  = "mistralai/mistral-7b-instruct-v0.3",
+                stringsAsFactors = FALSE
+            )
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            fake_resp(model = payload$model %||% "mistral")
+        },
+        {
+            expect_error(
+                gpt("hi",
+                    provider = "local",
+                    model = "llama3:latest",
+                    strict_model = TRUE,
+                    print_raw = FALSE),
+                "Model 'llama3:latest' not found"
+            )
+        }
+    )
+})
+
+test_that("model match is case-insensitive", {
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            data.frame(
+                provider  = "openai",
+                base_url  = "https://api.openai.com/v1/chat/completions",
+                model_id  = "GPT-4O-MINI",
+                stringsAsFactors = FALSE
+            )
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- "openai"
+            fake_resp(model = payload$model %||% "GPT-4O-MINI")
+        },
+        {
+            res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
+                       openai_api_key = "sk-test", print_raw = FALSE)
+            expect_identical(called, "openai")
+        }
+    )
+})
+
