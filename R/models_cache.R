@@ -19,6 +19,7 @@
   entries <- lapply(keys, function(k) .gptr_cache$get(k))
   names(entries) <- vapply(entries, function(e) paste0(e$provider, "::", e$base_url), character(1))
   entries
+
 }
 
 # --- URL helpers -------------------------------------------------------------
@@ -27,8 +28,9 @@
 # Strips trailing slashes and removes accidental inclusion of /v1, /chat/completions, etc.
 # Always returns just the root (e.g., "http://127.0.0.1:1234").
 .api_root <- function(x) {
-  x <- sub("(/v1/chat/completions)?$", "", x)
-  x <- sub("(/v1/models)?$", "", x)
+  # remove common API suffixes with or without trailing slash
+  x <- sub("(/v1/(chat/completions|models))/?$", "", x)
+  x <- sub("/v1/?$", "", x)
   x <- sub("/+$", "", x)
   x
 }
@@ -232,6 +234,7 @@
   ent <- list(
     provider = provider,
     base_url = .api_root(base_url),
+
     models = models,
     ts = as.numeric(Sys.time())
   )
@@ -268,6 +271,7 @@
         }
         rows <- lapply(keys, function(k) {
             ent  <- .gptr_cache$get(k)
+
             data.frame(
                 provider  = ent$provider,
                 base_url  = ent$base_url,
