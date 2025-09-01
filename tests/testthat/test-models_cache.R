@@ -31,29 +31,33 @@
 .patch_pkg(list(
   .cache_get = function(...) {
     a <- list(...)
-    if (length(a) == 1L && is.character(a[[1L]]) && grepl('@', a[[1L]], fixed = TRUE)) {
+    key_fun <- getFromNamespace('.cache_key', 'gptr')
+    if (length(a) == 1L && is.character(a[[1L]])) {
       key <- a[[1L]]
     } else {
       provider <- as.character(a[[1L]])
       base_url <- .cache_root_for_test(as.character(a[[2L]]))
-      key <- paste0(provider, '@', base_url)
+      key <- key_fun(provider, base_url)
     }
     .gptr_test_cache_store$get(key)
   },
   .cache_put = function(...) {
     a <- list(...)
+    key_fun <- getFromNamespace('.cache_key', 'gptr')
     provider <- as.character(a[[1L]])
     base_url <- .cache_root_for_test(as.character(a[[2L]]))
     models <- a[[3L]]
-    .gptr_test_cache_store$set(paste0(provider, '@', base_url),
-      list(models = models, ts = .get_next_ts()))
+    key <- key_fun(provider, base_url)
+    .gptr_test_cache_store$set(key,
+      list(provider = provider, base_url = base_url, models = models, ts = .get_next_ts()))
     invisible(TRUE)
   },
   .cache_del = function(...) {
     a <- list(...)
+    key_fun <- getFromNamespace('.cache_key', 'gptr')
     provider <- as.character(a[[1L]])
     base_url <- .cache_root_for_test(as.character(a[[2L]]))
-    key <- paste0(provider, '@', base_url)
+    key <- key_fun(provider, base_url)
     .gptr_test_cache_store$remove(key)
     invisible(TRUE)
   }
@@ -75,16 +79,16 @@
         n_models = integer(0), ts = numeric(0)
       ))
     }
-    do.call(rbind, lapply(keys, function(k) {
-      ent <- .gptr_test_cache_store$get(k)
-      data.frame(
-        provider = sub('@.*$', '', k, perl = TRUE),
-        base_url = sub('^.*@', '', k, perl = TRUE),
-        n_models = NROW(getFromNamespace('.as_models_df', 'gptr')(ent$models)),
-        ts = suppressWarnings(as.numeric(ent$ts)),
-        stringsAsFactors = FALSE
-      )
-    }))
+      do.call(rbind, lapply(keys, function(k) {
+        ent <- .gptr_test_cache_store$get(k)
+        data.frame(
+          provider = ent$provider,
+          base_url = ent$base_url,
+          n_models = NROW(getFromNamespace('.as_models_df', 'gptr')(ent$models)),
+          ts = suppressWarnings(as.numeric(ent$ts)),
+          stringsAsFactors = FALSE
+        )
+      }))
   })
 })
 
@@ -107,14 +111,16 @@ fix_time <- function(expr) {
 # Minimal in-memory cache to mock your real cache layer
 make_fake_cache <- function() {
   store <- cachem::cache_mem()
+  key_fun <- getFromNamespace('.cache_key', 'gptr')
   list(
     get = function(provider, base_url) {
-      key <- paste(provider, base_url, sep = '@')
+      key <- key_fun(provider, .cache_root_for_test(base_url))
       store$get(key)
     },
     put = function(provider, base_url, models) {
-      key <- paste(provider, base_url, sep = '@')
-      store$set(key, list(models = models, ts = fixed_ts))
+      root <- .cache_root_for_test(base_url)
+      key <- key_fun(provider, root)
+      store$set(key, list(provider = provider, base_url = root, models = models, ts = fixed_ts))
       invisible(TRUE)
     },
     cache = store
