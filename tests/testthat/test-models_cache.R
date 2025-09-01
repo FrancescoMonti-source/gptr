@@ -116,7 +116,7 @@ mock_http_openai <- function(status = 200L,
         )
       }))
   })
-})
+)
 
 
 
