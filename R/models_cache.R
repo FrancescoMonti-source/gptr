@@ -7,7 +7,7 @@
 #   gptr.localai_base_url  = "http://127.0.0.1:8080"
 # )
 
-.gptr_cache <- new.env(parent = emptyenv())
+.gptr_cache <- cachem::cache_mem(max_age = getOption("gptr.model_cache_ttl", 3600))
 
 # --- URL helpers -------------------------------------------------------------
 
@@ -200,28 +200,29 @@
 # Look up a cached entry in .gptr_cache by provider+base_url.
 # Returns NULL if not cached.
 .cache_get <- function(provider, base_url) {
-  .gptr_cache[[.cache_key(provider, base_url)]]
+  .gptr_cache$get(.cache_key(provider, base_url))
 }
 
 #' Save a cache entry for provider+base_url with a vector of model IDs and timestamp.
 #' @keywords internal
 .cache_put <- function(provider, base_url, models) {
-  .gptr_cache[[.cache_key(provider, base_url)]] <- list(
-    models = models,
-    ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
+  ttl <- getOption("gptr.model_cache_ttl", 3600)
+  .gptr_cache$set(
+    .cache_key(provider, base_url),
+    list(
+      models = models,
+      ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
+    ),
+    expires = Sys.time() + ttl
   )
 }
 
-#' Remove a cache entry for provider+base_url from .gptr_cache.
-#' Returns 1 if removed, 0 if nothing existed.
+
+#' Remove a cache entry for provider+base_url from the cache.
 #' @keywords internal
 .cache_del <- function(provider, base_url) {
-  key <- .cache_key(provider, base_url)
-  if (!exists(key, envir = .gptr_cache, inherits = FALSE)) {
-    return(0L)
-  }
-  rm(list = key, envir = .gptr_cache)
-  1L
+  .gptr_cache$remove(.cache_key(provider, base_url))
+  invisible(TRUE)
 }
 
 #' @keywords internal
@@ -236,7 +237,7 @@
 .list_models_cached <- function(provider = NULL, base_url = NULL) {
     # Case A: both missing -> enumerate everything currently cached (summary view)
     if (is.null(provider) && is.null(base_url)) {
-        keys <- ls(.gptr_cache, all.names = TRUE)
+        keys <- .gptr_cache$keys()
         if (!length(keys)) {
             return(data.frame(
                 provider   = character(),
@@ -247,7 +248,7 @@
             ))
         }
         rows <- lapply(keys, function(k) {
-            ent  <- .gptr_cache[[k]]
+            ent  <- .gptr_cache$get(k)
             meta <- .parse_cache_key(k)  # "<provider>::<base_url_root>"
             data.frame(
                 provider  = meta$provider,
@@ -275,10 +276,10 @@
     # Case C: only base_url
     if (is.null(provider) && !is.null(base_url)) {
         root <- .api_root(base_url)
-        keys <- ls(.gptr_cache, all.names = TRUE)
+        keys <- .gptr_cache$keys()
         hits <- vapply(keys, function(k) .parse_cache_key(k)$base_url == root, logical(1))
         if (!any(hits)) return(character(0))
-        models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache[[k]]$models), use.names = FALSE))
+        models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache$get(k)$models), use.names = FALSE))
         return(models %||% character(0))
     }
 
@@ -478,20 +479,20 @@ refresh_models_cache <- function(provider = NULL, base_url = NULL) {
 }
 
 #' Clear cache entries so that the next run will re-probe the server.
-#' Takes optional provider and/or base_url to scope the invalidation.
-#' Returns the number of entries removed.
-#' @return integer: number of entries removed
+#'
+#' With no arguments, clears all cached model listings. You can target a
+#' subset by specifying a `provider`, a `base_url`, or both.
+#' @param provider Optional provider name to invalidate.
+#' @param base_url Optional base URL of the backend to invalidate.
+#' @return invisible TRUE
 #' @export
 delete_models_cache <- function(provider = NULL, base_url = NULL) {
-    keys <- ls(.gptr_cache, all.names = TRUE)
+    keys <- .gptr_cache$keys()
     if (!length(keys)) return(invisible(TRUE))
 
-    # no args: clear everything
+    # no args: wipe everything
     if (is.null(provider) && is.null(base_url)) {
-        for (k in keys) {
-            parts <- .parse_cache_key(k)
-            .cache_del(parts$provider, parts$base_url)
-        }
+        .gptr_cache$reset()
         return(invisible(TRUE))
     }
 
@@ -499,8 +500,9 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
     if (!is.null(provider) && is.null(base_url)) {
         for (k in keys) {
             parts <- .parse_cache_key(k)
-            if (identical(parts$provider, provider))
-                .cache_del(parts$provider, parts$base_url)
+            if (identical(parts$provider, provider)) {
+                .gptr_cache$remove(k)
+            }
         }
         return(invisible(TRUE))
     }
@@ -510,14 +512,15 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
         root <- .api_root(base_url)
         for (k in keys) {
             parts <- .parse_cache_key(k)
-            if (identical(.api_root(parts$base_url), root))
-                .cache_del(parts$provider, parts$base_url)
+            if (identical(parts$base_url, root)) {
+                .gptr_cache$remove(k)
+            }
         }
         return(invisible(TRUE))
     }
 
-    # both
-    .cache_del(provider, .api_root(base_url))
+    # both provider and base_url
+    .gptr_cache$remove(.cache_key(provider, base_url))
     invisible(TRUE)
 }
 

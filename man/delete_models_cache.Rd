@@ -2,17 +2,20 @@
 % Please edit documentation in R/models_cache.R
 \name{delete_models_cache}
 \alias{delete_models_cache}
-\title{Clear cache entries so that the next run will re-probe the server.
-Takes optional provider and/or base_url to scope the invalidation.
-Returns the number of entries removed.}
+\title{Clear cache entries so that the next run will re-probe the server.}
 \usage{
 delete_models_cache(provider = NULL, base_url = NULL)
 }
+\arguments{
+\item{provider}{Optional provider name to invalidate.}
+
+\item{base_url}{Optional base URL of the backend to invalidate.}
+}
 \value{
-integer: number of entries removed
+invisible TRUE
 }
 \description{
-Clear cache entries so that the next run will re-probe the server.
-Takes optional provider and/or base_url to scope the invalidation.
-Returns the number of entries removed.
+Clear cache entries so that the next run will re-probe the server. With no arguments,
+clears all cached model listings. You can target a subset by specifying a provider,
+a base\_url, or both.
 }
