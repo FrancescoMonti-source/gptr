@@ -2,7 +2,7 @@
 % Please edit documentation in R/models_cache.R
 \name{delete_models_cache}
 \alias{delete_models_cache}
-\title{Resets the models cache so that the next run will re-probe the server.}
+\title{Clear models cache so that the next run will re-probe the server.}
 \usage{
 delete_models_cache()
 }
@@ -10,5 +10,5 @@ delete_models_cache()
 invisible TRUE
 }
 \description{
-Resets the models cache so that the next run will re-probe the server.
+Clear models cache so that the next run will re-probe the server.
 }
