@@ -3,9 +3,9 @@
 \name{.list_models_live}
 \alias{.list_models_live}
 \title{Perform a live HTTP GET on /v1/models for a given provider and base_url.
-Returns a list with a data frame of models (`df`) and a status string.
-Branches on provider to apply OpenAI-specific headers and retry logic or a
-generic flow for local backends. Always uses the `.http_*` wrappers.}
+Returns a list with a data frame of models (\code{df}) and a status string.
+Branches on provider to apply OpenAI-specific headers and retry logic or
+a generic flow for local backends. Always uses the \verb{.http_*} wrappers.}
 \usage{
 .list_models_live(
   provider,
@@ -16,8 +16,8 @@ generic flow for local backends. Always uses the `.http_*` wrappers.}
 }
 \description{
 Perform a live HTTP GET on /v1/models for a given provider and base_url.
-Returns a list with a data frame of models (`df`) and a status string.
-Branches on provider to apply OpenAI-specific headers and retry logic or a
-generic flow for local backends. Always uses the `.http_*` wrappers.
+Returns a list with a data frame of models (\code{df}) and a status string.
+Branches on provider to apply OpenAI-specific headers and retry logic or
+a generic flow for local backends. Always uses the \verb{.http_*} wrappers.
 }
 \keyword{internal}
