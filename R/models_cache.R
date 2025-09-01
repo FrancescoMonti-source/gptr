@@ -482,7 +482,7 @@ refresh_models_cache <- function(provider = NULL,
 
         if (identical(p, "openai")) {
             bu   <- cand$base_url
-            live <- .list_openai_live(openai_api_key)
+            live <- .list_models_live("openai", bu, openai_api_key)
             .cache_put("openai", bu, live$df)
             out[[length(out) + 1L]] <- data.frame(
                 provider     = "openai",
@@ -493,17 +493,22 @@ refresh_models_cache <- function(provider = NULL,
                 stringsAsFactors = FALSE
             )
         } else {
-            bu     <- base_url %||% cand$base_url
-            models <- .fetch_models_live(p, bu)
-            .cache_put(p, bu, models)
+            bu    <- base_url %||% cand$base_url
+            live  <- .list_models_live(p, bu)
+            .cache_put(p, bu, live$df)
+            status <- if (identical(live$status, "ok") && nrow(live$df) == 0) {
+                "unreachable_or_empty"
+            } else {
+                live$status
+            }
 
             out[[length(out) + 1L]] <- data.frame(
                 provider     = p,
                 base_url     = .api_root(bu),
-                models_count = length(models),
+                models_count = nrow(live$df),
                 # keep it POSIXct from the start
                 refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
-                status       = if (length(models)) "ok" else "unreachable_or_empty",
+                status       = status,
                 stringsAsFactors = FALSE
             )
         }
