@@ -16,6 +16,7 @@
   }
 }
 
+
 # --- URL helpers -------------------------------------------------------------
 
 # Normalize a base_url into a clean server root.
@@ -199,9 +200,11 @@
 
 # --- Cache primitives --------------------------------------------------------
 
-# Construct a unique cache key string from provider+base_url.
+# Construct a unique cache key string from provider+base_url using
+# only lowercase letters and numbers (cachem restriction).
 .cache_key <- function(provider, base_url) {
-  paste0(provider, "::", .api_root(base_url))
+  root <- .api_root(base_url)
+  paste0(provider, digest::sha1(root))
 }
 
 # Look up a cached entry in .gptr_cache by provider+base_url.
@@ -237,12 +240,6 @@
   invisible(TRUE)
 }
 
-#' @keywords internal
-.parse_cache_key <- function(key) {
-  # key format: "<provider>::<root>"
-  parts <- strsplit(key, "::", fixed = TRUE)[[1]]
-  list(provider = parts[[1]], base_url = parts[[2]])
-}
 
 #' @noRd
 #' @keywords internal
@@ -260,11 +257,10 @@
             ))
         }
         rows <- lapply(keys, function(k) {
-            ent  <- .gptr_cache$get(k)
-            meta <- .parse_cache_key(k)  # "<provider>::<base_url_root>"
+            ent <- .gptr_cache$get(k)
             data.frame(
-                provider  = meta$provider,
-                base_url  = meta$base_url,
+                provider  = ent$provider %||% NA_character_,
+                base_url  = ent$base_url %||% NA_character_,
                 n_models  = length(ent$models %||% character(0)),
                 cached_at = if (!is.null(ent$ts)) {
                     as.POSIXct(ent$ts, origin = "1970-01-01", tz = "Europe/Paris")
@@ -289,7 +285,11 @@
     if (is.null(provider) && !is.null(base_url)) {
         root <- .api_root(base_url)
         keys <- .gptr_cache$keys()
-        hits <- vapply(keys, function(k) .parse_cache_key(k)$base_url == root, logical(1))
+        hits <- vapply(keys, function(k) {
+            ent <- .gptr_cache$get(k)
+            identical(ent$base_url, root)
+        }, logical(1))
+
         if (!any(hits)) return(character(0))
         models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache$get(k)$models), use.names = FALSE))
         return(models %||% character(0))

@@ -116,6 +116,28 @@ test_that("auto + unknown model falls back to first preferred local", {
     )
 })
 
+test_that("auto with no local backend falls back to OpenAI", {
+    called <- NULL
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            data.frame(provider = character(), base_url = character(),
+                       model_id = character(), stringsAsFactors = FALSE)
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "fallback")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, "local")
+            fake_resp(model = payload$model %||% "local")
+        },
+        {
+            res <- gpt("hi", provider = "auto", openai_api_key = "sk", print_raw = FALSE)
+            expect_identical(called, "openai")
+        }
+    )
+})
+
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
     with_mocked_bindings(
