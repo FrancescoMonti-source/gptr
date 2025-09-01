@@ -56,6 +56,19 @@
     models_df <- .as_models_df(models_df)
     ts <- if (length(ts)) ts else NA_real_  # coalesce: legacy cache entries may omit ts
     if (nrow(models_df) == 0) {
+        if (!is.na(status)) {
+            return(data.frame(
+                provider = provider,
+                base_url = base_url,
+                model_id = NA_character_,
+                created = NA_real_,
+                availability = availability,
+                cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "Europe/Paris"),
+                source = src,
+                status = status,
+                stringsAsFactors = FALSE
+            ))
+        }
         return(data.frame(
             provider = character(),
             base_url = character(),
