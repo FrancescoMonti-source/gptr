@@ -13,6 +13,32 @@
   }
 })
 
+# 2) Airtight httr2 mock for OpenAI model listing
+mock_http_openai <- function(status = 200L,
+                             json = NULL,
+                             json_throws = FALSE,
+                             perform_throws = FALSE) {
+    # mocks for your wrapper layer
+    binds <- list(
+        .http_request = function(url) list(.url = url),
+        .http_req_headers = function(req, ...) req,
+        .http_req_timeout = function(req, ...) req,
+        .http_req_retry = function(req, ...) req,
+        .http_req_perform = if (perform_throws) {
+            function(req, ...) stop("network fail")
+        } else {
+            function(req, ...) structure(list(.url = req$.url), class = "httr2_response")
+        },
+        .http_resp_status = function(resp) status,
+        .http_resp_body_json = if (json_throws) {
+            function(...) stop("boom")
+        } else {
+            function(resp, simplifyVector = FALSE) json
+        }
+    )
+    .patch_pkg(binds) # patch in gptr namespace only
+}
+
 # Patch only if the binding exists in the package
 .patch_pkg <- function(bindings) {
   pkg_ns <- asNamespace("gptr")
@@ -86,6 +112,7 @@
       )
     }))
   })
+
 # Airtight mock for OpenAI model listing via httr2 wrappers
 mock_http_openai <- function(status = 200L,
                              json = NULL,
@@ -111,8 +138,6 @@ mock_http_openai <- function(status = 200L,
   .patch_pkg(binds)
   invisible(TRUE)
 }
-
-
 
 # Deterministic clock
 fixed_ts <- 1755806518
@@ -363,6 +388,7 @@ test_that("invalidate by provider+base_url clears targeted entry", {
   put("openai", base, data.frame(id = "y", created = 2))
   expect_false(is.null(get("openai", base)))
   inv(provider = "openai", base_url = base)
+
   expect_null(get("openai", base))
 })
 

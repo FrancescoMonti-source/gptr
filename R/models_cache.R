@@ -478,6 +478,7 @@ refresh_models_cache <- function(provider = NULL, base_url = NULL) {
     out
 }
 
+
 #' Clear cache entries so that the next run will re-probe the server.
 #'
 #' With no arguments, clears all cached model listings. You can target a

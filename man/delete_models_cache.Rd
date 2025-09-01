@@ -4,7 +4,7 @@
 \alias{delete_models_cache}
 \title{Clear cache entries so that the next run will re-probe the server.}
 \usage{
-delete_models_cache(provider = NULL, base_url = NULL)
+delete_models_cache()
 }
 \arguments{
 \item{provider}{Optional provider name to invalidate.}
@@ -15,6 +15,7 @@ delete_models_cache(provider = NULL, base_url = NULL)
 invisible TRUE
 }
 \description{
+
 Clear cache entries so that the next run will re-probe the server. With no arguments,
 clears all cached model listings. You can target a subset by specifying a provider,
 a base\_url, or both.
