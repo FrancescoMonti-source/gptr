@@ -318,6 +318,24 @@ test_that("openai fallback semantics via .list_models_live", {
 })
 
 
+test_that("refresh_models_cache handles openai provider", {
+  fake_cache <- make_fake_cache()
+  payload <- openai_models_payload()
+  mock_http_openai(status = 200L, json = payload)
+  testthat::local_mocked_bindings(
+    .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+  out <- refresh_models_cache(provider = "openai", openai_api_key = "sk-test")
+  expect_equal(out$provider, "openai")
+  expect_equal(out$models_count, 2L)
+  expect_equal(out$status, "ok")
+  cached <- fake_cache$get("openai", "https://api.openai.com")
+  expect_true(NROW(cached$models) == 2)
+})
+
+
 
 # list models
 test_that("list-models", {

@@ -444,13 +444,21 @@ list_models <- function(provider = NULL,
   out[ord, , drop = FALSE]
 }
 
-#' Force a live probe of /v1/models and update the cache immediately.
-#' Useful after adding/pulling a new model in LM Studio/Ollama.
+#' Force a live probe of /v1/models (locals) or the OpenAI catalog and update the cache immediately.
+#' Useful after adding/pulling a new model in LM Studio/Ollama or refreshing the OpenAI model list.
 #' Returns a data.frame summarizing provider, base_url, count of models, refreshed_at, and status.
+#' @param provider NULL to refresh all known providers, or a character vector containing any of "lmstudio", "ollama", "localai", "openai".
+#' @param base_url Optional base URL for local backends. Ignored for OpenAI.
+#' @param openai_api_key Optional OpenAI API key. Defaults to `Sys.getenv("OPENAI_API_KEY", "")`.
 #' @return data.frame: provider, base_url, models_count, refreshed_at, status
 #' @export
-refresh_models_cache <- function(provider = NULL, base_url = NULL) {
+refresh_models_cache <- function(provider = NULL,
+                                 base_url = NULL,
+                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
     cands <- .list_local_backends()
+    if (is.null(provider) || "openai" %in% provider) {
+        cands$openai <- list(provider = "openai", base_url = "https://api.openai.com")
+    }
     keys  <- if (is.null(provider)) names(cands) else provider
     out   <- list()
 
@@ -458,19 +466,33 @@ refresh_models_cache <- function(provider = NULL, base_url = NULL) {
         cand <- cands[[p]]
         if (is.null(cand)) next
 
-        bu     <- base_url %||% cand$base_url
-        live   <- .list_models_live(p, bu)
-        .cache_put(p, bu, live$df)
+        if (identical(p, "openai")) {
+            bu   <- cand$base_url
+            live <- .list_openai_live(openai_api_key)
+            .cache_put("openai", bu, live$df)
+            out[[length(out) + 1L]] <- data.frame(
+                provider     = "openai",
+                base_url     = .api_root(bu),
+                models_count = nrow(live$df),
+                refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
+                status       = live$status,
+                stringsAsFactors = FALSE
+            )
+        } else {
+            bu     <- base_url %||% cand$base_url
+            models <- .fetch_models_live(p, bu)
+            .cache_put(p, bu, models)
 
-        out[[length(out) + 1L]] <- data.frame(
-            provider     = p,
-            base_url     = .api_root(bu),
-            models_count = NROW(live$df),
-            # keep it POSIXct from the start
-            refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
-            status       = live$status,
-            stringsAsFactors = FALSE
-        )
+            out[[length(out) + 1L]] <- data.frame(
+                provider     = p,
+                base_url     = .api_root(bu),
+                models_count = length(models),
+                # keep it POSIXct from the start
+                refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
+                status       = if (length(models)) "ok" else "unreachable_or_empty",
+                stringsAsFactors = FALSE
+            )
+        }
     }
 
     if (!length(out)) {

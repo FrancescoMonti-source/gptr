@@ -2,17 +2,25 @@
 % Please edit documentation in R/models_cache.R
 \name{refresh_models_cache}
 \alias{refresh_models_cache}
-\title{Force a live probe of /v1/models and update the cache immediately.
-Useful after adding/pulling a new model in LM Studio/Ollama.
-Returns a data.frame summarizing provider, base_url, count of models, refreshed_at, and status.}
+\title{Force a live probe of /v1/models (locals) or the OpenAI catalog and update the cache immediately}
 \usage{
-refresh_models_cache(provider = NULL, base_url = NULL)
+refresh_models_cache(
+  provider = NULL,
+  base_url = NULL,
+  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")
+)
+}
+\arguments{
+\item{provider}{NULL to refresh all known providers, or a character vector containing any of \code{"lmstudio"}, \code{"ollama"}, \code{"localai"}, \code{"openai"}.}
+
+\item{base_url}{Optional base URL for local backends. Ignored for OpenAI.}
+
+\item{openai_api_key}{Optional OpenAI API key. Defaults to \code{Sys.getenv("OPENAI_API_KEY", "")}.}
 }
 \value{
 data.frame: provider, base_url, models_count, refreshed_at, status
 }
 \description{
-Force a live probe of /v1/models and update the cache immediately.
-Useful after adding/pulling a new model in LM Studio/Ollama.
+Useful after adding/pulling a new model in LM Studio/Ollama or refreshing the OpenAI model list.
 Returns a data.frame summarizing provider, base_url, count of models, refreshed_at, and status.
 }
