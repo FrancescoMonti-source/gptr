@@ -8,7 +8,6 @@ $.gpt_chat_callable
 .cache_key
 .cache_put
 .coerce_type
-.fetch_models_live
 .finalize_columns
 .gptr_cache
 .gptr_state
@@ -32,7 +31,7 @@ $.gpt_chat_callable
 .json_last_resort
 .list_local_backends
 .list_models_cached
-.list_openai_live
+.list_models_live
 .models_cache_snapshot
 .models_endpoint
 .normalize_token

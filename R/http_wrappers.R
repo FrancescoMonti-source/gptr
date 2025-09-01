@@ -49,7 +49,7 @@
 #'   .http_body_json = function(...) stop("boom"),
 #'   .env = asNamespace("gptr")
 #' )
-#' #' now .list_openai_live("sk") yields status = "auth_error" without real I/O.
+#' #' now .list_models_live("openai", "https://api.openai.com", "sk") yields status = "auth_error" without real I/O.
 
 #' Request-side wrappers
 #' @keywords internal

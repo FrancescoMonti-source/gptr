@@ -248,43 +248,47 @@ test_that("cache snapshot - immutability", {
   expect_false(identical(s1, s2))
 })
 
-test_that("refresh writes cache and surfaces status", {
+test_that("refresh with no models returns empty data", {
   fake_cache <- make_fake_cache()
   local_mocked_bindings(
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     refresh_models_cache = function(provider, base_url) list(status = "refreshed"),
-    .list_models_cached = function(...) character(0),
+    .list_models_cached = function(...) data.frame(id = character(0), created = numeric(0)),
     .api_root = function(x) x
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
-  expect_true(any(out$status == "refreshed"))
+  expect_equal(nrow(out), 0)
 })
 
 
 test_that("openai non-JSON -> non_json", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   mock_http_openai(status = 200L, json_throws = TRUE)
   o <- live("sk-test")
   expect_equal(o$status, "non_json")
 })
 
 test_that("openai network error -> unreachable", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   mock_http_openai(perform_throws = TRUE)
   o <- live("sk-test")
   expect_equal(o$status, "unreachable")
 })
 
 test_that("openai 5xx -> http_503", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   mock_http_openai(status = 503L)
   o <- live("sk-test")
   expect_equal(o$status, "http_503")
 })
 
 test_that("openai ok -> df parsed and status ok", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
@@ -303,8 +307,9 @@ test_that("openai empty model list -> empty_cache", {
   expect_identical(nrow(out), 0L)
 })
 
-test_that("openai fallback semantics via .list_openai_live", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+test_that("openai fallback semantics via .list_models_live", {
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
 
   mock_http_openai(status = 200L, json_throws = TRUE)
   o1 <- live("sk")
@@ -317,6 +322,24 @@ test_that("openai fallback semantics via .list_openai_live", {
   mock_http_openai(status = 503L)
   o3 <- live("sk")
   expect_equal(o3$status, "http_503")
+})
+
+
+test_that("refresh_models_cache handles openai provider", {
+  fake_cache <- make_fake_cache()
+  payload <- openai_models_payload()
+  mock_http_openai(status = 200L, json = payload)
+  testthat::local_mocked_bindings(
+    .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+  out <- refresh_models_cache(provider = "openai", openai_api_key = "sk-test")
+  expect_equal(out$provider, "openai")
+  expect_equal(out$models_count, 2L)
+  expect_equal(out$status, "ok")
+  cached <- fake_cache$get("openai", "https://api.openai.com")
+  expect_true(NROW(cached$models) == 2)
 })
 
 
@@ -371,6 +394,22 @@ test_that(".row_df repeats provider/base/url and status", {
   expect_equal(unique(r$provider), "openai")
   expect_equal(nrow(r), 2)
   expect_equal(r$status, rep("ok", 2))
+})
+
+test_that(".row_df returns zero rows when no models and status is NA", {
+  f <- getFromNamespace(".row_df", "gptr")
+  r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
+         "catalog", "live", fixed_ts)
+  expect_equal(nrow(r), 0)
+})
+
+test_that(".row_df preserves status when no models", {
+  f <- getFromNamespace(".row_df", "gptr")
+  r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
+         "catalog", "live", fixed_ts, status = "auth_missing")
+  expect_equal(nrow(r), 1)
+  expect_true(is.na(r$model_id))
+  expect_equal(r$status, "auth_missing")
 })
 
 
