@@ -7,7 +7,14 @@
 #   gptr.localai_base_url  = "http://127.0.0.1:8080"
 # )
 
-.gptr_cache <- cachem::cache_mem(max_age = getOption("gptr.model_cache_ttl", 3600))
+.gptr_cache <- {
+  ttl <- if (isTRUE(getOption("gptr.check_model_once", TRUE))) NULL else getOption("gptr.model_cache_ttl", 3600)
+  if (is.null(ttl)) {
+    cachem::cache_mem()
+  } else {
+    cachem::cache_mem(max_age = ttl)
+  }
+}
 
 # --- URL helpers -------------------------------------------------------------
 
@@ -206,15 +213,20 @@
 #' Save a cache entry for provider+base_url with a vector of model IDs and timestamp.
 #' @keywords internal
 .cache_put <- function(provider, base_url, models) {
-  ttl <- getOption("gptr.model_cache_ttl", 3600)
-  .gptr_cache$set(
-    .cache_key(provider, base_url),
-    list(
-      models = models,
-      ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
-    ),
-    expires = Sys.time() + ttl
+  entry <- list(
+    models = models,
+    ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
   )
+  if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
+    .gptr_cache$set(.cache_key(provider, base_url), entry)
+  } else {
+    ttl <- getOption("gptr.model_cache_ttl", 3600)
+    .gptr_cache$set(
+      .cache_key(provider, base_url),
+      entry,
+      expires = Sys.time() + ttl
+    )
+  }
 }
 
 
