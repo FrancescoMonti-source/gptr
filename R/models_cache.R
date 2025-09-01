@@ -217,8 +217,10 @@
 #' @keywords internal
 .cache_put <- function(provider, base_url, models) {
   entry <- list(
-    models = models,
-    ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
+    provider = provider,
+    base_url = .api_root(base_url),
+    models   = models,
+    ts       = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
   )
   if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
     .gptr_cache$set(.cache_key(provider, base_url), entry)
@@ -259,8 +261,8 @@
         rows <- lapply(keys, function(k) {
             ent <- .gptr_cache$get(k)
             data.frame(
-                provider  = ent$provider %||% NA_character_,
-                base_url  = ent$base_url %||% NA_character_,
+                provider  = ent$provider,
+                base_url  = ent$base_url,
                 n_models  = length(ent$models %||% character(0)),
                 cached_at = if (!is.null(ent$ts)) {
                     as.POSIXct(ent$ts, origin = "1970-01-01", tz = "Europe/Paris")
