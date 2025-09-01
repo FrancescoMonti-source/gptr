@@ -54,6 +54,7 @@
 .row_df <- function(provider, base_url, models_df, availability, src, ts, status = NA_character_) {
     base_url <- .api_root(base_url)
     models_df <- .as_models_df(models_df)
+    ts <- if (length(ts)) ts else NA_real_  # coalesce: legacy cache entries may omit ts
     if (nrow(models_df) == 0) {
         return(data.frame(
             provider = provider,
