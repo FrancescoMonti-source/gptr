@@ -175,6 +175,10 @@ gpt <- function(prompt,
     if (provider == "openai") {
         msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
+        bu_root <- .api_root(defs$base_url)
+        if (is.null(.cache_get("openai", bu_root))) {
+            invisible(try(list_models(provider = "openai", openai_api_key = defs$api_key), silent = TRUE))
+        }
         if (!is.null(model) && nzchar(model)) {
             ids <- tryCatch(list_models(provider = "openai", openai_api_key = defs$api_key)$id,
                             error = function(e) character(0))
@@ -197,12 +201,11 @@ gpt <- function(prompt,
     # ---------------- provider == "local" ----------------
     if (provider == "local") {
         stopifnot(!is.null(base_root), nzchar(base_root))
-        ms <- try(list_models(provider = backend, base_url = base_root, refresh = FALSE), silent = TRUE)
-        ids <- if (!inherits(ms, "try-error") && NROW(ms) && "model_id" %in% names(ms)) {
-            unique(na.omit(as.character(ms$model_id)))
-        } else if (!inherits(ms, "try-error") && NROW(ms) && "id" %in% names(ms)) {
-            unique(na.omit(as.character(ms$id)))
-        } else character(0)
+        if (is.null(.cache_get(backend, base_root))) {
+            invisible(try(list_models(provider = backend, base_url = base_root, refresh = FALSE), silent = TRUE))
+        }
+        ent <- .cache_get(backend, base_root)
+        ids <- if (!is.null(ent)) unique(na.omit(as.character(ent$models))) else character(0)
 
         requested_model <- model %||% getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
 
