@@ -2,13 +2,11 @@
 % Please edit documentation in R/models_cache.R
 \name{.cache_del}
 \alias{.cache_del}
-\title{Remove a cache entry for provider+base_url from .gptr_cache.
-Returns 1 if removed, 0 if nothing existed.}
+\title{Remove a cache entry for provider+base_url from the cache.}
 \usage{
 .cache_del(provider, base_url)
 }
 \description{
-Remove a cache entry for provider+base_url from .gptr_cache.
-Returns 1 if removed, 0 if nothing existed.
+Remove a cache entry for provider+base_url from the cache.
 }
 \keyword{internal}

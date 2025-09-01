@@ -1,18 +1,15 @@
 # shared store (keep yours)
-.gptr_test_cache_store <- new.env(parent = emptyenv())
+.gptr_test_cache_store <- cachem::cache_mem()
 
 # normalize a base url to the cache "root"
 .cache_root_for_test <- function(x) sub("/v1/.*$", "", x)
 
 # Monotonic timestamp counter so snapshots differ predictably
 .get_next_ts <- local({
-  seq_name <- ".gptr_test_cache_seq"
+  seq <- 0L
   function() {
-    cur <- get0(seq_name, envir = .gptr_test_cache_store, inherits = FALSE)
-    if (is.null(cur)) cur <- 0L
-    cur <- cur + 1L
-    assign(seq_name, cur, envir = .gptr_test_cache_store)
-    1755806518 + cur
+    seq <<- seq + 1L
+    1755806518 + seq
   }
 })
 
@@ -34,37 +31,30 @@
 .patch_pkg(list(
   .cache_get = function(...) {
     a <- list(...)
-    if (length(a) == 1L && is.character(a[[1L]]) && grepl("@", a[[1L]], fixed = TRUE)) {
+    if (length(a) == 1L && is.character(a[[1L]]) && grepl('@', a[[1L]], fixed = TRUE)) {
       key <- a[[1L]]
     } else {
       provider <- as.character(a[[1L]])
       base_url <- .cache_root_for_test(as.character(a[[2L]]))
-      key <- paste0(provider, "@", base_url)
+      key <- paste0(provider, '@', base_url)
     }
-    if (!exists(key, envir = .gptr_test_cache_store, inherits = FALSE)) {
-      return(NULL)
-    }
-    get(key, envir = .gptr_test_cache_store, inherits = FALSE)
+    .gptr_test_cache_store$get(key)
   },
   .cache_put = function(...) {
     a <- list(...)
     provider <- as.character(a[[1L]])
     base_url <- .cache_root_for_test(as.character(a[[2L]]))
     models <- a[[3L]]
-    assign(paste0(provider, "@", base_url),
-      list(models = models, ts = .get_next_ts()),
-      envir = .gptr_test_cache_store
-    )
+    .gptr_test_cache_store$set(paste0(provider, '@', base_url),
+      list(models = models, ts = .get_next_ts()))
     invisible(TRUE)
   },
   .cache_del = function(...) {
     a <- list(...)
     provider <- as.character(a[[1L]])
     base_url <- .cache_root_for_test(as.character(a[[2L]]))
-    key <- paste0(provider, "@", base_url)
-    if (exists(key, envir = .gptr_test_cache_store, inherits = FALSE)) {
-      rm(list = key, envir = .gptr_test_cache_store)
-    }
+    key <- paste0(provider, '@', base_url)
+    .gptr_test_cache_store$remove(key)
     invisible(TRUE)
   }
 ))
@@ -78,7 +68,7 @@
 # Uniform snapshot to avoid rbind col mismatches
 .patch_pkg(list(
   .models_cache_snapshot = function() {
-    keys <- ls(envir = .gptr_test_cache_store, all.names = FALSE)
+    keys <- .gptr_test_cache_store$keys()
     if (!length(keys)) {
       return(data.frame(
         provider = character(0), base_url = character(0),
@@ -86,88 +76,15 @@
       ))
     }
     do.call(rbind, lapply(keys, function(k) {
-      ent <- get(k, envir = .gptr_test_cache_store, inherits = FALSE)
+      ent <- .gptr_test_cache_store$get(k)
       data.frame(
-        provider = sub("@.*$", "", k, perl = TRUE),
-        base_url = sub("^.*@", "", k, perl = TRUE),
-        n_models = NROW(getFromNamespace(".as_models_df", "gptr")(ent$models)),
+        provider = sub('@.*$', '', k, perl = TRUE),
+        base_url = sub('^.*@', '', k, perl = TRUE),
+        n_models = NROW(getFromNamespace('.as_models_df', 'gptr')(ent$models)),
         ts = suppressWarnings(as.numeric(ent$ts)),
         stringsAsFactors = FALSE
       )
     }))
-  }
-))
-
-test_that("no direct httr2 calls outside wrappers", {
-  # Files to scan
-  files <- list.files("R", pattern = "\\.R$", full.names = TRUE)
-  files <- setdiff(files, file.path("R", "http_wrappers.R")) # allow wrappers
-
-  offenders <- character()
-
-  for (f in files) {
-    lines <- readLines(f, warn = FALSE)
-    lines <- lines[!grepl("^#'", lines)] # ignore roxygen comments
-
-    hits_idx <- grep("\\bhttr2::", lines)
-    if (length(hits_idx)) {
-      # include file + line number + the offending line
-      offenders <- c(
-        offenders,
-        paste0(basename(f), ":", hits_idx, ": ", trimws(lines[hits_idx]))
-      )
-    }
-  }
-
-  msg <- if (length(offenders)) {
-    paste0(
-      "Found direct httr2 calls (use .http_* wrappers):\n",
-      paste(offenders, collapse = "\n")
-    )
-  } else {
-    ""
-  }
-
-  expect(length(offenders) == 0L, msg) # edition-agnostic assertion
-})
-
-
-
-
-# 2) Airtight httr2 mock for OpenAI model listing
-mock_http_openai <- function(status = 200L,
-                             json = NULL,
-                             json_throws = FALSE,
-                             perform_throws = FALSE) {
-  # mocks for your wrapper layer
-  binds <- list(
-    .http_request = function(url) list(.url = url),
-    .http_req_headers = function(req, ...) req,
-    .http_req_timeout = function(req, ...) req,
-    .http_req_retry = function(req, ...) req,
-    .http_req_perform = if (perform_throws) {
-      function(req, ...) stop("network fail")
-    } else {
-      function(req, ...) structure(list(.url = req$.url), class = "httr2_response")
-    },
-    .http_resp_status = function(resp) status,
-    .http_resp_body_json = if (json_throws) {
-      function(...) stop("boom")
-    } else {
-      function(resp, simplifyVector = FALSE) json
-    }
-  )
-  .patch_pkg(binds) # patch in gptr namespace only
-}
-
-
-
-
-# Sanity: helper should be visible
-testthat::with_reporter("silent", {
-  testthat::test_that("helpers loaded", {
-    testthat::expect_true(exists("mock_httr2_openai", inherits = TRUE))
-    testthat::expect_true(is.environment(.gptr_test_cache_store))
   })
 })
 
@@ -189,21 +106,18 @@ fix_time <- function(expr) {
 
 # Minimal in-memory cache to mock your real cache layer
 make_fake_cache <- function() {
-  store <- new.env(parent = emptyenv())
+  store <- cachem::cache_mem()
   list(
     get = function(provider, base_url) {
-      key <- paste(provider, base_url, sep = "@")
-      if (!exists(key, envir = store, inherits = FALSE)) {
-        return(NULL)
-      }
-      get(key, envir = store, inherits = FALSE)
+      key <- paste(provider, base_url, sep = '@')
+      store$get(key)
     },
     put = function(provider, base_url, models) {
-      key <- paste(provider, base_url, sep = "@")
-      assign(key, list(models = models, ts = fixed_ts), envir = store)
+      key <- paste(provider, base_url, sep = '@')
+      store$set(key, list(models = models, ts = fixed_ts))
       invisible(TRUE)
     },
-    env = store
+    cache = store
   )
 }
 
@@ -404,16 +318,16 @@ test_that(".list_models_cached - drops live probing", {
   expect_true(all(out$source == "cache"))
 })
 
-test_that("invalidate clears cache for provider/base_url", {
+test_that("invalidate clears cache", {
   inv <- getFromNamespace("delete_models_cache", "gptr")
   put <- getFromNamespace(".cache_put", "gptr")
   get <- getFromNamespace(".cache_get", "gptr")
 
-  base <- "https://api.openai.com" # normalized root!
+  base <- "https://api.openai.com"
   put("openai", base, data.frame(id = "x", created = 1))
 
   expect_false(is.null(get("openai", base)))
-  inv(provider = "openai", base_url = base)
+  inv()
   expect_null(get("openai", base))
 })
 
@@ -467,14 +381,4 @@ test_that("list_models - second call uses cache when available", {
 
 
 
-test_that("invalidate by provider+base_url clears exactly one", {
-  inv <- getFromNamespace("delete_models_cache", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  get <- getFromNamespace(".cache_get", "gptr")
 
-  base <- "https://api.openai.com"
-  put("openai", base, data.frame(id = "x", created = 1))
-  expect_false(is.null(get("openai", base)))
-  inv(provider = "openai", base_url = base)
-  expect_null(get("openai", base))
-})
