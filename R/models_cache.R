@@ -7,7 +7,15 @@
 #   gptr.localai_base_url  = "http://127.0.0.1:8080"
 # )
 
-.gptr_cache <- cachem::cache_mem(max_age = getOption("gptr.model_cache_ttl", 3600))
+.gptr_cache <- {
+  ttl <- if (isTRUE(getOption("gptr.check_model_once", TRUE))) NULL else getOption("gptr.model_cache_ttl", 3600)
+  if (is.null(ttl)) {
+    cachem::cache_mem()
+  } else {
+    cachem::cache_mem(max_age = ttl)
+  }
+}
+
 
 # --- URL helpers -------------------------------------------------------------
 
@@ -208,18 +216,20 @@
 #' Save a cache entry for provider+base_url with a vector of model IDs and timestamp.
 #' @keywords internal
 .cache_put <- function(provider, base_url, models) {
-  ttl <- getOption("gptr.model_cache_ttl", 3600)
-  root <- .api_root(base_url)
-  .gptr_cache$set(
-    .cache_key(provider, root),
-    list(
-      provider = provider,
-      base_url = root,
-      models   = models,
-      ts       = as.numeric(Sys.time())
-    ),
-    expires = Sys.time() + ttl
+  entry <- list(
+    models = models,
+    ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
   )
+  if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
+    .gptr_cache$set(.cache_key(provider, base_url), entry)
+  } else {
+    ttl <- getOption("gptr.model_cache_ttl", 3600)
+    .gptr_cache$set(
+      .cache_key(provider, base_url),
+      entry,
+      expires = Sys.time() + ttl
+    )
+  }
 }
 
 
@@ -229,6 +239,7 @@
   .gptr_cache$remove(.cache_key(provider, base_url))
   invisible(TRUE)
 }
+
 
 #' @noRd
 #' @keywords internal
@@ -278,6 +289,7 @@
             ent <- .gptr_cache$get(k)
             identical(ent$base_url, root)
         }, logical(1))
+
         if (!any(hits)) return(character(0))
         models <- unique(unlist(lapply(keys[hits], function(k) .gptr_cache$get(k)$models), use.names = FALSE))
         return(models %||% character(0))
@@ -478,11 +490,50 @@ refresh_models_cache <- function(provider = NULL, base_url = NULL) {
     out
 }
 
-#' Clear models cache so that the next run will re-probe the server.
+
+#' Clear cache entries so that the next run will re-probe the server.
+#'
+#' With no arguments, clears all cached model listings. You can target a
+#' subset by specifying a `provider`, a `base_url`, or both.
+#' @param provider Optional provider name to invalidate.
+#' @param base_url Optional base URL of the backend to invalidate.
 #' @return invisible TRUE
 #' @export
-delete_models_cache <- function() {
-    .gptr_cache$reset()
+delete_models_cache <- function(provider = NULL, base_url = NULL) {
+    keys <- .gptr_cache$keys()
+    if (!length(keys)) return(invisible(TRUE))
+
+    # no args: wipe everything
+    if (is.null(provider) && is.null(base_url)) {
+        .gptr_cache$reset()
+        return(invisible(TRUE))
+    }
+
+    # provider only
+    if (!is.null(provider) && is.null(base_url)) {
+        for (k in keys) {
+            parts <- .parse_cache_key(k)
+            if (identical(parts$provider, provider)) {
+                .gptr_cache$remove(k)
+            }
+        }
+        return(invisible(TRUE))
+    }
+
+    # base_url only
+    if (is.null(provider) && !is.null(base_url)) {
+        root <- .api_root(base_url)
+        for (k in keys) {
+            parts <- .parse_cache_key(k)
+            if (identical(parts$base_url, root)) {
+                .gptr_cache$remove(k)
+            }
+        }
+        return(invisible(TRUE))
+    }
+
+    # both provider and base_url
+    .gptr_cache$remove(.cache_key(provider, base_url))
     invisible(TRUE)
 }
 

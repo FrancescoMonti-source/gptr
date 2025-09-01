@@ -51,10 +51,10 @@ Practical upshot:
 }
 \examples{
 Example(prod):
-resp <- .http_request(url) |>
-  .http_headers(Authorization = paste("Bearer", key)) |>
-  .http_timeout(timeout) |>
-  .http_retry(max_tries = 3, backoff = function(i) 0.2 * i, ...) |>
+resp <- .http_request(url) \%>\%
+  .http_headers(Authorization = paste("Bearer", key)) \%>\%
+  .http_timeout(timeout) \%>\%
+  .http_retry(max_tries = 3, backoff = function(i) 0.2 * i, ...) \%>\%
   .http_perform()
 sc <- .http_status(resp)
 j <- .http_body_json(resp, simplifyVector = FALSE)
