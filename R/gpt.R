@@ -95,7 +95,7 @@ gpt <- function(prompt,
             picked <- FALSE
             if (!inherits(lm, "try-error") && NROW(lm)) {
                 for (bk in prefer) {
-                    hit <- lm[tolower(lm$provider) == tolower(bk), , drop = FALSE]
+                    hit <- lm[tolower(lm$provider) == tolower(bk) & !is.na(lm$model_id), , drop = FALSE]
                     if (NROW(hit)) {
                         base_root <- .api_root(as.character(hit$base_url[1L]))
                         backend   <- bk
@@ -105,10 +105,18 @@ gpt <- function(prompt,
                 }
             }
             if (!picked || is.null(base_root)) {
-                backend   <- prefer[[1L]]
-                base_root <- .api_root(roots[[backend]])
+                if (nzchar(openai_api_key)) {
+                    provider <- "openai"
+                    backend <- NULL
+                    base_root <- NULL
+                } else {
+                    backend   <- prefer[[1L]]
+                    base_root <- .api_root(roots[[backend]])
+                    provider  <- "local"
+                }
+            } else {
+                provider <- "local"
             }
-            provider <- "local"
         }
     }
 
