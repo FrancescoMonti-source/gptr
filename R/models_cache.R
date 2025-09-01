@@ -216,8 +216,10 @@
 #' @keywords internal
 .cache_put <- function(provider, base_url, models) {
   entry <- list(
-    models = models,
-    ts     = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
+    provider = provider,
+    base_url = .api_root(base_url),
+    models   = models,
+    ts       = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
   )
   if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
     .gptr_cache$set(.cache_key(provider, base_url), entry)
@@ -339,7 +341,7 @@
 #' @export
 list_models <- function(provider = NULL,
                         base_url = NULL,
-                        refresh = FALSE,
+                        refresh = TRUE,
                         openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
   # ---- scope selection ---
   providers <- if (is.null(provider)) c("lmstudio", "ollama", "localai", "openai") else provider
