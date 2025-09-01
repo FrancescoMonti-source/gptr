@@ -424,9 +424,15 @@ list_models <- function(provider = NULL,
 
   if (!length(rows)) {
     return(data.frame(
-      provider = character(), base_url = character(), model_id = character(),
-      created = numeric(), availability = character(), cached_when = numeric(),
-      source = character(), status = character(), stringsAsFactors = FALSE
+      provider = character(),
+      base_url = character(),
+      model_id = character(),
+      created = numeric(),
+      availability = character(),
+      cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
+      source = character(),
+      status = character(),
+      stringsAsFactors = FALSE
     ))
   }
 
