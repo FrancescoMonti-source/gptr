@@ -471,7 +471,7 @@ refresh_models_cache <- function(provider = NULL,
                 models_count = nrow(live$df),
                 refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
                 status       = live$status,
-                stringsAsFactors = FALSE,
+                stringsAsFactors = FALSE
             )
         } else {
             bu     <- base_url %||% cand$base_url
@@ -485,7 +485,7 @@ refresh_models_cache <- function(provider = NULL,
                 # keep it POSIXct from the start
                 refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
                 status       = if (length(models)) "ok" else "unreachable_or_empty",
-                stringsAsFactors = FALSE,
+                stringsAsFactors = FALSE
             )
         }
     }
