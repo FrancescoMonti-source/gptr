@@ -381,6 +381,47 @@ test_that("refresh_models_cache retries after unreachable and caches", {
   expect_identical(NROW(cached$models), 1L)
 })
 
+test_that(".list_models_cached skips cache when unreachable", {
+  fake_cache <- make_fake_cache()
+  live_mock <- function(provider, base_url) {
+    list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
+  }
+  f <- getFromNamespace(".list_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .list_models_live = live_mock,
+    .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_equal(out$status, "unreachable")
+  expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
+})
+
+test_that(".list_models_cached retries after unreachable and caches", {
+  fake_cache <- make_fake_cache()
+  calls <- 0
+  live_mock <- function(provider, base_url) {
+    calls <<- calls + 1
+    if (calls == 1) {
+      list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
+    } else {
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    }
+  }
+  f <- getFromNamespace(".list_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .list_models_live = live_mock,
+    .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_equal(out$status, "ok")
+  cached <- fake_cache$get("lmstudio", "http://127.0.0.1:1234")
+  expect_identical(NROW(cached$models), 1L)
+})
+
 
 
 # list models

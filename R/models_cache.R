@@ -301,13 +301,20 @@
     # Case D: provider + base_url with TTL behavior
     ent <- .cache_get(provider, base_url)
     if (!is.null(ent)) {
-        if (isTRUE(getOption("gptr.check_model_once", TRUE))) return(.as_models_df(ent$models))
+        if (isTRUE(getOption("gptr.check_model_once", TRUE))) return(list(df = .as_models_df(ent$models), status = "ok"))
         ttl <- getOption("gptr.model_cache_ttl", 3600)
-        if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(.as_models_df(ent$models))
+        if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(list(df = .as_models_df(ent$models), status = "ok"))
     }
     live <- .list_models_live(provider, base_url)
+    if (identical(live$status, "unreachable")) {
+        Sys.sleep(0.2)
+        live <- .list_models_live(provider, base_url)
+        if (identical(live$status, "unreachable")) {
+            return(live)
+        }
+    }
     .cache_put(provider, base_url, live$df)
-    live$df
+    live
 }
 
 
@@ -358,7 +365,8 @@ list_models <- function(provider = NULL,
 
       if (isTRUE(refresh)) {
         refreshed <- refresh_models_cache(p, bu)
-        mods_df <- .list_models_cached(p, bu)
+        live <- .list_models_cached(p, bu)
+        mods_df <- live$df
         ts <- .cache_get(p, bu)$ts %||% as.numeric(Sys.time())
         src <- "live"
         if (p == "ollama" && nrow(mods_df) == 0) {
@@ -373,7 +381,8 @@ list_models <- function(provider = NULL,
       } else {
         ent <- .cache_get(p, bu)
         if (is.null(ent)) {
-          mods_df <- .list_models_cached(p, bu)
+          live <- .list_models_cached(p, bu)
+          mods_df <- live$df
           ts <- .cache_get(p, bu)$ts %||% as.numeric(Sys.time())
           src <- "live"
           if (p == "ollama" && nrow(mods_df) == 0) {
@@ -382,7 +391,7 @@ list_models <- function(provider = NULL,
             ts <- .cache_get(p, bu)$ts
             mods_df <- .as_models_df(mods_vec)
           }
-          rows[[length(rows) + 1L]] <- .row_df(p, bu, mods_df, "installed", src, ts)
+          rows[[length(rows) + 1L]] <- .row_df(p, bu, mods_df, "installed", src, ts, status = live$status)
         } else {
           rows[[length(rows) + 1L]] <- .row_df(p, bu, .as_models_df(ent$models), "installed", "cache", ent$ts)
         }
