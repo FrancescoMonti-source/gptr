@@ -300,6 +300,13 @@ test_that("openai ok -> df parsed and status ok", {
   expect_setequal(o$df$id, c("gpt-4o", "gpt-4.1-mini"))
 })
 
+test_that("openai empty model list -> empty_cache", {
+  payload <- list(data = list())
+  mock_http_openai(status = 200L, json = payload)
+  out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
+  expect_identical(nrow(out), 0L)
+})
+
 test_that("openai fallback semantics via .list_models_live", {
   f <- getFromNamespace(".list_models_live", "gptr")
   live <- function(key) f("openai", "https://api.openai.com", key)

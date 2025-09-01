@@ -393,11 +393,15 @@ list_models <- function(provider = NULL,
       if (isTRUE(refresh)) {
         live <- .list_models_live("openai", bu, openai_api_key)
         ts <- as.numeric(Sys.time())
-        # Cache ONLY if ok and non-empty
-        if (identical(live$status, "ok") && nrow(live$df) > 0) {
-          .cache_put("openai", bu, live$df)
+        if (identical(live$status, "ok") && nrow(live$df) == 0) {
+          live$status <- "empty_cache"
+          Sys.sleep(0.25)
+        } else {
+          if (identical(live$status, "ok") && nrow(live$df) > 0) {
+            .cache_put("openai", bu, live$df)
+          }
+          rows[[length(rows) + 1L]] <- .row_df("openai", bu, live$df, "catalog", "live", ts, status = live$status)
         }
-        rows[[length(rows) + 1L]] <- .row_df("openai", bu, live$df, "catalog", "live", ts, status = live$status)
       } else {
         ent <- .cache_get("openai", bu)
         if (is.null(ent)) {
@@ -406,6 +410,10 @@ list_models <- function(provider = NULL,
             .cache_put("openai", bu, live$df)
             ts <- .cache_get("openai", bu)$ts
             rows[[length(rows) + 1L]] <- .row_df("openai", bu, live$df, "catalog", "live", ts, status = live$status)
+          } else if (identical(live$status, "ok") && nrow(live$df) == 0) {
+            live$status <- "empty_cache"
+            ts <- as.numeric(Sys.time())
+            Sys.sleep(0.25)
           } else {
             ts <- as.numeric(Sys.time())
             rows[[length(rows) + 1L]] <- .row_df("openai", bu, live$df, "catalog", "live", ts, status = live$status)
@@ -421,9 +429,15 @@ list_models <- function(provider = NULL,
 
   if (!length(rows)) {
     return(data.frame(
-      provider = character(), base_url = character(), model_id = character(),
-      created = numeric(), availability = character(), cached_when = numeric(),
-      source = character(), status = character(), stringsAsFactors = FALSE
+      provider = character(),
+      base_url = character(),
+      model_id = character(),
+      created = numeric(),
+      availability = character(),
+      cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
+      source = character(),
+      status = character(),
+      stringsAsFactors = FALSE
     ))
   }
 
