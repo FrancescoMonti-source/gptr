@@ -4,7 +4,7 @@
 \alias{delete_models_cache}
 \title{Clear cache entries so that the next run will re-probe the server.}
 \usage{
-delete_models_cache()
+delete_models_cache(provider = NULL, base_url = NULL)
 }
 \arguments{
 \item{provider}{Optional provider name to invalidate.}

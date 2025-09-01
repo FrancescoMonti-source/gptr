@@ -338,7 +338,7 @@
 #' @export
 list_models <- function(provider = NULL,
                         base_url = NULL,
-                        refresh = FALSE,
+                        refresh = TRUE,
                         openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
   # ---- scope selection ---
   providers <- if (is.null(provider)) c("lmstudio", "ollama", "localai", "openai") else provider
