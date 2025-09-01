@@ -483,7 +483,13 @@ refresh_models_cache <- function(provider = NULL,
         if (identical(p, "openai")) {
             bu   <- cand$base_url
             live <- .list_models_live("openai", bu, openai_api_key)
-            .cache_put("openai", bu, live$df)
+            if (identical(live$status, "unreachable")) {
+                Sys.sleep(0.2)
+                live <- .list_models_live("openai", bu, openai_api_key)
+            }
+            if (!identical(live$status, "unreachable")) {
+                .cache_put("openai", bu, live$df)
+            }
             out[[length(out) + 1L]] <- data.frame(
                 provider     = "openai",
                 base_url     = .api_root(bu),
@@ -495,7 +501,13 @@ refresh_models_cache <- function(provider = NULL,
         } else {
             bu    <- base_url %||% cand$base_url
             live  <- .list_models_live(p, bu)
-            .cache_put(p, bu, live$df)
+            if (identical(live$status, "unreachable")) {
+                Sys.sleep(0.2)
+                live <- .list_models_live(p, bu)
+            }
+            if (!identical(live$status, "unreachable")) {
+                .cache_put(p, bu, live$df)
+            }
             status <- if (identical(live$status, "ok") && nrow(live$df) == 0) {
                 "unreachable_or_empty"
             } else {
