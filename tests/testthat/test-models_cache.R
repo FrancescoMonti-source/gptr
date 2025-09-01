@@ -254,7 +254,7 @@ test_that("refresh writes cache and surfaces status", {
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     refresh_models_cache = function(provider, base_url) list(status = "refreshed"),
-    .list_models_cached = function(...) character(0),
+    .list_models_cached = function(...) data.frame(id = character(0), created = numeric(0)),
     .api_root = function(x) x
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
@@ -263,28 +263,32 @@ test_that("refresh writes cache and surfaces status", {
 
 
 test_that("openai non-JSON -> non_json", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   mock_http_openai(status = 200L, json_throws = TRUE)
   o <- live("sk-test")
   expect_equal(o$status, "non_json")
 })
 
 test_that("openai network error -> unreachable", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   mock_http_openai(perform_throws = TRUE)
   o <- live("sk-test")
   expect_equal(o$status, "unreachable")
 })
 
 test_that("openai 5xx -> http_503", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   mock_http_openai(status = 503L)
   o <- live("sk-test")
   expect_equal(o$status, "http_503")
 })
 
 test_that("openai ok -> df parsed and status ok", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
@@ -296,8 +300,9 @@ test_that("openai ok -> df parsed and status ok", {
   expect_setequal(o$df$id, c("gpt-4o", "gpt-4.1-mini"))
 })
 
-test_that("openai fallback semantics via .list_openai_live", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+test_that("openai fallback semantics via .list_models_live", {
+  f <- getFromNamespace(".list_models_live", "gptr")
+  live <- function(key) f("openai", "https://api.openai.com", key)
 
   mock_http_openai(status = 200L, json_throws = TRUE)
   o1 <- live("sk")
