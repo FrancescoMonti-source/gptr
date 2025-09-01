@@ -201,10 +201,19 @@ gpt <- function(prompt,
     # ---------------- provider == "local" ----------------
     if (provider == "local") {
         stopifnot(!is.null(base_root), nzchar(base_root))
-        if (is.null(.cache_get(backend, base_root))) {
-            invisible(try(list_models(provider = backend, base_url = base_root, refresh = FALSE), silent = TRUE))
+
+        if (!is.null(backend) && nzchar(backend)) {
+            if (is.null(.cache_get(backend, base_root))) {
+                invisible(try(list_models(provider = backend, base_url = base_root, refresh = FALSE),
+                              silent = TRUE))
+            }
+            ent <- .cache_get(backend, base_root)
+        } else {
+            invisible(try(list_models(provider = backend, base_url = base_root, refresh = FALSE),
+                          silent = TRUE))
+            ent <- NULL
         }
-        ent <- .cache_get(backend, base_root)
+
         ids <- if (!is.null(ent)) unique(na.omit(as.character(ent$models))) else character(0)
 
         requested_model <- model %||% getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
