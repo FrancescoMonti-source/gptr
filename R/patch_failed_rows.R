@@ -117,7 +117,7 @@ patch_failed_rows <- function(data,
         ...
       ),
       error = function(e) {
-        tibble::as_tibble(row_df) |>
+        tibble::as_tibble(row_df) %>%
           dplyr::mutate(.error = conditionMessage(e), .invalid_rows = 1L)
       }
     )

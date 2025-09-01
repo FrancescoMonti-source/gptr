@@ -63,7 +63,7 @@
     return(character(0))
   }
   url <- .models_endpoint(base_url)
-  resp <- try(httr2::request(url) |> httr2::req_timeout(timeout) |> httr2::req_perform(),
+  resp <- try(httr2::request(url) %>% httr2::req_timeout(timeout) %>% httr2::req_perform(),
     silent = TRUE
   )
   if (inherits(resp, "try-error")) {
@@ -107,9 +107,9 @@
   }
   url <- "https://api.openai.com/v1/models"
   resp <- try(
-    .http_request(url) |>
-      .http_req_headers(Authorization = paste("Bearer", openai_api_key)) |>
-      .http_req_timeout(timeout) |>
+    .http_request(url) %>%
+      .http_req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
+      .http_req_timeout(timeout) %>%
       .http_req_retry(
         max_tries = 3,
         backoff = function(i) 0.2 * i,
@@ -120,7 +120,7 @@
           }
           sc %in% c(408, 429, 500, 502, 503, 504)
         }
-      ) |>
+      ) %>%
       .http_req_perform(),
     silent = TRUE
   )
@@ -172,9 +172,9 @@
   url <- paste0(ifelse(nzchar(proto), proto, "http://"), host, "/api/tags")
 
   resp <- try(
-    httr2::request(url) |>
-      httr2::req_timeout(timeout) |>
-      httr2::req_retry(max_tries = 3, backoff = function(i) 0.2 * i) |>
+    httr2::request(url) %>%
+      httr2::req_timeout(timeout) %>%
+      httr2::req_retry(max_tries = 3, backoff = function(i) 0.2 * i) %>%
       httr2::req_perform(),
     silent = TRUE
   )

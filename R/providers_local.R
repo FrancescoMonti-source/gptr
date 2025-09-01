@@ -58,7 +58,7 @@
 #   test_ok <- function(url) {
 #     tryCatch(
 #       {
-#         resp <- httr2::req_perform(httr2::request(url) |> httr2::req_timeout(timeout))
+#         resp <- httr2::req_perform(httr2::request(url) %>% httr2::req_timeout(timeout))
 #         httr2::resp_status(resp) < 400
 #       },
 #       error = function(e) FALSE
@@ -139,7 +139,7 @@
 #     return(character(0))
 #   }
 #   resp <- tryCatch(
-#     httr2::req_perform(httr2::request(models_url) |> httr2::req_timeout(timeout)),
+#     httr2::req_perform(httr2::request(models_url) %>% httr2::req_timeout(timeout)),
 #     error = function(e) NULL
 #   )
 #   if (is.null(resp) || httr2::resp_status(resp) >= 400) {
@@ -235,18 +235,18 @@ request_local <- function(payload,
   root <- sub("/chat/completions/?$", "", base_url)
   root <- sub("/v1/?$", "", root)
 
-  req <- httr2::request(root) |>
-    httr2::req_url_path_append("v1", "chat", "completions") |>
+  req <- httr2::request(root) %>%
+    httr2::req_url_path_append("v1", "chat", "completions") %>%
     httr2::req_headers(
       "Content-Type" = "application/json",
       "Accept" = "application/json"
-    ) |>
-    httr2::req_user_agent(user_agent) |>
-    httr2::req_timeout(timeout_sec) |>
+    ) %>%
+    httr2::req_user_agent(user_agent) %>%
+    httr2::req_timeout(timeout_sec) %>%
     httr2::req_retry(
       max_tries = max_tries,
       backoff = function(attempt) 0.2 * (2^(attempt - 1))
-    ) |>
+    ) %>%
     httr2::req_error(is_error = function(resp) FALSE) # patched
 
   # Payload: list -> JSON; character -> raw JSON

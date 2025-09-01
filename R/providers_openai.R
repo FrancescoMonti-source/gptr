@@ -218,11 +218,11 @@ request_openai <- function(payload,
 
     ua <- sprintf("gptr/%s (+openai)", tryCatch(as.character(utils::packageVersion("gptr")), error = function(e) "0.0.0"))
 
-    req <- httr2::request(base_url) |>
-        httr2::req_user_agent(ua) |>
-        httr2::req_timeout(seconds = timeout) |>
-        httr2::req_headers(Authorization = paste("Bearer", api_key)) |>
-        httr2::req_body_json(payload, auto_unbox = TRUE) |>
+    req <- httr2::request(base_url) %>%
+        httr2::req_user_agent(ua) %>%
+        httr2::req_timeout(seconds = timeout) %>%
+        httr2::req_headers(Authorization = paste("Bearer", api_key)) %>%
+        httr2::req_body_json(payload, auto_unbox = TRUE) %>%
         httr2::req_retry(
             max_tries = 4,
             backoff = function(attempt) runif(1, 0.3, 1.2),

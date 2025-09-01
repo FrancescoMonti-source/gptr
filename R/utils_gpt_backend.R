@@ -148,8 +148,8 @@
 #'   vmsg <- isTRUE(getOption("gptr.verbose_preflight", FALSE))
 #'   ok <- tryCatch(
 #'     {
-#'       httr2::request(paste0(root, "/models")) |>
-#'         httr2::req_timeout(1) |>
+#'       httr2::request(paste0(root, "/models")) %>%
+#'         httr2::req_timeout(1) %>%
 #'         httr2::req_perform()
 #'       TRUE
 #'     },
