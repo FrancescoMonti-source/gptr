@@ -365,19 +365,7 @@ list_models <- function(provider = NULL,
 
       if (isTRUE(refresh)) {
         refreshed <- refresh_models_cache(p, bu)
-        live <- .list_models_cached(p, bu)
-        mods_df <- live$df
-        ts <- .cache_get(p, bu)$ts %||% as.numeric(Sys.time())
-        src <- "live"
-        if (p == "ollama" && nrow(mods_df) == 0) {
-          mods_vec <- .ollama_tags_live(bu)
-          .cache_put(p, bu, mods_vec)
-          ts <- .cache_get(p, bu)$ts
-          mods_df <- .as_models_df(mods_vec)
-        }
-        rows[[length(rows) + 1L]] <- .row_df(p, bu, mods_df, "installed", src, ts,
-          status = tryCatch(refreshed$status, error = function(e) NA_character_)
-        )
+        rows[[length(rows) + 1L]] <- refreshed
       } else {
         ent <- .cache_get(p, bu)
         if (is.null(ent)) {
@@ -397,21 +385,11 @@ list_models <- function(provider = NULL,
         }
       }
     } else if (p == "openai") {
-      bu <- "https://api.openai.com"
-
       if (isTRUE(refresh)) {
-        live <- .list_models_live("openai", bu, openai_api_key)
-        ts <- as.numeric(Sys.time())
-        if (identical(live$status, "ok") && nrow(live$df) == 0) {
-          live$status <- "empty_cache"
-          Sys.sleep(0.25)
-        } else {
-          if (identical(live$status, "ok") && nrow(live$df) > 0) {
-            .cache_put("openai", bu, live$df)
-          }
-          rows[[length(rows) + 1L]] <- .row_df("openai", bu, live$df, "catalog", "live", ts, status = live$status)
-        }
+        refreshed <- refresh_models_cache("openai", openai_api_key = openai_api_key)
+        rows[[length(rows) + 1L]] <- refreshed
       } else {
+        bu <- "https://api.openai.com"
         ent <- .cache_get("openai", bu)
         if (is.null(ent)) {
           live <- .list_models_live("openai", bu, openai_api_key)
@@ -467,14 +445,14 @@ list_models <- function(provider = NULL,
   out[ord, , drop = FALSE]
 }
 
-#' Force a live probe of /v1/models (locals) or the OpenAI catalog and update the cache immediately.
-#' Useful after adding/pulling a new model in LM Studio/Ollama or refreshing the OpenAI model list.
-#' Returns a data.frame summarizing provider, base_url, count of models, refreshed_at, and status.
-#' @param provider NULL to refresh all known providers, or a character vector containing any of "lmstudio", "ollama", "localai", "openai".
-#' @param base_url Optional base URL for local backends. Ignored for OpenAI.
-#' @param openai_api_key Optional OpenAI API key. Defaults to `Sys.getenv("OPENAI_API_KEY", "")`.
-#' @return data.frame: provider, base_url, models_count, refreshed_at, status
-#' @export
+  #' Force a live probe of /v1/models (locals) or the OpenAI catalog and update the cache immediately.
+  #' Useful after adding/pulling a new model in LM Studio/Ollama or refreshing the OpenAI model list.
+  #' Returns the same columns as `list_models()` populated with live results.
+  #' @param provider NULL to refresh all known providers, or a character vector containing any of "lmstudio", "ollama", "localai", "openai".
+  #' @param base_url Optional base URL for local backends. Ignored for OpenAI.
+  #' @param openai_api_key Optional OpenAI API key. Defaults to `Sys.getenv("OPENAI_API_KEY", "")`.
+  #' @return data.frame with columns: provider, base_url, model_id, created, availability, cached_at, source, status
+  #' @export
 refresh_models_cache <- function(provider = NULL,
                                  base_url = NULL,
                                  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
@@ -482,78 +460,73 @@ refresh_models_cache <- function(provider = NULL,
     if (is.null(provider) || "openai" %in% provider) {
         cands$openai <- list(provider = "openai", base_url = "https://api.openai.com")
     }
-    keys  <- if (is.null(provider)) names(cands) else provider
-    out   <- list()
+    keys <- if (is.null(provider)) names(cands) else provider
+    rows <- list()
 
     for (p in keys) {
         cand <- cands[[p]]
         if (is.null(cand)) next
 
         if (identical(p, "openai")) {
-            bu   <- cand$base_url
+            bu <- cand$base_url
             live <- .list_models_live("openai", bu, openai_api_key)
             if (identical(live$status, "unreachable")) {
                 Sys.sleep(0.2)
                 live <- .list_models_live("openai", bu, openai_api_key)
             }
-            if (!identical(live$status, "unreachable")) {
+            if (identical(live$status, "ok") && nrow(live$df) > 0) {
                 .cache_put("openai", bu, live$df)
+                ts <- .cache_get("openai", bu)$ts
+            } else {
+                ts <- as.numeric(Sys.time())
             }
-            out[[length(out) + 1L]] <- data.frame(
-                provider     = "openai",
-                base_url     = .api_root(bu),
-                models_count = nrow(live$df),
-                refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
-                status       = live$status,
-                stringsAsFactors = FALSE
-            )
+            rows[[length(rows) + 1L]] <- .row_df("openai", bu, live$df, "catalog", "live", ts, status = live$status)
         } else {
-            bu    <- base_url %||% cand$base_url
-            live  <- .list_models_live(p, bu)
+            bu <- base_url %||% cand$base_url
+            live <- .list_models_live(p, bu)
             if (identical(live$status, "unreachable")) {
                 Sys.sleep(0.2)
                 live <- .list_models_live(p, bu)
             }
-            if (!identical(live$status, "unreachable")) {
-                .cache_put(p, bu, live$df)
+            mods_df <- live$df
+            if (identical(live$status, "ok")) {
+                .cache_put(p, bu, mods_df)
+                ts <- .cache_get(p, bu)$ts
+                if (p == "ollama" && nrow(mods_df) == 0) {
+                    mods_vec <- .ollama_tags_live(bu)
+                    .cache_put(p, bu, mods_vec)
+                    ts <- .cache_get(p, bu)$ts
+                    mods_df <- .as_models_df(mods_vec)
+                }
+            } else {
+                ts <- as.numeric(Sys.time())
             }
             status <- if (identical(live$status, "ok") && nrow(live$df) == 0) {
                 "unreachable_or_empty"
             } else {
                 live$status
             }
-
-            out[[length(out) + 1L]] <- data.frame(
-                provider     = p,
-                base_url     = .api_root(bu),
-                models_count = nrow(live$df),
-                # keep it POSIXct from the start
-                refreshed_at = as.POSIXct(Sys.time(), tz = "Europe/Paris"),
-                status       = status,
-                stringsAsFactors = FALSE
-            )
+            rows[[length(rows) + 1L]] <- .row_df(p, bu, mods_df, "installed", "live", ts, status = status)
         }
     }
 
-    if (!length(out)) {
+    if (!length(rows)) {
         return(data.frame(
-            provider     = character(),
-            base_url     = character(),
-            models_count = integer(),
-            # zero-length POSIXct, not numeric
-            refreshed_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
-            status       = character(),
+            provider = character(),
+            base_url = character(),
+            model_id = character(),
+            created = numeric(),
+            availability = character(),
+            cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
+            source = character(),
+            status = character(),
             stringsAsFactors = FALSE
         ))
     }
 
-    out <- do.call(rbind, out)
-
-    # safety: if anything snuck in as numeric, reclass it here
-    if (!inherits(out$refreshed_at, "POSIXct")) {
-        out$refreshed_at <- as.POSIXct(out$refreshed_at, origin = "1970-01-01", tz = "Europe/Paris")
-    }
-
+    out <- do.call(rbind, rows)
+    out$created <- suppressWarnings(as.numeric(out$created))
+    out$created <- as.POSIXct(out$created, origin = "1970-01-01", tz = "Europe/Paris")
     out
 }
 
