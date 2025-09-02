@@ -184,6 +184,7 @@ test_that("explicit local base_url is honored", {
                        provider = "local",
                        base_url = "http://192.168.1.50:1234",
                        model = "mistralai/mistral-7b-instruct-v0.3",
+                       strict_model = TRUE,
                        print_raw = FALSE)
             expect_identical(called, "local@http://192.168.1.50:1234")
         }
@@ -194,9 +195,9 @@ test_that("strict_model errors when model not installed (local)", {
     with_mocked_bindings(
         list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
             data.frame(
-                provider  = "lmstudio",
-                base_url  = "http://127.0.0.1:1234",
-                model_id  = "mistralai/mistral-7b-instruct-v0.3",
+                provider  = "local",
+                base_url  = base_url %||% "http://localhost",
+                model_id  = "mistral",
                 stringsAsFactors = FALSE
             )
         },
@@ -211,6 +212,32 @@ test_that("strict_model errors when model not installed (local)", {
                     strict_model = TRUE,
                     print_raw = FALSE),
                 "Model 'llama3:latest' not found"
+            )
+        }
+    )
+})
+
+test_that("strict_model ignored when model listing unavailable", {
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
+            data.frame(
+                provider  = character(),
+                base_url  = character(),
+                model_id  = character(),
+                stringsAsFactors = FALSE
+            )
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            fake_resp(model = payload$model %||% "mistral")
+        },
+        {
+            expect_error(
+                gpt("hi",
+                    provider = "local",
+                    model = "llama3:latest",
+                    strict_model = TRUE,
+                    print_raw = FALSE),
+                NA
             )
         }
     )
