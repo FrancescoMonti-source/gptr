@@ -209,16 +209,21 @@ gpt <- function(prompt,
             }
             ent <- .cache_get(backend, base_root)
         } else {
-            invisible(try(list_models(provider = backend, base_url = base_root, refresh = FALSE),
-                          silent = TRUE))
-            ent <- NULL
+            ent <- tryCatch(
+                list_models(provider = backend, base_url = base_root, refresh = FALSE),
+                error = function(e) NULL
+            )
         }
 
-        ids <- if (!is.null(ent)) unique(na.omit(as.character(ent$models))) else character(0)
+        ids <- if (!is.null(ent)) {
+            if (is.data.frame(ent)) unique(na.omit(as.character(ent$model_id)))
+            else unique(na.omit(as.character(ent$models)))
+        } else character(0)
 
         requested_model <- model %||% getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
 
-        if (nzchar(requested_model) && length(ids) && !tolower(requested_model) %in% tolower(ids)) {
+        if (nzchar(requested_model) && length(ids) &&
+            !tolower(requested_model) %in% tolower(ids)) {
             msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
             if (isTRUE(strict_model)) stop(msg, call. = FALSE) else warning(msg, call. = FALSE)
         }
