@@ -509,7 +509,7 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
         for (k in keys) {
             ent <- .gptr_cache$get(k, missing = NULL)
             if (!is.null(ent) && identical(ent$provider, provider)) {
-                .gptr_cache$remove(k)
+                .cache_del(ent$provider, ent$base_url)
             }
         }
         return(invisible(TRUE))
@@ -521,14 +521,14 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
         for (k in keys) {
             ent <- .gptr_cache$get(k, missing = NULL)
             if (!is.null(ent) && identical(ent$base_url, root)) {
-                .gptr_cache$remove(k)
+                .cache_del(ent$provider, ent$base_url)
             }
         }
         return(invisible(TRUE))
     }
 
     # both provider and base_url
-    .gptr_cache$remove(.cache_key(provider, base_url))
+    .cache_del(provider, base_url)
     invisible(TRUE)
 }
 
