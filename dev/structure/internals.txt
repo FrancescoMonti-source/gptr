@@ -32,14 +32,12 @@ $.gpt_chat_callable
 .list_local_backends
 .list_models_cached
 .list_models_live
-.models_cache_snapshot
 .models_endpoint
 .normalize_token
 .ollama_tags_live
 .onAttach
 .onLoad
 .packageName
-.parse_cache_key
 .parse_key_spec
 .resolve_openai_defaults
 .row_df
@@ -52,3 +50,4 @@ openai_parse_text
 request_openai
 row_to_tibble
 trim_text
+ttl
