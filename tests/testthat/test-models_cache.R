@@ -576,3 +576,11 @@ test_that("list_models - second call uses cache when available", {
 
 
 
+
+test_that(".fetch_models_cached_* helpers are present", {
+  f_local <- getFromNamespace(".fetch_models_cached_local", "gptr")
+  f_openai <- getFromNamespace(".fetch_models_cached_openai", "gptr")
+  expect_type(f_local, "closure")
+  expect_type(f_openai, "closure")
+})
+
