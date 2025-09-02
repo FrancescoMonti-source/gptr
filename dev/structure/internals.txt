@@ -31,7 +31,7 @@ $.gpt_chat_callable
 .json_last_resort
 .list_local_backends
 .list_models_cached
-.list_models_live
+.fetch_models_live
 .models_endpoint
 .normalize_token
 .ollama_tags_live
