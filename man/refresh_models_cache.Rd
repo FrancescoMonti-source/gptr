@@ -4,7 +4,7 @@
 \alias{refresh_models_cache}
 \title{Force a live probe of /v1/models (locals) or the OpenAI catalog and update the cache immediately.
 Useful after adding/pulling a new model in LM Studio/Ollama or refreshing the OpenAI model list.
-Returns a data.frame summarizing provider, base_url, count of models, refreshed_at, and status.}
+Returns the same columns as \code{list_models()} populated with live results.}
 \usage{
 refresh_models_cache(
   provider = NULL,
@@ -20,10 +20,10 @@ refresh_models_cache(
 \item{openai_api_key}{Optional OpenAI API key. Defaults to \code{Sys.getenv("OPENAI_API_KEY", "")}.}
 }
 \value{
-data.frame: provider, base_url, models_count, refreshed_at, status
+data.frame with columns: provider, base_url, model_id, created, availability, cached_at, source, status
 }
 \description{
 Force a live probe of /v1/models (locals) or the OpenAI catalog and update the cache immediately.
 Useful after adding/pulling a new model in LM Studio/Ollama or refreshing the OpenAI model list.
-Returns a data.frame summarizing provider, base_url, count of models, refreshed_at, and status.
+Returns the same columns as \code{list_models()} populated with live results.
 }
