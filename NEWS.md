@@ -5,7 +5,7 @@
 * `list_models()` now defaults to `refresh = FALSE`; use new `refresh_models()` (replacing `refresh_models_cache()`) to force a live probe.
 
 # gptr 0.4.3
-Removed legacy helpers: .resolve_base_url, .resolve_provider_backend, .detect_local_backends, .probe_models, .local_candidates, list_local_backends, .ensure_backend_up.
+Removed legacy backend helpers and detection functions.
 
 gpt():
 
@@ -44,7 +44,7 @@ Docs/tests: update examples and tests to use list_models() instead of removed he
 
 # gptr 0.2.1
 
-* Unified backend resolution. New internal .resolve_provider_backend() centralizes all “auto” logic (provider/backend/base_url). gpt() now calls this, so callers don’t need to guess.
+* Unified backend resolution centralizes all “auto” logic (provider/backend/base_url). gpt() now handles this centrally, so callers don’t need to guess.
 * Shorthand providers. provider = "lmstudio"|"ollama"|"localai" now normalize to provider="local" + backend=... consistently.
 * Predictable auto. provider="auto" chooses local when available; OpenAI when not (or when the model clearly targets OpenAI and no local is preferred).
 * Explicit base URLs. For OpenAI, base_url must be the full endpoint (.../v1/chat/completions). Documented and tested.
