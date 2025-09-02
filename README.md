@@ -235,7 +235,7 @@ gpt("ping", provider = "lmstudio", model = "mistralai/mistral-7b-instruct-v0.3")
 
 ## 📄 License
 
-MIT License — see [LICENSE.md](LICENSE.md)
+MIT License — see [LICENSE.txt](LICENSE.txt)
 
 ------------------------------------------------------------------------
 
