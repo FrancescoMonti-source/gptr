@@ -327,7 +327,9 @@
             return(live)
         }
     }
-    .cache_put(provider, base_url, live$df)
+    if (identical(live$status, "ok")) {
+        .cache_put(provider, base_url, live$df)
+    }
     live
 }
 #' @keywords internal
