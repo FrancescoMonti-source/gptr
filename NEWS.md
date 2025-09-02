@@ -1,3 +1,8 @@
+# gptr (development version)
+
+* Renamed internal helpers for clarity: `.collect_local_models` → `.fetch_local_models_cached` and `.collect_openai_models` → `.fetch_openai_models_cached`.
+* `.list_models_live` and provider-specific variants are now `.fetch_models_live`, `.fetch_models_live_openai`, and `.fetch_models_live_local` for clearer intent.
+
 # gptr 0.4.3
 Removed legacy helpers: .resolve_base_url, .resolve_provider_backend, .detect_local_backends, .probe_models, .local_candidates, list_local_backends, .ensure_backend_up.
 
