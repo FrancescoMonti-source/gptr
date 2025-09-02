@@ -2,6 +2,7 @@
 
 * Renamed internal helpers for clarity: `.collect_local_models` → `.fetch_local_models_cached` and `.collect_openai_models` → `.fetch_openai_models_cached`.
 * `.list_models_live` and provider-specific variants are now `.fetch_models_live`, `.fetch_models_live_openai`, and `.fetch_models_live_local` for clearer intent.
+* `list_models()` now defaults to `refresh = FALSE`; use new `refresh_models()` (replacing `refresh_models_cache()`) to force a live probe.
 
 # gptr 0.4.3
 Removed legacy helpers: .resolve_base_url, .resolve_provider_backend, .detect_local_backends, .probe_models, .local_candidates, list_local_backends, .ensure_backend_up.
@@ -12,7 +13,7 @@ Simplified provider/backend normalization.
 
 Local backends now always use root host URLs (http://127.0.0.1:1234) rather than full paths.
 
-Discovery and preflight handled through list_models() / refresh_models_cache().
+Discovery and preflight handled through list_models() / refresh_models().
 
 Local calls unified on request_local(), which appends /v1/chat/completions.
 

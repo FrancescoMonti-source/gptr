@@ -9,6 +9,6 @@ json_keys_align
 list_models
 openai_make_messages
 patch_failed_rows
-refresh_models_cache
+refresh_models
 request_local
 show_gptr_options

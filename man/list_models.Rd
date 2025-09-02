@@ -7,7 +7,7 @@
 list_models(
   provider = NULL,
   base_url = NULL,
-  refresh = TRUE,
+  refresh = FALSE,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", "")
 )
 }
@@ -19,7 +19,7 @@ list_models(
 defaults from options are used for locals, and https://api.openai.com for OpenAI.}
 
 \item{refresh}{Logical. If TRUE, forces a live probe and updates cache
-(for locals) or bypasses cache (for OpenAI).}
+(for locals) or bypasses cache (for OpenAI). Defaults to \code{FALSE}.}
 
 \item{openai_api_key}{Optional OpenAI API key. If missing, falls back to
 Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
@@ -43,3 +43,4 @@ to force a live probe of \verb{/v1/models} (Ollama falls back to \verb{/api/tags
 \item Stable columns: provider, base_url, model_id, availability, cached_when, source.
 }
 }
+\seealso{\code{\link{refresh_models}}}

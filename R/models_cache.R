@@ -390,7 +390,7 @@
 #' @param base_url Optional root URL to target a specific server. If NULL,
 #'   defaults from options are used for locals, and https://api.openai.com for OpenAI.
 #' @param refresh Logical. If TRUE, forces a live probe and updates cache
-#'   (for locals) or bypasses cache (for OpenAI).
+#'   (for locals) or bypasses cache (for OpenAI). Defaults to `FALSE`.
 #' @param openai_api_key Optional OpenAI API key. If missing, falls back to
 #'   Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
 #'   an auth_missing status (no stop).
@@ -399,7 +399,7 @@
 #' @export
 list_models <- function(provider = NULL,
                         base_url = NULL,
-                        refresh = TRUE,
+                        refresh = FALSE,
                         openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
   # ---- scope selection ---
   providers <- if (is.null(provider)) c("lmstudio", "ollama", "localai", "openai") else provider
@@ -413,20 +413,12 @@ list_models <- function(provider = NULL,
         localai  = getOption("gptr.localai_base_url", "http://127.0.0.1:8080")
       )
       bu <- .api_root(base_url %||% bu_default)
-
-      if (isTRUE(refresh)) {
-        refreshed <- refresh_models_cache(p, bu)
-        rows[[length(rows) + 1L]] <- refreshed
-      } else {
-        rows[[length(rows) + 1L]] <- .fetch_local_models_cached(p, bu)
-      }
+      if (isTRUE(refresh)) .cache_del(p, bu)
+      rows[[length(rows) + 1L]] <- .fetch_local_models_cached(p, bu)
     } else if (p == "openai") {
-      if (isTRUE(refresh)) {
-        refreshed <- refresh_models_cache("openai", openai_api_key = openai_api_key)
-        rows[[length(rows) + 1L]] <- refreshed
-      } else {
-        rows[[length(rows) + 1L]] <- .fetch_openai_models_cached(openai_api_key)
-      }
+      bu <- .api_root(base_url %||% "https://api.openai.com")
+      if (isTRUE(refresh)) .cache_del("openai", bu)
+      rows[[length(rows) + 1L]] <- .fetch_openai_models_cached(openai_api_key, bu)
     }
   }
 
@@ -462,93 +454,21 @@ list_models <- function(provider = NULL,
   out[ord, , drop = FALSE]
 }
 
-  #' Force a live probe of /v1/models (locals) or the OpenAI catalog and update the cache immediately.
-  #' Useful after adding/pulling a new model in LM Studio/Ollama or refreshing the OpenAI model list.
-  #' Returns the same columns as `list_models()` populated with live results.
-  #' @param provider NULL to refresh all known providers, or a character vector containing any of "lmstudio", "ollama", "localai", "openai".
-  #' @param base_url Optional base URL for local backends. Ignored for OpenAI.
-  #' @param openai_api_key Optional OpenAI API key. Defaults to `Sys.getenv("OPENAI_API_KEY", "")`.
-  #' @return data.frame with columns: provider, base_url, model_id, created, availability, cached_at, source, status
-  #' @export
-refresh_models_cache <- function(provider = NULL,
-                                 base_url = NULL,
-                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
-    cands <- .list_local_backends()
-    if (is.null(provider) || "openai" %in% provider) {
-        cands$openai <- list(provider = "openai", base_url = "https://api.openai.com")
-    }
-    keys <- if (is.null(provider)) names(cands) else provider
-    rows <- list()
+# Convenience wrapper ------------------------------------------------------
 
-    for (p in keys) {
-        cand <- cands[[p]]
-        if (is.null(cand)) next
-
-        if (identical(p, "openai")) {
-            bu <- cand$base_url
-            live <- .fetch_models_live("openai", bu, openai_api_key)
-            if (identical(live$status, "unreachable")) {
-                Sys.sleep(0.2)
-                live <- .fetch_models_live("openai", bu, openai_api_key)
-            }
-            if (identical(live$status, "ok") && nrow(live$df) > 0) {
-                .cache_put("openai", bu, live$df)
-                ts <- .cache_get("openai", bu)$ts
-            } else {
-                ts <- as.numeric(Sys.time())
-            }
-            rows[[length(rows) + 1L]] <- .row_df("openai", bu, live$df, "catalog", "live", ts, status = live$status)
-        } else {
-            bu <- base_url %||% cand$base_url
-            live <- .fetch_models_live(p, bu)
-            if (identical(live$status, "unreachable")) {
-                Sys.sleep(0.2)
-                live <- .fetch_models_live(p, bu)
-            }
-            mods_df <- live$df
-            if (identical(live$status, "ok")) {
-                .cache_put(p, bu, mods_df)
-                ts <- .cache_get(p, bu)$ts
-                if (p == "ollama" && nrow(mods_df) == 0) {
-                    mods_vec <- .ollama_tags_live(bu)
-                    .cache_put(p, bu, mods_vec)
-                    ts <- .cache_get(p, bu)$ts
-                    mods_df <- .as_models_df(mods_vec)
-                }
-            } else {
-                ts <- as.numeric(Sys.time())
-            }
-            status <- if (identical(live$status, "ok") && nrow(live$df) == 0) {
-                "unreachable_or_empty"
-            } else {
-                live$status
-            }
-            rows[[length(rows) + 1L]] <- .row_df(p, bu, mods_df, "installed", "live", ts, status = status)
-        }
-    }
-
-    if (!length(rows)) {
-        return(data.frame(
-            provider = character(),
-            base_url = character(),
-            model_id = character(),
-            created = numeric(),
-            availability = character(),
-            cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
-            source = character(),
-            status = character(),
-            stringsAsFactors = FALSE
-        ))
-    }
-
-    out <- do.call(rbind, rows)
-    out$created <- suppressWarnings(as.numeric(out$created))
-    out$created <- as.POSIXct(out$created, origin = "1970-01-01", tz = "Europe/Paris")
-    out
+#' Refresh model listings, bypassing cache
+#'
+#' Convenience wrapper around [list_models()] with `refresh = TRUE`.
+#' @inheritParams list_models
+#' @return See [list_models()]
+#' @export
+refresh_models <- function(...) {
+  list_models(refresh = TRUE, ...)
 }
 
+# ---------------------------------------------------------------------------
 
-#' Clear cache entries so that the next run will re-probe the server.
+  #' Clear cache entries so that the next run will re-probe the server.
 #'
 #' With no arguments, clears all cached model listings. You can target a
 #' subset by specifying a `provider`, a `base_url`, or both.

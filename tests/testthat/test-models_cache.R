@@ -253,20 +253,8 @@ test_that("refresh with no models returns empty data", {
   local_mocked_bindings(
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    refresh_models_cache = function(provider, base_url) {
-      data.frame(
-        provider = character(),
-        base_url = character(),
-        model_id = character(),
-        created = numeric(),
-        availability = character(),
-        cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
-        source = character(),
-        status = character(),
-        stringsAsFactors = FALSE
-      )
-    },
-    .list_models_cached = function(...) data.frame(id = character(0), created = numeric(0)),
+    .cache_del = function(...) invisible(TRUE),
+    .fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
     .api_root = function(x) x
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
@@ -337,16 +325,17 @@ test_that("openai fallback semantics via .fetch_models_live", {
 })
 
 
-test_that("refresh_models_cache handles openai provider", {
+test_that("refresh_models handles openai provider", {
   fake_cache <- make_fake_cache()
   payload <- openai_models_payload()
   mock_http_openai(status = 200L, json = payload)
   testthat::local_mocked_bindings(
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .cache_del = function(...) invisible(TRUE),
     .env = asNamespace("gptr")
   )
-  out <- refresh_models_cache(provider = "openai", openai_api_key = "sk-test")
+  out <- refresh_models(provider = "openai", openai_api_key = "sk-test")
   expect_true(all(out$provider == "openai"))
   expect_equal(nrow(out), 2L)
   expect_true(all(out$status == "ok"))
@@ -354,7 +343,7 @@ test_that("refresh_models_cache handles openai provider", {
   expect_true(NROW(cached$models) == 2)
 })
 
-test_that("refresh_models_cache skips cache when unreachable", {
+test_that("refresh_models skips cache when unreachable", {
   fake_cache <- make_fake_cache()
   live_mock <- function(provider, base_url) {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
@@ -363,15 +352,16 @@ test_that("refresh_models_cache skips cache when unreachable", {
     .fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_del = function(...) invisible(TRUE),
     .env = asNamespace("gptr")
   )
-  out <- refresh_models_cache(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
+  out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
   expect_true(all(out$status == "unreachable"))
   expect_true(all(is.na(out$model_id)))
   expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
 })
 
-test_that("refresh_models_cache retries after unreachable and caches", {
+test_that("refresh_models retries after unreachable and caches", {
   fake_cache <- make_fake_cache()
   calls <- 0
   live_mock <- function(provider, base_url) {
@@ -386,9 +376,10 @@ test_that("refresh_models_cache retries after unreachable and caches", {
     .fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_del = function(...) invisible(TRUE),
     .env = asNamespace("gptr")
   )
-  out <- refresh_models_cache(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
+  out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
   expect_equal(nrow(out), 1L)
   expect_equal(out$status, "ok")
   expect_equal(out$model_id, "m1")
