@@ -233,7 +233,7 @@
     provider = provider,
     base_url = .api_root(base_url),
     models   = models,
-    ts       = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "Europe/Paris")
+    ts       = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "UTC")
   )
   if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
     .gptr_cache$set(.cache_key(provider, base_url), entry)
@@ -267,7 +267,7 @@
                 provider   = character(),
                 base_url   = character(),
                 n_models   = integer(),
-                cached_at  = as.POSIXct(character(), tz = "Europe/Paris"),
+                cached_at  = as.POSIXct(character(), tz = "UTC"),
                 stringsAsFactors = FALSE
             ))
         }
@@ -278,9 +278,9 @@
                 base_url  = ent$base_url %||% NA_character_,
                 n_models  = NROW(.as_models_df(ent$models)),
                 cached_at = if (!is.null(ent$ts)) {
-                    as.POSIXct(ent$ts, origin = "1970-01-01", tz = "Europe/Paris")
+                    as.POSIXct(ent$ts, origin = "1970-01-01", tz = "UTC")
                 } else {
-                    as.POSIXct(NA, tz = "Europe/Paris")
+                    as.POSIXct(NA, tz = "UTC")
                 },
                 stringsAsFactors = FALSE
             )
@@ -430,7 +430,7 @@ list_models <- function(provider = NULL,
       model_id = character(),
       created = numeric(),
       availability = character(),
-      cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
+      cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "UTC"),
       source = character(),
       status = character(),
       stringsAsFactors = FALSE
@@ -442,7 +442,7 @@ list_models <- function(provider = NULL,
 
   # Add human-readable timestamp (UTC) where 'created' is present
   out$created <- suppressWarnings(as.numeric(out$created))
-  out$created <- as.POSIXct(out$created, origin = "1970-01-01", tz = "Europe/Paris")
+  out$created <- as.POSIXct(out$created, origin = "1970-01-01", tz = "UTC")
 
   # Stable ordering: locals first, then by recency (where available), then model_id
   ord <- order(
@@ -489,8 +489,8 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
     # provider only
     if (!is.null(provider) && is.null(base_url)) {
         for (k in keys) {
-            parts <- .parse_cache_key(k)
-            if (identical(parts$provider, provider)) {
+            ent <- .gptr_cache$get(k)
+            if (!is.null(ent) && identical(ent$provider, provider)) {
                 .gptr_cache$remove(k)
             }
         }
@@ -501,8 +501,8 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
     if (is.null(provider) && !is.null(base_url)) {
         root <- .api_root(base_url)
         for (k in keys) {
-            parts <- .parse_cache_key(k)
-            if (identical(parts$base_url, root)) {
+            ent <- .gptr_cache$get(k)
+            if (!is.null(ent) && identical(ent$base_url, root)) {
                 .gptr_cache$remove(k)
             }
         }

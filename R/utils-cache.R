@@ -63,7 +63,7 @@
                 model_id = NA_character_,
                 created = NA_real_,
                 availability = availability,
-                cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "Europe/Paris"),
+                cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "UTC"),
                 source = src,
                 status = status,
                 stringsAsFactors = FALSE
@@ -75,7 +75,7 @@
             model_id = character(),
             created = numeric(),
             availability = character(),
-            cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "Europe/Paris"),
+            cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "UTC"),
             source = character(),
             status = character(),
             stringsAsFactors = FALSE
@@ -87,7 +87,7 @@
         model_id = models_df$id,
         created = models_df$created,
         availability = availability,
-        cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "Europe/Paris"),
+        cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "UTC"),
         source = src,
         status = status,
         stringsAsFactors = FALSE
