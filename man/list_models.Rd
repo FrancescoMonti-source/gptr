@@ -43,4 +43,3 @@ to force a live probe of \verb{/v1/models} (Ollama falls back to \verb{/api/tags
 \item Stable columns: provider, base_url, model_id, availability, cached_when, source.
 }
 }
-\seealso{\code{\link{refresh_models}}}

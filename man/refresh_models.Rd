@@ -4,23 +4,11 @@
 \alias{refresh_models}
 \title{Refresh model listings, bypassing cache}
 \usage{
-refresh_models(
-  provider = NULL,
-  base_url = NULL,
-  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")
-)
-}
-\arguments{
-\item{provider}{NULL to refresh all known providers, or a character vector containing any of "lmstudio", "ollama", "localai", "openai".}
-
-\item{base_url}{Optional base URL for local backends. Ignored for OpenAI.}
-
-\item{openai_api_key}{Optional OpenAI API key. Defaults to \code{Sys.getenv("OPENAI_API_KEY", "")}.}
+refresh_models(...)
 }
 \value{
-See \code{\link{list_models}}.
+See \code{\link[=list_models]{list_models()}}
 }
 \description{
-Convenience wrapper around \code{\link{list_models}} with \code{refresh = TRUE}.
+Convenience wrapper around \code{\link[=list_models]{list_models()}} with \code{refresh = TRUE}.
 }
-\seealso{\code{\link{list_models}}}
