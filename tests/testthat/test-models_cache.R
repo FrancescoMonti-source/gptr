@@ -492,9 +492,19 @@ test_that("delete_models_cache removes by provider", {
             list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
   cache$set(key_fun("lmstudio", "http://127.0.0.1:1234"),
             list(provider = "lmstudio", base_url = "http://127.0.0.1:1234", models = list(), ts = 1))
+  calls <- list()
+  testthat::local_mocked_bindings(
+    .cache_del = function(p, u) {
+      calls <<- append(calls, list(c(p, u)))
+      cache$remove(key_fun(p, u))
+      invisible(TRUE)
+    },
+    .env = asNamespace("gptr")
+  )
   inv(provider = "openai")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
   expect_false(is.null(cache$get(key_fun("lmstudio", "http://127.0.0.1:1234"), missing = NULL)))
+  expect_identical(calls, list(c("openai", "https://api.openai.com")))
 })
 
 test_that("delete_models_cache removes by base_url", {
@@ -506,9 +516,19 @@ test_that("delete_models_cache removes by base_url", {
             list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
+  calls <- list()
+  testthat::local_mocked_bindings(
+    .cache_del = function(p, u) {
+      calls <<- append(calls, list(c(p, u)))
+      cache$remove(key_fun(p, u))
+      invisible(TRUE)
+    },
+    .env = asNamespace("gptr")
+  )
   inv(base_url = "https://api.openai.com")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
   expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
+  expect_identical(calls, list(c("openai", "https://api.openai.com")))
 })
 
 test_that("delete_models_cache removes by provider and base_url", {
@@ -520,9 +540,19 @@ test_that("delete_models_cache removes by provider and base_url", {
             list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
+  calls <- list()
+  testthat::local_mocked_bindings(
+    .cache_del = function(p, u) {
+      calls <<- append(calls, list(c(p, u)))
+      cache$remove(key_fun(p, u))
+      invisible(TRUE)
+    },
+    .env = asNamespace("gptr")
+  )
   inv(provider = "openai", base_url = "https://api.openai.com")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
   expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
+  expect_identical(calls, list(c("openai", "https://api.openai.com")))
 })
 
 
