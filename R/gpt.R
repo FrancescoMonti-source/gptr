@@ -218,7 +218,7 @@ gpt <- function(prompt,
 
         requested_model <- model %||% getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
 
-        if (nzchar(requested_model) && length(ids) && !tolower(requested_model) %in% tolower(ids)) {
+        if (nzchar(requested_model) && (!length(ids) || !tolower(requested_model) %in% tolower(ids))) {
             msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
             if (isTRUE(strict_model)) stop(msg, call. = FALSE) else warning(msg, call. = FALSE)
         }

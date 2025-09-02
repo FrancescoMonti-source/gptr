@@ -194,9 +194,9 @@ test_that("strict_model errors when model not installed (local)", {
     with_mocked_bindings(
         list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
             data.frame(
-                provider  = "lmstudio",
-                base_url  = "http://127.0.0.1:1234",
-                model_id  = "mistralai/mistral-7b-instruct-v0.3",
+                provider  = character(),
+                base_url  = character(),
+                model_id  = character(),
                 stringsAsFactors = FALSE
             )
         },
