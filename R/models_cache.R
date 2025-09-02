@@ -354,18 +354,17 @@
   ent <- .cache_get(provider, base_url)
   if (is.null(ent)) {
     live <- .list_models_cached(provider, base_url)
-    mods_df <- live$df
+    mods <- live$df
     ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
     src <- "live"
-    if (provider == "ollama" && nrow(mods_df) == 0) {
-      mods_vec <- .ollama_tags_live(base_url)
-      .cache_put(provider, base_url, mods_vec)
+    if (provider == "ollama" && nrow(mods) == 0) {
+      mods <- .ollama_tags_live(base_url)
+      .cache_put(provider, base_url, mods)
       ts <- .cache_get(provider, base_url)$ts
-      mods_df <- .as_models_df(mods_vec)
     }
-    .row_df(provider, base_url, mods_df, "installed", src, ts, status = live$status)
+    .row_df(provider, base_url, mods, "installed", src, ts, status = live$status)
   } else {
-    .row_df(provider, base_url, .as_models_df(ent$models), "installed", "cache", ent$ts)
+    .row_df(provider, base_url, ent$models, "installed", "cache", ent$ts)
   }
 }
 
