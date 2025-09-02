@@ -311,7 +311,8 @@ test_that("refresh_models skips cache when unreachable", {
     .env = asNamespace("gptr")
   )
   out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
-  expect_true(all(out$status == "unreachable"))
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$status, "unreachable")
   expect_true(all(is.na(out$model_id)))
   expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
 })
@@ -335,11 +336,11 @@ test_that("refresh_models retries after unreachable and caches", {
     .env = asNamespace("gptr")
   )
   out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
-  expect_equal(nrow(out), 1L)
-  expect_equal(out$status, "ok")
-  expect_equal(out$model_id, "m1")
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$status, "ok")
+  expect_identical(out$model_id, "m1")
   cached <- fake_cache$get("lmstudio", "http://127.0.0.1:1234")
-  expect_identical(NROW(cached$models), 1L)
+  expect_identical(cached$models$id, "m1")
 })
 
 test_that(".list_models_cached skips cache when unreachable", {
@@ -355,7 +356,8 @@ test_that(".list_models_cached skips cache when unreachable", {
     .env = asNamespace("gptr")
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
-  expect_equal(out$status, "unreachable")
+  expect_identical(out$status, "unreachable")
+  expect_identical(nrow(out$df), 0L)
   expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
 })
 
@@ -378,9 +380,9 @@ test_that(".list_models_cached retries after unreachable and caches", {
     .env = asNamespace("gptr")
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
-  expect_equal(out$status, "ok")
+  expect_identical(out$status, "ok")
   cached <- fake_cache$get("lmstudio", "http://127.0.0.1:1234")
-  expect_identical(NROW(cached$models), 1L)
+  expect_identical(cached$models$id, "m1")
 })
 
 
@@ -568,7 +570,7 @@ test_that("list_models - second call uses cache when available", {
   oi <- subset(out2, provider == "openai")
   expect_true(nrow(oi) >= 2)
   expect_true(all(oi$source == "cache"))
-  expect_true(all(oi$status %in% c("ok_cache", NA))) # NA if locals; ok_cache for OpenAI
+  expect_true(all(oi$status == "ok_cache"))
 })
 
 
