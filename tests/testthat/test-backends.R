@@ -12,13 +12,18 @@ fake_resp <- function(model = "dummy") {
 test_that("auto + openai model routes to OpenAI", {
     called <- NULL
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, ...) {
+        .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
-                provider  = "openai",
-                base_url  = "https://api.openai.com/v1/chat/completions",
-                model_id  = "gpt-4o-mini",
+                provider = "openai",
+                base_url = "https://api.openai.com",
+                model_id = "gpt-4o-mini",
                 stringsAsFactors = FALSE
             )
+        },
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE),
+                 status = "ok")
         },
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
@@ -39,13 +44,18 @@ test_that("auto + openai model routes to OpenAI", {
 test_that("auto + local model routes to local", {
     called <- NULL
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, ...) {
+        .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
-                provider  = "lmstudio",
-                base_url  = "http://127.0.0.1:1234",
-                model_id  = "mistralai/mistral-7b-instruct-v0.3",
+                provider = "lmstudio",
+                base_url = "http://127.0.0.1:1234",
+                model_id = model,
                 stringsAsFactors = FALSE
             )
+        },
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistralai/mistral-7b-instruct-v0.3",
+                                 stringsAsFactors = FALSE), status = "ok")
         },
         request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, paste0("local@", base_url))
@@ -70,13 +80,17 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
 
     called <- NULL
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, ...) {
+        .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
-                provider  = c("openai", "ollama"),
-                base_url  = c("https://api.openai.com/v1/chat/completions", "http://127.0.0.1:11434"),
+                provider = c("openai", "ollama"),
+                base_url  = c("https://api.openai.com", "http://127.0.0.1:11434"),
                 model_id  = c("o1-mini", "o1-mini"),
                 stringsAsFactors = FALSE
             )
+        },
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = "o1-mini", stringsAsFactors = FALSE), status = "ok")
         },
         request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, paste0("local@", base_url))
@@ -120,9 +134,13 @@ test_that("auto + unknown model falls back to first preferred local", {
 test_that("auto with no local backend falls back to OpenAI", {
     called <- NULL
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, ...) {
+        .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(provider = character(), base_url = character(),
                        model_id = character(), stringsAsFactors = FALSE)
+        },
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
         },
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
@@ -142,13 +160,10 @@ test_that("auto with no local backend falls back to OpenAI", {
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, ...) {
-            data.frame(
-                provider  = "lmstudio",
-                base_url  = "http://127.0.0.1:1234",
-                model_id  = "gpt-4o-mini", # even if someone mirrored the name
-                stringsAsFactors = FALSE
-            )
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE),
+                 status = "ok")
         },
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
@@ -167,14 +182,10 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
 test_that("explicit local base_url is honored", {
     called <- NULL
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
-            # return something so strict_model won't explode
-            data.frame(
-                provider  = "lmstudio",
-                base_url  = base_url %||% "http://127.0.0.1:1234",
-                model_id  = "mistralai/mistral-7b-instruct-v0.3",
-                stringsAsFactors = FALSE
-            )
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistralai/mistral-7b-instruct-v0.3",
+                                 stringsAsFactors = FALSE), status = "ok")
         },
         request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, paste0("local@", base_url))
@@ -194,13 +205,9 @@ test_that("explicit local base_url is honored", {
 
 test_that("strict_model errors when model not installed (local)", {
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
-            data.frame(
-                provider  = "local",
-                base_url  = base_url %||% "http://localhost",
-                model_id  = "mistral",
-                stringsAsFactors = FALSE
-            )
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistral", stringsAsFactors = FALSE), status = "ok")
         },
         request_local = function(payload, base_url, timeout = 30) {
             fake_resp(model = payload$model %||% "mistral")
@@ -220,13 +227,9 @@ test_that("strict_model errors when model not installed (local)", {
 
 test_that("strict_model ignored when model listing unavailable", {
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, provider = NULL, base_url = NULL, ...) {
-            data.frame(
-                provider  = character(),
-                base_url  = character(),
-                model_id  = character(),
-                stringsAsFactors = FALSE
-            )
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
         },
         request_local = function(payload, base_url, timeout = 30) {
             fake_resp(model = payload$model %||% "mistral")
@@ -247,13 +250,17 @@ test_that("strict_model ignored when model listing unavailable", {
 test_that("model match is case-insensitive", {
     called <- NULL
     with_mocked_bindings(
-        list_models = function(refresh = FALSE, ...) {
+        .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
-                provider  = "openai",
-                base_url  = "https://api.openai.com/v1/chat/completions",
-                model_id  = "GPT-4O-MINI",
+                provider = "openai",
+                base_url = "https://api.openai.com",
+                model_id = "GPT-4O-MINI",
                 stringsAsFactors = FALSE
             )
+        },
+        .list_models_cached = function(provider = NULL, base_url = NULL,
+                                       openai_api_key = "", ...) {
+            list(df = data.frame(id = "GPT-4O-MINI", stringsAsFactors = FALSE), status = "ok")
         },
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             called <<- "openai"
