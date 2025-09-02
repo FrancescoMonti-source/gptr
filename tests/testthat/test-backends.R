@@ -97,21 +97,22 @@ test_that("auto + unknown model falls back to first preferred local", {
     old <- options(gptr.local_prefer = c("lmstudio","ollama","localai"))
     on.exit(options(old), add = TRUE)
 
-    called <- NULL
-    with_mocked_bindings(
-        list_models = function(refresh = FALSE, ...) {
-            # empty union forces fallback
-            data.frame(provider = character(), base_url = character(),
-                       model_id = character(), stringsAsFactors = FALSE)
+    delete_models_cache()
+    called <- character()
+    httr2::with_mocked_bindings(
+        req_perform = function(req, ...) {
+            url <- httr2::req_url(req)
+            called <<- c(called, url)
+            structure(list(url = url), class = "fake_resp")
         },
-        request_local = function(payload, base_url, timeout = 30) {
-            called <<- c(called, paste0("local@", base_url))
-            fake_resp(model = payload$model %||% "fallback")
+        resp_status = function(resp) 404L,
+        resp_body_json = function(resp, ...) {
+            list(model = "fallback",
+                 choices = list(list(message = list(content = "ok"))))
         },
         {
             res <- gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE)
-            # default lmstudio root from options
-            expect_identical(called, "local@http://127.0.0.1:1234")
+            expect_true(grepl("^http://127\\.0\\.0\\.1:1234", tail(called, 1)))
         }
     )
 })
