@@ -223,7 +223,7 @@
 # Look up a cached entry in .gptr_cache by provider+base_url.
 # Returns NULL if not cached.
 .cache_get <- function(provider, base_url) {
-  .gptr_cache$get(.cache_key(provider, base_url))
+  .gptr_cache$get(.cache_key(provider, base_url), missing = NULL)
 }
 
 #' Save a cache entry for provider+base_url with a vector of model IDs and timestamp.
@@ -233,7 +233,7 @@
     provider = provider,
     base_url = .api_root(base_url),
     models   = models,
-    ts       = as.POSIXct(as.numeric(Sys.time()), origin = "1970-01-01", tz = "UTC")
+    ts       = as.numeric(Sys.time())
   )
   if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
     .gptr_cache$set(.cache_key(provider, base_url), entry)
@@ -272,7 +272,10 @@
             ))
         }
         rows <- lapply(keys, function(k) {
-            ent <- .gptr_cache$get(k)
+            ent <- .gptr_cache$get(k, missing = NULL)
+            if (is.null(ent)) {
+                return(NULL)
+            }
             data.frame(
                 provider  = ent$provider %||% NA_character_,
                 base_url  = ent$base_url %||% NA_character_,
@@ -285,6 +288,16 @@
                 stringsAsFactors = FALSE
             )
         })
+        rows <- Filter(Negate(is.null), rows)
+        if (!length(rows)) {
+            return(data.frame(
+                provider   = character(),
+                base_url   = character(),
+                n_models   = integer(),
+                cached_at  = as.POSIXct(character(), tz = "UTC"),
+                stringsAsFactors = FALSE
+            ))
+        }
         return(do.call(rbind, rows))
     }
 
@@ -301,13 +314,17 @@
         root <- .api_root(base_url)
         keys <- .gptr_cache$keys()
         hits <- vapply(keys, function(k) {
-            ent <- .gptr_cache$get(k)
-            identical(ent$base_url, root)
+            ent <- .gptr_cache$get(k, missing = NULL)
+            !is.null(ent) && identical(ent$base_url, root)
         }, logical(1))
 
         if (!any(hits)) return(character(0))
         models <- unique(unlist(lapply(keys[hits], function(k) {
-            .as_models_df(.gptr_cache$get(k)$models)$id
+            ent <- .gptr_cache$get(k, missing = NULL)
+            if (is.null(ent)) {
+                return(character(0))
+            }
+            .as_models_df(ent$models)$id
         }), use.names = FALSE))
         return(models %||% character(0))
     }
@@ -491,7 +508,7 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
     # provider only
     if (!is.null(provider) && is.null(base_url)) {
         for (k in keys) {
-            ent <- .gptr_cache$get(k)
+            ent <- .gptr_cache$get(k, missing = NULL)
             if (!is.null(ent) && identical(ent$provider, provider)) {
                 .gptr_cache$remove(k)
             }
@@ -503,7 +520,7 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
     if (is.null(provider) && !is.null(base_url)) {
         root <- .api_root(base_url)
         for (k in keys) {
-            ent <- .gptr_cache$get(k)
+            ent <- .gptr_cache$get(k, missing = NULL)
             if (!is.null(ent) && identical(ent$base_url, root)) {
                 .gptr_cache$remove(k)
             }

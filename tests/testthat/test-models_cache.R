@@ -135,7 +135,7 @@ make_fake_cache <- function() {
   list(
     get = function(provider, base_url) {
       key <- key_fun(provider, .cache_root_for_test(base_url))
-      store$get(key)
+      store$get(key, missing = NULL)
     },
     put = function(provider, base_url, models) {
       root <- .cache_root_for_test(base_url)
@@ -478,9 +478,9 @@ test_that("invalidate clears cache", {
   cache$set(key_fun("openai", base),
             list(provider = "openai", base_url = base,
                  models = data.frame(id = "x", created = 1), ts = 1))
-  expect_false(is.null(cache$get(key_fun("openai", base))))
+  expect_false(is.null(cache$get(key_fun("openai", base), missing = NULL)))
   inv()
-  expect_null(cache$get(key_fun("openai", base)))
+  expect_null(cache$get(key_fun("openai", base), missing = NULL))
 })
 
 test_that("delete_models_cache removes by provider", {
@@ -493,8 +493,8 @@ test_that("delete_models_cache removes by provider", {
   cache$set(key_fun("lmstudio", "http://127.0.0.1:1234"),
             list(provider = "lmstudio", base_url = "http://127.0.0.1:1234", models = list(), ts = 1))
   inv(provider = "openai")
-  expect_null(cache$get(key_fun("openai", "https://api.openai.com")))
-  expect_false(is.null(cache$get(key_fun("lmstudio", "http://127.0.0.1:1234"))))
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
+  expect_false(is.null(cache$get(key_fun("lmstudio", "http://127.0.0.1:1234"), missing = NULL)))
 })
 
 test_that("delete_models_cache removes by base_url", {
@@ -507,8 +507,8 @@ test_that("delete_models_cache removes by base_url", {
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   inv(base_url = "https://api.openai.com")
-  expect_null(cache$get(key_fun("openai", "https://api.openai.com")))
-  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"))))
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
+  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
 })
 
 test_that("delete_models_cache removes by provider and base_url", {
@@ -521,8 +521,8 @@ test_that("delete_models_cache removes by provider and base_url", {
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   inv(provider = "openai", base_url = "https://api.openai.com")
-  expect_null(cache$get(key_fun("openai", "https://api.openai.com")))
-  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"))))
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
+  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
 })
 
 
