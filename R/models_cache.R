@@ -373,7 +373,7 @@
                                         base_url = "https://api.openai.com") {
   ent <- .cache_get("openai", base_url)
   if (is.null(ent)) {
-    live <- .fetch_models_live("openai", base_url, openai_api_key)
+    live <- .fetch_models_live_openai(base_url, openai_api_key)
     if (identical(live$status, "ok") && nrow(live$df) > 0) {
       .cache_put("openai", base_url, live$df)
       ts <- .cache_get("openai", base_url)$ts
