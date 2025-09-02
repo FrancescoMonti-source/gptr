@@ -389,7 +389,7 @@
     )
 }
 #' @keywords internal
-.fetch_local_models_cached <- function(provider, base_url) {
+.fetch_models_cached_local <- function(provider, base_url) {
   ent <- .cache_get(provider, base_url)
   if (is.null(ent)) {
     live <- .list_models_cached(provider, base_url)
@@ -408,7 +408,7 @@
 }
 
 #' @keywords internal
-.fetch_openai_models_cached <- function(openai_api_key,
+.fetch_models_cached_openai <- function(openai_api_key,
                                         base_url = "https://api.openai.com") {
   ent <- .cache_get("openai", base_url)
   if (is.null(ent)) {
@@ -471,11 +471,11 @@ list_models <- function(provider = NULL,
       )
       bu <- .api_root(base_url %||% bu_default)
       if (isTRUE(refresh)) .cache_del(p, bu)
-      rows[[length(rows) + 1L]] <- .fetch_local_models_cached(p, bu)
+      rows[[length(rows) + 1L]] <- .fetch_models_cached_local(p, bu)
     } else if (p == "openai") {
       bu <- .api_root(base_url %||% "https://api.openai.com")
       if (isTRUE(refresh)) .cache_del("openai", bu)
-      rows[[length(rows) + 1L]] <- .fetch_openai_models_cached(openai_api_key, bu)
+      rows[[length(rows) + 1L]] <- .fetch_models_cached_openai(openai_api_key, bu)
     }
   }
 
