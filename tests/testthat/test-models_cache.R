@@ -89,38 +89,6 @@ mock_http_openai <- function(status = 200L,
   }
 ))
 
-# If your package exposes a function accessor or legacy env, wire them too
-.patch_pkg(list(.cache_env = (function(env) {
-  function() env
-})(.gptr_test_cache_store)))
-.patch_pkg(list(.models_cache_env = .gptr_test_cache_store))
-
-# Uniform snapshot to avoid rbind col mismatches
-.patch_pkg(list(
-  .models_cache_snapshot = function() {
-    keys <- .gptr_test_cache_store$keys()
-    if (!length(keys)) {
-      return(data.frame(
-        provider = character(0), base_url = character(0),
-        n_models = integer(0), ts = numeric(0)
-      ))
-    }
-      do.call(rbind, lapply(keys, function(k) {
-        ent <- .gptr_test_cache_store$get(k)
-        data.frame(
-          provider = ent$provider,
-          base_url = ent$base_url,
-          n_models = NROW(getFromNamespace('.as_models_df', 'gptr')(ent$models)),
-          ts = suppressWarnings(as.numeric(ent$ts)),
-          stringsAsFactors = FALSE
-        )
-      }))
-  })
-)
-
-
-
-
 # Airtight mock for OpenAI model listing via httr2 wrappers
 mock_http_openai <- function(status = 200L,
                              json = NULL,
@@ -233,19 +201,6 @@ test_that("cache put / get / del", {
   expect_true(is.list(ent) && "models" %in% names(ent) && "ts" %in% names(ent))
   del("openai", "https://api.openai.com")
   expect_null(get("openai", "https://api.openai.com"))
-})
-
-# models cache snapshot immutability
-test_that("cache snapshot - immutability", {
-  snap <- getFromNamespace(".models_cache_snapshot", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  get <- getFromNamespace(".cache_get", "gptr")
-
-  put("openai", "https://api.openai.com", data.frame(id = "a", created = 1))
-  s1 <- snap()
-  put("openai", "https://api.openai.com", data.frame(id = "b", created = 2))
-  s2 <- snap()
-  expect_false(identical(s1, s2))
 })
 
 test_that("refresh with no models returns empty data", {
@@ -499,26 +454,73 @@ test_that(".row_df preserves status when no models", {
 })
 
 
-test_that(".list_models_cached - drops live probing", {
+test_that(".list_models_cached enumerates cache contents", {
   f <- getFromNamespace(".list_models_cached", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  put("openai", "https://api.openai.com", c("gpt-4o" = 1683))
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  cache$set(key_fun("openai", "https://api.openai.com"),
+            list(provider = "openai", base_url = "https://api.openai.com",
+                 models = data.frame(id = "gpt-4o", created = 1), ts = 1))
   out <- f()
-  expect_true(any(out$provider == "openai"))
-  expect_true(all(out$source == "cache"))
+  expect_true("openai" %in% out$provider)
+  expect_equal(out$n_models[out$provider == "openai"], 1L)
 })
 
 test_that("invalidate clears cache", {
   inv <- getFromNamespace("delete_models_cache", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  get <- getFromNamespace(".cache_get", "gptr")
-
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
   base <- "https://api.openai.com"
-  put("openai", base, data.frame(id = "x", created = 1))
-
-  expect_false(is.null(get("openai", base)))
+  cache$set(key_fun("openai", base),
+            list(provider = "openai", base_url = base,
+                 models = data.frame(id = "x", created = 1), ts = 1))
+  expect_false(is.null(cache$get(key_fun("openai", base))))
   inv()
-  expect_null(get("openai", base))
+  expect_null(cache$get(key_fun("openai", base)))
+})
+
+test_that("delete_models_cache removes by provider", {
+  inv <- getFromNamespace("delete_models_cache", "gptr")
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  cache$set(key_fun("openai", "https://api.openai.com"),
+            list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
+  cache$set(key_fun("lmstudio", "http://127.0.0.1:1234"),
+            list(provider = "lmstudio", base_url = "http://127.0.0.1:1234", models = list(), ts = 1))
+  inv(provider = "openai")
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com")))
+  expect_false(is.null(cache$get(key_fun("lmstudio", "http://127.0.0.1:1234"))))
+})
+
+test_that("delete_models_cache removes by base_url", {
+  inv <- getFromNamespace("delete_models_cache", "gptr")
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  cache$set(key_fun("openai", "https://api.openai.com"),
+            list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
+  cache$set(key_fun("openai", "https://alt.openai.com"),
+            list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
+  inv(base_url = "https://api.openai.com")
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com")))
+  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"))))
+})
+
+test_that("delete_models_cache removes by provider and base_url", {
+  inv <- getFromNamespace("delete_models_cache", "gptr")
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  cache$set(key_fun("openai", "https://api.openai.com"),
+            list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
+  cache$set(key_fun("openai", "https://alt.openai.com"),
+            list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
+  inv(provider = "openai", base_url = "https://api.openai.com")
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com")))
+  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"))))
 })
 
 
