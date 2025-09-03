@@ -1,148 +1,3 @@
-# shared store (keep yours)
-setup({
-  .gptr_test_cache_store <- cachem::cache_mem()
-
-# normalize a base url to the cache "root"
-.cache_root_for_test <- function(x) sub("/v1/.*$", "", x)
-
-# Monotonic timestamp counter so snapshots differ predictably
-.get_next_ts <- local({
-  seq <- 0L
-  function() {
-    seq <<- seq + 1L
-    1755806518 + seq
-  }
-})
-
-# Helper to build httr2_response objects
-json_resp <- function(status = 200L, body = list()) {
-  httr2::response(
-    status = status,
-    body = charToRaw(jsonlite::toJSON(body, auto_unbox = TRUE)),
-    headers = list("content-type" = "application/json")
-  )
-}
-
-# Mock OpenAI model listing via httr2
-mock_http_openai <- function(status = 200L,
-                             json = NULL,
-                             json_throws = FALSE,
-                             perform_throws = FALSE) {
-  if (is.null(json)) json <- list()
-  resp <- json_resp(status = status, body = json)
-  testthat::local_mocked_bindings(
-    .http_request = function(url) list(.url = url),
-    .http_req_headers = function(req, ...) req,
-    .http_req_timeout = function(req, ...) req,
-    .http_req_retry = function(req, ...) req,
-    .http_resp_status = function(resp) status,
-    .http_resp_body_json = if (json_throws) {
-      function(...) stop("boom")
-    } else {
-      function(resp, simplifyVector = FALSE) json
-    },
-    .env = asNamespace("gptr"),
-    .local_envir = parent.frame()
-  )
-  testthat::local_mocked_bindings(
-    req_perform = if (perform_throws) {
-      function(req, ...) stop("network fail")
-    } else {
-      function(req, ...) resp
-    },
-    .env = asNamespace("httr2"),
-    .local_envir = parent.frame()
-  )
-  invisible(TRUE)
-}
-
-# Cache: tolerate any signature using ...
-testthat::local_mocked_bindings(
-  .cache_get = function(...) {
-    a <- list(...)
-    key_fun <- getFromNamespace('.cache_key', 'gptr')
-    if (length(a) == 1L && is.character(a[[1L]])) {
-      key <- a[[1L]]
-    } else {
-      provider <- as.character(a[[1L]])
-      base_url <- .cache_root_for_test(as.character(a[[2L]]))
-      key <- key_fun(provider, base_url)
-    }
-    .gptr_test_cache_store$get(key, missing = NULL)
-  },
-  .cache_put = function(...) {
-    a <- list(...)
-    key_fun <- getFromNamespace('.cache_key', 'gptr')
-    provider <- as.character(a[[1L]])
-    base_url <- .cache_root_for_test(as.character(a[[2L]]))
-    models <- a[[3L]]
-    key <- key_fun(provider, base_url)
-    .gptr_test_cache_store$set(key,
-      list(provider = provider, base_url = base_url, models = models, ts = .get_next_ts()))
-    invisible(TRUE)
-  },
-  .cache_del = function(...) {
-    a <- list(...)
-    key_fun <- getFromNamespace('.cache_key', 'gptr')
-    provider <- as.character(a[[1L]])
-    base_url <- .cache_root_for_test(as.character(a[[2L]]))
-    key <- key_fun(provider, base_url)
-    .gptr_test_cache_store$remove(key)
-    invisible(TRUE)
-  },
-  .env = asNamespace("gptr")
-)
-
-# Deterministic clock
-fixed_ts <- 1755806518
-fix_time <- function(expr) {
-  withr::local_envvar(c(TZ = "UTC"))
-  withr::with_options(list(gpt.timeout = 2, gptr.request_timeout = 2), {
-    withr::with_seed(1, {
-      # Freeze Sys.time() via a small shim you use inside your code when stamping cache
-      # If you currently call Sys.time() directly, we’ll just set created_at from fixed numbers in tests.
-      force(expr)
-    })
-  })
-}
-
-# Minimal in-memory cache to mock your real cache layer
-make_fake_cache <- function() {
-  store <- cachem::cache_mem()
-  key_fun <- getFromNamespace('.cache_key', 'gptr')
-  list(
-    get = function(provider, base_url) {
-      key <- key_fun(provider, .cache_root_for_test(base_url))
-      store$get(key, missing = NULL)
-    },
-    put = function(provider, base_url, models) {
-      root <- .cache_root_for_test(base_url)
-      key <- key_fun(provider, root)
-      store$set(key, list(provider = provider, base_url = root, models = models, ts = fixed_ts))
-      invisible(TRUE)
-    },
-    cache = store
-  )
-}
-
-# Small helpers to build fake OpenAI/Ollama replies
-openai_models_payload <- function() {
-  list(
-    data = list(
-      list(id = "gpt-4o", created = 1683758102),
-      list(id = "gpt-4.1-mini", created = 1686558896)
-    )
-  )
-}
-
-ollama_tags_payload <- function() {
-  list(models = data.frame(
-    name = c("mistral:instruct", "llama3.1"),
-    stringsAsFactors = FALSE
-  ))
-}
-})
-
 # api_root()
 # normalization trims trailing /v1/chat/completions
 # keeps scheme/host
@@ -169,6 +24,7 @@ test_that(".cache_key", {
 
 # cache put / get / del
 test_that("cache put / get / del", {
+  local_cache_store()
   get <- getFromNamespace(".cache_get", "gptr")
   put <- getFromNamespace(".cache_put", "gptr")
   del <- getFromNamespace(".cache_del", "gptr")
@@ -235,6 +91,7 @@ test_that("openai ok -> df parsed and status ok", {
 })
 
 test_that("openai empty model list -> empty_cache", {
+  local_cache_store()
   payload <- list(data = list())
   mock_http_openai(status = 200L, json = payload)
   out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
@@ -371,17 +228,20 @@ test_that(".fetch_models_cached retries after unreachable and caches", {
 
 # list models
 test_that("list-models", {
+  local_cache_store()
   out <- list_models(provider = "openai", refresh = FALSE, openai_api_key = "sk-test")
   expect_true(all(out$provider == "openai"))
 })
 
 test_that("list_models - manual override options", {
+  local_cache_store()
   withr::local_options(list(gptr.lmstudio_base_url = "http://127.0.0.1:9999"))
   out <- list_models(provider = "lmstudio", base_url = "http://10.0.0.2:1234")
   expect_true(all(out$base_url == "http://10.0.0.2:1234"))
 })
 
 test_that("list_models - stable ordering by provider/availability/created/id", {
+  local_cache_store()
   out <- list_models(refresh = FALSE, openai_api_key = "sk-test")
   prov_order <- rle(out$provider)$values
   expect_identical(prov_order[1], "lmstudio") # adjust if others present
@@ -551,6 +411,7 @@ test_that("delete_models_cache removes by provider and base_url", {
 #
 # Option A — Compare only content columns (ignore operational metadata)
 test_that("list_models - idempotence", {
+  local_cache_store()
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
@@ -570,6 +431,7 @@ test_that("list_models - idempotence", {
 # Option B : Assert that the second call uses cache (stronger)
 # Warm the cache once, then make live fail; the second call must fall back to cache
 test_that("list_models - second call uses cache when available", {
+  local_cache_store()
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
