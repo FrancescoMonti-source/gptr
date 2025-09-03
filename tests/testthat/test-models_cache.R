@@ -65,7 +65,7 @@ mock_http_openai <- function(status = 200L,
       base_url <- .cache_root_for_test(as.character(a[[2L]]))
       key <- key_fun(provider, base_url)
     }
-    .gptr_test_cache_store$get(key)
+    .gptr_test_cache_store$get(key, missing = NULL)
   },
   .cache_put = function(...) {
     a <- list(...)
