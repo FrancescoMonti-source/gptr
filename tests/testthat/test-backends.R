@@ -137,6 +137,20 @@ test_that("auto + unknown model errors asking for provider", {
     )
 })
 
+test_that("auto + model resolution returning NULL errors asking for provider", {
+    testthat::with_mocked_bindings(
+        .resolve_model_provider = function(model, openai_api_key = "", ...) NULL,
+        {
+            expect_error(
+                gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
+                "Model 'missing' is not available; specify a provider.",
+                fixed = TRUE
+            )
+        },
+        .env = asNamespace("gptr")
+    )
+})
+
 test_that("auto with no local backend falls back to OpenAI", {
     called <- NULL
     testthat::with_mocked_bindings(
