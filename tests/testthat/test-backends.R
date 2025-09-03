@@ -132,7 +132,8 @@ test_that("auto + unknown model errors asking for provider", {
     )
     expect_error(
         gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE),
-        "specify a provider"
+        "Model 'nonexistent-model' is not available; specify a provider.",
+        fixed = TRUE
     )
 })
 

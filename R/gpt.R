@@ -60,6 +60,8 @@ gpt <- function(prompt,
                 backend  <- hit_provider
                 base_root <- .api_root(as.character(hit$base_url[1L]))
             }
+        } else {
+            rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
         }
     }
 
