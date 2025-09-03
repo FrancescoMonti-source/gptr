@@ -1,16 +1,14 @@
 fake_resp <- function(model = "dummy") {
-    body <- jsonlite::toJSON(
-        list(
-            model = model,
-            choices = list(list(message = list(content = "ok")))
-        ),
-        auto_unbox = TRUE
+    body <- list(
+        model = model,
+        choices = list(list(message = list(content = "ok")))
     )
-    httr2::response(
+    resp <- httr2::response(
         status = 200L,
-        body = charToRaw(body),
+        body = charToRaw(jsonlite::toJSON(body, auto_unbox = TRUE)),
         headers = list("content-type" = "application/json")
     )
+    list(body = body, resp = resp)
 }
 
 test_that("auto + openai model routes to OpenAI", {
