@@ -300,7 +300,7 @@ test_that("refresh_models handles openai provider", {
 
 test_that("refresh_models skips cache when unreachable", {
   fake_cache <- make_fake_cache()
-  live_mock <- function(provider, base_url) {
+  live_mock <- function(provider, base_url, openai_api_key = "") {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
   testthat::local_mocked_bindings(
@@ -320,7 +320,7 @@ test_that("refresh_models skips cache when unreachable", {
 test_that("refresh_models retries after unreachable and caches", {
   fake_cache <- make_fake_cache()
   calls <- 0
-  live_mock <- function(provider, base_url) {
+  live_mock <- function(provider, base_url, openai_api_key = "") {
     calls <<- calls + 1
     if (calls == 1) {
       list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
@@ -345,7 +345,7 @@ test_that("refresh_models retries after unreachable and caches", {
 
 test_that(".list_models_cached skips cache when unreachable", {
   fake_cache <- make_fake_cache()
-  live_mock <- function(provider, base_url) {
+  live_mock <- function(provider, base_url, openai_api_key = "") {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
   f <- getFromNamespace(".list_models_cached", "gptr")
@@ -364,7 +364,7 @@ test_that(".list_models_cached skips cache when unreachable", {
 test_that(".list_models_cached retries after unreachable and caches", {
   fake_cache <- make_fake_cache()
   calls <- 0
-  live_mock <- function(provider, base_url) {
+  live_mock <- function(provider, base_url, openai_api_key = "") {
     calls <<- calls + 1
     if (calls == 1) {
       list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
