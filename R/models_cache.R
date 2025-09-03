@@ -420,7 +420,6 @@
     } else if (identical(live$status, "ok") && nrow(live$df) == 0) {
       live$status <- "empty_cache"
       ts <- as.numeric(Sys.time())
-      Sys.sleep(0.25)
     } else {
       ts <- as.numeric(Sys.time())
     }
@@ -442,7 +441,9 @@
 #'     * "installed" for local backends
 #'     * "catalog"   for OpenAI (account/catalog listing)
 #' - Stable columns: provider, base_url, model_id, availability, cached_when, source.
-#'
+#' - If OpenAI returns no models, a placeholder row is still returned with
+#'   `status = "empty_cache"` and `model_id = NA`.
+#' 
 #' @param provider NULL (default, list all), or one of:
 #'   "lmstudio","ollama","localai","openai".
 #' @param base_url Optional root URL to target a specific server. If NULL,

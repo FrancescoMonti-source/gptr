@@ -259,7 +259,9 @@ test_that("openai empty model list -> empty_cache", {
   payload <- list(data = list())
   mock_http_openai(status = 200L, json = payload)
   out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
-  expect_identical(nrow(out), 0L)
+  expect_identical(nrow(out), 1L)
+  expect_true(is.na(out$model_id))
+  expect_identical(out$status, "empty_cache")
 })
 
 test_that("openai fallback semantics via .fetch_models_live", {
