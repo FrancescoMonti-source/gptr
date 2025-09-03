@@ -86,8 +86,8 @@ gpt <- function(prompt,
         } else {
             picked <- FALSE
             for (bk in prefer) {
-                lm <- try(.list_models_cached(provider = bk, base_url = roots[[bk]],
-                                              openai_api_key = openai_api_key), silent = TRUE)
+                lm <- try(.fetch_models_cached(provider = bk, base_url = roots[[bk]],
+                                                   openai_api_key = openai_api_key), silent = TRUE)
                 if (!inherits(lm, "try-error") && is.list(lm) && NROW(lm$df)) {
                     base_root <- .api_root(roots[[bk]])
                     backend   <- bk
@@ -168,13 +168,13 @@ gpt <- function(prompt,
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
         bu_root <- .api_root(defs$base_url)
         if (is.null(.cache_get("openai", bu_root))) {
-            invisible(try(.list_models_cached(provider = "openai", base_url = bu_root,
-                                             openai_api_key = defs$api_key), silent = TRUE))
+            invisible(try(.fetch_models_cached(provider = "openai", base_url = bu_root,
+                                                  openai_api_key = defs$api_key), silent = TRUE))
         }
         if (!is.null(model) && nzchar(model)) {
             ids <- tryCatch(
-                .list_models_cached(provider = "openai", base_url = bu_root,
-                                    openai_api_key = defs$api_key)$df$id,
+                .fetch_models_cached(provider = "openai", base_url = bu_root,
+                                         openai_api_key = defs$api_key)$df$id,
                 error = function(e) character(0)
             )
             if (length(ids) && !tolower(model) %in% tolower(ids)) {
@@ -197,8 +197,8 @@ gpt <- function(prompt,
     if (provider == "local") {
         stopifnot(!is.null(base_root), nzchar(base_root))
 
-        ent <- try(.list_models_cached(provider = backend, base_url = base_root,
-                                       openai_api_key = openai_api_key), silent = TRUE)
+        ent <- try(.fetch_models_cached(provider = backend, base_url = base_root,
+                                           openai_api_key = openai_api_key), silent = TRUE)
         ids <- if (!inherits(ent, "try-error") && is.list(ent) && !is.null(ent$df)) {
             unique(na.omit(as.character(ent$df$id)))
         } else character(0)

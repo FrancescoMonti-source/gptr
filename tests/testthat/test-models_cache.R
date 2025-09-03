@@ -65,7 +65,7 @@ mock_http_openai <- function(status = 200L,
       base_url <- .cache_root_for_test(as.character(a[[2L]]))
       key <- key_fun(provider, base_url)
     }
-    .gptr_test_cache_store$get(key)
+    .gptr_test_cache_store$get(key, missing = NULL)
   },
   .cache_put = function(...) {
     a <- list(...)
@@ -219,37 +219,37 @@ test_that("refresh with no models returns empty data", {
 
 test_that("openai non-JSON -> non_json", {
   f <- getFromNamespace(".fetch_models_live", "gptr")
-  live <- function(key) f("openai", "https://api.openai.com", key)
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(status = 200L, json_throws = TRUE)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "non_json")
 })
 
 test_that("openai network error -> unreachable", {
   f <- getFromNamespace(".fetch_models_live", "gptr")
-  live <- function(key) f("openai", "https://api.openai.com", key)
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(perform_throws = TRUE)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "unreachable")
 })
 
 test_that("openai 5xx -> http_503", {
   f <- getFromNamespace(".fetch_models_live", "gptr")
-  live <- function(key) f("openai", "https://api.openai.com", key)
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(status = 503L)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "http_503")
 })
 
 test_that("openai ok -> df parsed and status ok", {
   f <- getFromNamespace(".fetch_models_live", "gptr")
-  live <- function(key) f("openai", "https://api.openai.com", key)
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
   ))
   mock_http_openai(status = 200L, json = payload)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "ok")
   expect_true(is.data.frame(o$df))
   expect_setequal(o$df$id, c("gpt-4o", "gpt-4.1-mini"))
@@ -259,23 +259,25 @@ test_that("openai empty model list -> empty_cache", {
   payload <- list(data = list())
   mock_http_openai(status = 200L, json = payload)
   out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
-  expect_identical(nrow(out), 0L)
+  expect_identical(nrow(out), 1L)
+  expect_true(is.na(out$model_id))
+  expect_identical(out$status, "empty_cache")
 })
 
 test_that("openai fallback semantics via .fetch_models_live", {
   f <- getFromNamespace(".fetch_models_live", "gptr")
-  live <- function(key) f("openai", "https://api.openai.com", key)
+  withr::local_envvar(OPENAI_API_KEY = "sk")
 
   mock_http_openai(status = 200L, json_throws = TRUE)
-  o1 <- live("sk")
+  o1 <- f("openai", "https://api.openai.com")
   expect_equal(o1$status, "non_json")
 
   mock_http_openai(perform_throws = TRUE)
-  o2 <- live("sk")
+  o2 <- f("openai", "https://api.openai.com")
   expect_equal(o2$status, "unreachable")
 
   mock_http_openai(status = 503L)
-  o3 <- live("sk")
+  o3 <- f("openai", "https://api.openai.com")
   expect_equal(o3$status, "http_503")
 })
 
@@ -343,12 +345,12 @@ test_that("refresh_models retries after unreachable and caches", {
   expect_identical(cached$models$id, "m1")
 })
 
-test_that(".list_models_cached skips cache when unreachable", {
+test_that(".fetch_models_cached skips cache when unreachable", {
   fake_cache <- make_fake_cache()
   live_mock <- function(provider, base_url) {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
-  f <- getFromNamespace(".list_models_cached", "gptr")
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
   testthat::local_mocked_bindings(
     .fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
@@ -361,7 +363,7 @@ test_that(".list_models_cached skips cache when unreachable", {
   expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
 })
 
-test_that(".list_models_cached retries after unreachable and caches", {
+test_that(".fetch_models_cached retries after unreachable and caches", {
   fake_cache <- make_fake_cache()
   calls <- 0
   live_mock <- function(provider, base_url) {
@@ -372,7 +374,7 @@ test_that(".list_models_cached retries after unreachable and caches", {
       list(df = data.frame(id = "m1", created = 1), status = "ok")
     }
   }
-  f <- getFromNamespace(".list_models_cached", "gptr")
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
   testthat::local_mocked_bindings(
     .fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
@@ -456,8 +458,8 @@ test_that(".row_df preserves status when no models", {
 })
 
 
-test_that(".list_models_cached enumerates cache contents", {
-  f <- getFromNamespace(".list_models_cached", "gptr")
+test_that(".fetch_models_cached enumerates cache contents", {
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
   cache <- getFromNamespace(".gptr_cache", "gptr")
   key_fun <- getFromNamespace(".cache_key", "gptr")
   cache$reset()

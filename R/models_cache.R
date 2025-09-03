@@ -169,13 +169,13 @@
 #' @keywords internal
 .fetch_models_live <- function(provider,
                                base_url,
-                               openai_api_key = "",
                                timeout = getOption("gptr.request_timeout", 5)) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
   }
   if (identical(provider, "openai")) {
-    .fetch_models_live_openai(base_url, openai_api_key, timeout)
+    key <- Sys.getenv("OPENAI_API_KEY", "")
+    .fetch_models_live_openai(base_url, key, timeout)
   } else {
     .fetch_models_live_local(provider, base_url, timeout)
   }
@@ -221,7 +221,8 @@
 }
 
 # Look up a cached entry in .gptr_cache by provider+base_url.
-# Returns NULL if not cached.
+# cachem's default `missing` value yields a `key_missing` sentinel; explicitly
+# return `NULL` when an entry doesn't exist so callers can rely on `is.null()`.
 .cache_get <- function(provider, base_url) {
   .gptr_cache$get(.cache_key(provider, base_url), missing = NULL)
 }
@@ -258,8 +259,8 @@
 
 #' @noRd
 #' @keywords internal
-.list_models_cached <- function(provider = NULL, base_url = NULL,
-                               openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+.fetch_models_cached <- function(provider = NULL, base_url = NULL,
+                                    openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
     # Case A: both missing -> enumerate everything currently cached (summary view)
     if (is.null(provider) && is.null(base_url)) {
         keys <- .gptr_cache$keys()
@@ -337,10 +338,10 @@
         ttl <- getOption("gptr.model_cache_ttl", 3600)
         if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(list(df = .as_models_df(ent$models), status = "ok"))
     }
-    live <- .fetch_models_live(provider, base_url, openai_api_key)
+    live <- .fetch_models_live(provider, base_url)
     if (identical(live$status, "unreachable")) {
         Sys.sleep(0.2)
-        live <- .fetch_models_live(provider, base_url, openai_api_key)
+        live <- .fetch_models_live(provider, base_url)
         if (identical(live$status, "unreachable")) {
             return(live)
         }
@@ -369,8 +370,8 @@
             localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
             openai   = "https://api.openai.com"
         )
-        ent <- try(.list_models_cached(provider = p, base_url = bu,
-                                       openai_api_key = openai_api_key), silent = TRUE)
+        ent <- try(.fetch_models_cached(provider = p, base_url = bu,
+                                            openai_api_key = openai_api_key), silent = TRUE)
         ids <- tryCatch({
             if (is.list(ent) && !is.null(ent$df)) as.character(ent$df$id) else character(0)
         }, error = function(e) character(0))
@@ -392,7 +393,7 @@
 .fetch_models_cached_local <- function(provider, base_url) {
   ent <- .cache_get(provider, base_url)
   if (is.null(ent)) {
-    live <- .list_models_cached(provider, base_url)
+    live <- .fetch_models_cached(provider, base_url)
     mods <- live$df
     ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
     src <- "live"
@@ -419,7 +420,6 @@
     } else if (identical(live$status, "ok") && nrow(live$df) == 0) {
       live$status <- "empty_cache"
       ts <- as.numeric(Sys.time())
-      Sys.sleep(0.25)
     } else {
       ts <- as.numeric(Sys.time())
     }
@@ -441,7 +441,9 @@
 #'     * "installed" for local backends
 #'     * "catalog"   for OpenAI (account/catalog listing)
 #' - Stable columns: provider, base_url, model_id, availability, cached_when, source.
-#'
+#' - If OpenAI returns no models, a placeholder row is still returned with
+#'   `status = "empty_cache"` and `model_id = NA`.
+#' 
 #' @param provider NULL (default, list all), or one of:
 #'   "lmstudio","ollama","localai","openai".
 #' @param base_url Optional root URL to target a specific server. If NULL,
