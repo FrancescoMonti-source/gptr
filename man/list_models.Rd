@@ -27,7 +27,9 @@ an auth_missing status (no stop).}
 }
 \value{
 data.frame with columns:
-provider, base_url, model_id, availability, cached_when, source, and optional status.
+provider, base_url, model_id, availability, cached_when, source, and status. Status
+diagnostics for each backend are also provided via \code{attr(x, "diagnostics")}, a list of
+\code{provider}, \code{base_url}, and \code{status} entries.
 }
 \description{
 Behavior:
@@ -41,7 +43,7 @@ to force a live probe of \verb{/v1/models} (Ollama falls back to \verb{/api/tags
 \item "catalog"   for OpenAI (account/catalog listing)
 }
 \item Stable columns: provider, base_url, model_id, availability, cached_when, source.
-\item If OpenAI returns no models, a placeholder row is still returned with
-\code{status = "empty_cache"} and \code{model_id = NA}.
+\item If a backend returns no models, zero rows are returned; status is reported in
+\code{attr(x, "diagnostics")}.
 }
 }
