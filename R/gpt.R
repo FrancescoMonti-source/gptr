@@ -43,7 +43,7 @@ gpt <- function(prompt,
     # --- Early auto+model resolution (use cache, no heuristics) ---
     if (identical(provider, "auto") && is.character(model) && nzchar(model)) {
         lm <- try(.resolve_model_provider(model, openai_api_key = openai_api_key), silent = TRUE)
-        if (!inherits(lm, "try-error") && NROW(lm)) {
+        if (!inherits(lm, "try-error") && is.data.frame(lm) && nrow(lm) > 0) {
             hits <- lm
             prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
             rank_fn <- function(p) {
@@ -207,6 +207,8 @@ gpt <- function(prompt,
         ids <- if (!inherits(ent, "try-error") && is.list(ent) && !is.null(ent$df)) {
             unique(na.omit(as.character(ent$df$id)))
         } else character(0)
+
+        if (isTRUE(strict_model) && !length(ids)) strict_model <- FALSE
 
         default_model <- getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
         requested_model <- model %||% default_model

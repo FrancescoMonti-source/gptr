@@ -137,6 +137,20 @@ test_that("auto + unknown model errors asking for provider", {
     )
 })
 
+test_that("auto + model resolution returning NULL errors asking for provider", {
+    testthat::with_mocked_bindings(
+        .resolve_model_provider = function(model, openai_api_key = "", ...) NULL,
+        {
+            expect_error(
+                gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
+                "Model 'missing' is not available; specify a provider.",
+                fixed = TRUE
+            )
+        },
+        .env = asNamespace("gptr")
+    )
+})
+
 test_that("auto with no local backend falls back to OpenAI", {
     called <- NULL
     testthat::with_mocked_bindings(
@@ -256,10 +270,11 @@ test_that("strict_model errors when model not installed (local)", {
 
 test_that("strict_model ignored when model listing unavailable", {
     delete_models_cache()
-    called <- FALSE
+    called_models <- FALSE
+    called_chat <- FALSE
     testthat::local_mocked_bindings(
         req_perform = function(req, ...) {
-            called <<- TRUE
+            called_models <<- TRUE
             fake_resp()
         },
         resp_status = function(resp, ...) 404L,
@@ -267,7 +282,8 @@ test_that("strict_model ignored when model listing unavailable", {
     )
     testthat::local_mocked_bindings(
         request_local = function(payload, base_url, timeout = 30) {
-            fake_resp(model = payload$model %||% "mistral")
+            called_chat <<- TRUE
+            fake_resp(model = "fallback")
         },
         .env = asNamespace("gptr")
     )
@@ -279,7 +295,8 @@ test_that("strict_model ignored when model listing unavailable", {
             print_raw = FALSE),
         NA
     )
-    expect_true(called)
+    expect_true(called_models)
+    expect_true(called_chat)
 })
 
 test_that("model match is case-insensitive", {
