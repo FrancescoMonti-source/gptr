@@ -259,8 +259,8 @@
 
 #' @noRd
 #' @keywords internal
-.list_models_cached <- function(provider = NULL, base_url = NULL,
-                               openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+.fetch_models_cached <- function(provider = NULL, base_url = NULL,
+                                    openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
     # Case A: both missing -> enumerate everything currently cached (summary view)
     if (is.null(provider) && is.null(base_url)) {
         keys <- .gptr_cache$keys()
@@ -370,8 +370,8 @@
             localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
             openai   = "https://api.openai.com"
         )
-        ent <- try(.list_models_cached(provider = p, base_url = bu,
-                                       openai_api_key = openai_api_key), silent = TRUE)
+        ent <- try(.fetch_models_cached(provider = p, base_url = bu,
+                                            openai_api_key = openai_api_key), silent = TRUE)
         ids <- tryCatch({
             if (is.list(ent) && !is.null(ent$df)) as.character(ent$df$id) else character(0)
         }, error = function(e) character(0))
@@ -393,7 +393,7 @@
 .fetch_models_cached_local <- function(provider, base_url) {
   ent <- .cache_get(provider, base_url)
   if (is.null(ent)) {
-    live <- .list_models_cached(provider, base_url)
+    live <- .fetch_models_cached(provider, base_url)
     mods <- live$df
     ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
     src <- "live"
