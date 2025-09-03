@@ -32,6 +32,7 @@ Imports:
     stats,
     utils,
     cachem,
+    magrittr,
     digest
 Suggests: 
     testthat (>= 3.0.0),
