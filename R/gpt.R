@@ -208,6 +208,8 @@ gpt <- function(prompt,
             unique(na.omit(as.character(ent$df$id)))
         } else character(0)
 
+        if (isTRUE(strict_model) && !length(ids)) strict_model <- FALSE
+
         default_model <- getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
         requested_model <- model %||% default_model
 
