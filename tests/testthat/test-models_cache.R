@@ -45,7 +45,8 @@ mock_http_openai <- function(status = 200L,
     } else {
       function(resp, simplifyVector = FALSE) json
     },
-    .env = asNamespace("gptr")
+    .env = asNamespace("gptr"),
+    .local_envir = parent.frame()
   )
   invisible(TRUE)
 }
