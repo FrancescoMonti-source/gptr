@@ -41,7 +41,7 @@ to force a live probe of \verb{/v1/models} (Ollama falls back to \verb{/api/tags
 \item "catalog"   for OpenAI (account/catalog listing)
 }
 \item Stable columns: provider, base_url, model_id, availability, cached_when, source.
-\item If OpenAI returns no models, a placeholder row is included with
+\item If OpenAI returns no models, a placeholder row is still returned with
 \code{status = "empty_cache"} and \code{model_id = NA}.
 }
 }
