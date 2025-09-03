@@ -30,7 +30,7 @@ $.gpt_chat_callable
 .is_na_like
 .json_last_resort
 .list_local_backends
-.list_models_cached
+.fetch_models_cached
 .fetch_models_live
 .models_endpoint
 .normalize_token
