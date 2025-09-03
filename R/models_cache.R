@@ -347,7 +347,11 @@
         }
     }
     if (identical(live$status, "ok")) {
-        .cache_put(provider, base_url, live$df)
+        if (nrow(live$df) > 0) {
+            .cache_put(provider, base_url, live$df)
+        } else {
+            .cache_del(provider, base_url)
+        }
     }
     live
 }
@@ -395,14 +399,21 @@
   if (is.null(ent)) {
     live <- .fetch_models_cached(provider, base_url)
     mods <- live$df
-    ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
+    tmp <- .cache_get(provider, base_url)
+    ts <- if (!is.null(tmp)) tmp$ts else as.numeric(Sys.time())
     src <- "live"
     if (provider == "ollama" && nrow(mods) == 0) {
       mods <- .ollama_tags_live(base_url)
-      .cache_put(provider, base_url, mods)
-      ts <- .cache_get(provider, base_url)$ts
+      if (length(mods) > 0) {
+        .cache_put(provider, base_url, mods)
+        tmp <- .cache_get(provider, base_url)
+        ts <- if (!is.null(tmp)) tmp$ts else ts
+      } else {
+        ts <- as.numeric(Sys.time())
+      }
     }
-    .row_df(provider, base_url, mods, "installed", src, ts, status = live$status)
+    status <- if (nrow(mods) > 0) live$status else NA_character_
+    .row_df(provider, base_url, mods, "installed", src, ts, status = status)
   } else {
     .row_df(provider, base_url, ent$models, "installed", "cache", ent$ts)
   }

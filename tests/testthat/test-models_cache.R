@@ -214,6 +214,7 @@ test_that("refresh with no models returns empty data", {
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
   expect_equal(nrow(out), 0)
+  expect_length(fake_cache$cache$keys(), 0)
 })
 
 
