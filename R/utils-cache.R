@@ -55,21 +55,9 @@
     base_url <- .api_root(base_url)
     models_df <- .as_models_df(models_df)
     ts <- if (length(ts)) ts else NA_real_  # coalesce: legacy cache entries may omit ts
+
     if (nrow(models_df) == 0) {
-        if (!is.na(status)) {
-            return(data.frame(
-                provider = provider,
-                base_url = base_url,
-                model_id = NA_character_,
-                created = NA_real_,
-                availability = availability,
-                cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "UTC"),
-                source = src,
-                status = status,
-                stringsAsFactors = FALSE
-            ))
-        }
-        return(data.frame(
+        df <- data.frame(
             provider = character(),
             base_url = character(),
             model_id = character(),
@@ -79,9 +67,12 @@
             source = character(),
             status = character(),
             stringsAsFactors = FALSE
-        ))
+        )
+        attr(df, "diagnostic") <- list(provider = provider, base_url = base_url, status = status)
+        return(df)
     }
-    data.frame(
+
+    df <- data.frame(
         provider = provider,
         base_url = base_url,
         model_id = models_df$id,
@@ -92,4 +83,6 @@
         status = status,
         stringsAsFactors = FALSE
     )
+    attr(df, "diagnostic") <- list(provider = provider, base_url = base_url, status = status)
+    df
 }

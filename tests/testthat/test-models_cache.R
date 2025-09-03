@@ -259,9 +259,10 @@ test_that("openai empty model list -> empty_cache", {
   payload <- list(data = list())
   mock_http_openai(status = 200L, json = payload)
   out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
-  expect_identical(nrow(out), 1L)
-  expect_true(is.na(out$model_id))
-  expect_identical(out$status, "empty_cache")
+  expect_identical(nrow(out), 0L)
+  diag <- attr(out, "diagnostics")[[1]]
+  expect_identical(diag$status, "empty_cache")
+  expect_identical(diag$provider, "openai")
 })
 
 test_that("openai fallback semantics via .fetch_models_live", {
@@ -300,24 +301,25 @@ test_that("refresh_models handles openai provider", {
   expect_true(NROW(cached$models) == 2)
 })
 
-test_that("refresh_models skips cache when unreachable", {
-  fake_cache <- make_fake_cache()
-  live_mock <- function(provider, base_url) {
-    list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
-  }
-  testthat::local_mocked_bindings(
-    .fetch_models_live = live_mock,
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_del = function(...) invisible(TRUE),
-    .env = asNamespace("gptr")
-  )
-  out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
-  expect_identical(nrow(out), 1L)
-  expect_identical(out$status, "unreachable")
-  expect_true(all(is.na(out$model_id)))
-  expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
-})
+  test_that("refresh_models skips cache when unreachable", {
+    fake_cache <- make_fake_cache()
+    live_mock <- function(provider, base_url) {
+      list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
+    }
+    testthat::local_mocked_bindings(
+      .fetch_models_live = live_mock,
+      .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+      .cache_get = function(p, u) fake_cache$get(p, u),
+      .cache_del = function(...) invisible(TRUE),
+      .env = asNamespace("gptr")
+    )
+    out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
+    expect_identical(nrow(out), 0L)
+    diag <- attr(out, "diagnostics")[[1]]
+    expect_identical(diag$status, "unreachable")
+    expect_identical(diag$provider, "lmstudio")
+    expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
+  })
 
 test_that("refresh_models retries after unreachable and caches", {
   fake_cache <- make_fake_cache()
@@ -439,6 +441,7 @@ test_that(".row_df repeats provider/base/url and status", {
   expect_equal(unique(r$provider), "openai")
   expect_equal(nrow(r), 2)
   expect_equal(r$status, rep("ok", 2))
+  expect_equal(attr(r, "diagnostic")$status, "ok")
 })
 
 test_that(".row_df returns zero rows when no models and status is NA", {
@@ -452,9 +455,10 @@ test_that(".row_df preserves status when no models", {
   f <- getFromNamespace(".row_df", "gptr")
   r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
          "catalog", "live", fixed_ts, status = "auth_missing")
-  expect_equal(nrow(r), 1)
-  expect_true(is.na(r$model_id))
-  expect_equal(r$status, "auth_missing")
+  expect_equal(nrow(r), 0)
+  diag <- attr(r, "diagnostic")
+  expect_equal(diag$status, "auth_missing")
+  expect_equal(diag$provider, "openai")
 })
 
 

@@ -441,8 +441,8 @@
 #'     * "installed" for local backends
 #'     * "catalog"   for OpenAI (account/catalog listing)
 #' - Stable columns: provider, base_url, model_id, availability, cached_when, source.
-#' - If OpenAI returns no models, a placeholder row is still returned with
-#'   `status = "empty_cache"` and `model_id = NA`.
+#' - If a backend returns no models, zero rows are returned and the status is
+#'   recorded in `attr(x, "diagnostics")`.
 #' 
 #' @param provider NULL (default, list all), or one of:
 #'   "lmstudio","ollama","localai","openai".
@@ -454,7 +454,9 @@
 #'   Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
 #'   an auth_missing status (no stop).
 #' @return data.frame with columns:
-#'   provider, base_url, model_id, availability, cached_when, source, and optional status.
+#'   provider, base_url, model_id, availability, cached_when, source, and status.
+#'   Status diagnostics for each backend are also attached via
+#'   `attr(x, "diagnostics")`.
 #' @export
 list_models <- function(provider = NULL,
                         base_url = NULL,
@@ -463,6 +465,7 @@ list_models <- function(provider = NULL,
   # ---- scope selection ---
   providers <- if (is.null(provider)) c("lmstudio", "ollama", "localai", "openai") else provider
   rows <- list()
+  diagnostics <- list()
 
   for (p in providers) {
     if (p %in% c("lmstudio", "ollama", "localai")) {
@@ -473,12 +476,16 @@ list_models <- function(provider = NULL,
       )
       bu <- .api_root(base_url %||% bu_default)
       if (isTRUE(refresh)) .cache_del(p, bu)
-      rows[[length(rows) + 1L]] <- .fetch_models_cached_local(p, bu)
+      df <- .fetch_models_cached_local(p, bu)
+      diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
+      rows[[length(rows) + 1L]] <- df
     } else if (p == "openai") {
       bu <- .api_root(base_url %||% "https://api.openai.com")
       if (isTRUE(refresh)) .cache_del("openai", bu)
-      rows[[length(rows) + 1L]] <- .fetch_models_cached_openai(openai_api_key, bu)
-    }
+      df <- .fetch_models_cached_openai(openai_api_key, bu)
+      diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
+      rows[[length(rows) + 1L]] <- df
+  }
   }
 
 
@@ -497,6 +504,7 @@ list_models <- function(provider = NULL,
   }
 
   out <- do.call(rbind, rows)
+  attr(out, "diagnostics") <- diagnostics
 
 
   # Add human-readable timestamp (UTC) where 'created' is present
