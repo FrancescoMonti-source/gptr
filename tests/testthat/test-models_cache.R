@@ -13,48 +13,45 @@
   }
 })
 
-# 2) Airtight httr2 mock for OpenAI model listing
+# Helper to build httr2_response objects
+json_resp <- function(status = 200L, body = list()) {
+  httr2::response(
+    status = status,
+    body = charToRaw(jsonlite::toJSON(body, auto_unbox = TRUE)),
+    headers = list("content-type" = "application/json")
+  )
+}
+
+# Mock OpenAI model listing via httr2
 mock_http_openai <- function(status = 200L,
                              json = NULL,
                              json_throws = FALSE,
                              perform_throws = FALSE) {
-    # mocks for your wrapper layer
-    binds <- list(
-        .http_request = function(url) list(.url = url),
-        .http_req_headers = function(req, ...) req,
-        .http_req_timeout = function(req, ...) req,
-        .http_req_retry = function(req, ...) req,
-        .http_req_perform = if (perform_throws) {
-            function(req, ...) stop("network fail")
-        } else {
-            function(req, ...) structure(list(.url = req$.url), class = "httr2_response")
-        },
-        .http_resp_status = function(resp) status,
-        .http_resp_body_json = if (json_throws) {
-            function(...) stop("boom")
-        } else {
-            function(resp, simplifyVector = FALSE) json
-        }
-    )
-    .patch_pkg(binds) # patch in gptr namespace only
-}
-
-# Patch only if the binding exists in the package
-.patch_pkg <- function(bindings) {
-  pkg_ns <- asNamespace("gptr")
-  have <- intersect(names(bindings), ls(pkg_ns, all.names = TRUE))
-  if (!length(have)) {
-    return(invisible(FALSE))
-  }
-  do.call(
-    testthat::local_mocked_bindings,
-    c(bindings[have], list(.env = pkg_ns))
+  if (is.null(json)) json <- list()
+  resp <- json_resp(status = status, body = json)
+  httr2::local_mock(
+    .http_request = function(url) list(.url = url),
+    .http_req_headers = function(req, ...) req,
+    .http_req_timeout = function(req, ...) req,
+    .http_req_retry = function(req, ...) req,
+    .http_req_perform = if (perform_throws) {
+      function(req, ...) stop("network fail")
+    } else {
+      function(req, ...) resp
+    },
+    .http_resp_status = function(resp) status,
+    .http_resp_body_json = if (json_throws) {
+      function(...) stop("boom")
+    } else {
+      function(resp, simplifyVector = FALSE) json
+    },
+    .env = asNamespace("gptr")
   )
   invisible(TRUE)
 }
 
 # Cache: tolerate any signature using ...
-.patch_pkg(list(
+httr2::local_mock(
   .cache_get = function(...) {
     a <- list(...)
     key_fun <- getFromNamespace('.cache_key', 'gptr')
@@ -86,34 +83,9 @@ mock_http_openai <- function(status = 200L,
     key <- key_fun(provider, base_url)
     .gptr_test_cache_store$remove(key)
     invisible(TRUE)
-  }
-))
-
-# Airtight mock for OpenAI model listing via httr2 wrappers
-mock_http_openai <- function(status = 200L,
-                             json = NULL,
-                             json_throws = FALSE,
-                             perform_throws = FALSE) {
-  binds <- list(
-    .http_request = function(url) list(.url = url),
-    .http_req_headers = function(req, ...) req,
-    .http_req_timeout = function(req, ...) req,
-    .http_req_retry = function(req, ...) req,
-    .http_req_perform = if (perform_throws) {
-      function(req, ...) stop("network fail")
-    } else {
-      function(req, ...) structure(list(.url = req$.url), class = "httr2_response")
-    },
-    .http_resp_status = function(resp) status,
-    .http_resp_body_json = if (json_throws) {
-      function(...) stop("boom")
-    } else {
-      function(resp, simplifyVector = FALSE) json
-    }
-  )
-  .patch_pkg(binds)
-  invisible(TRUE)
-}
+  },
+  .env = asNamespace("gptr")
+)
 
 # Deterministic clock
 fixed_ts <- 1755806518
@@ -205,12 +177,13 @@ test_that("cache put / get / del", {
 
 test_that("refresh with no models returns empty data", {
   fake_cache <- make_fake_cache()
-  local_mocked_bindings(
+  httr2::local_mock(
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_del = function(...) invisible(TRUE),
     .fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
-    .api_root = function(x) x
+    .api_root = function(x) x,
+    .env = asNamespace("gptr")
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
   expect_equal(nrow(out), 0)
@@ -286,7 +259,7 @@ test_that("refresh_models handles openai provider", {
   fake_cache <- make_fake_cache()
   payload <- openai_models_payload()
   mock_http_openai(status = 200L, json = payload)
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_del = function(...) invisible(TRUE),
@@ -305,7 +278,7 @@ test_that("refresh_models skips cache when unreachable", {
   live_mock <- function(provider, base_url) {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
@@ -330,7 +303,7 @@ test_that("refresh_models retries after unreachable and caches", {
       list(df = data.frame(id = "m1", created = 1), status = "ok")
     }
   }
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
@@ -351,7 +324,7 @@ test_that(".fetch_models_cached skips cache when unreachable", {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
   f <- getFromNamespace(".fetch_models_cached", "gptr")
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
@@ -375,7 +348,7 @@ test_that(".fetch_models_cached retries after unreachable and caches", {
     }
   }
   f <- getFromNamespace(".fetch_models_cached", "gptr")
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
@@ -495,7 +468,7 @@ test_that("delete_models_cache removes by provider", {
   cache$set(key_fun("lmstudio", "http://127.0.0.1:1234"),
             list(provider = "lmstudio", base_url = "http://127.0.0.1:1234", models = list(), ts = 1))
   calls <- list()
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .cache_del = function(p, u) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
@@ -519,7 +492,7 @@ test_that("delete_models_cache removes by base_url", {
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   calls <- list()
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .cache_del = function(p, u) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
@@ -543,7 +516,7 @@ test_that("delete_models_cache removes by provider and base_url", {
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   calls <- list()
-  testthat::local_mocked_bindings(
+  httr2::local_mock(
     .cache_del = function(p, u) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
