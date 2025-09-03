@@ -97,21 +97,39 @@ test_that("auto + unknown model falls back to first preferred local", {
     old <- options(gptr.local_prefer = c("lmstudio","ollama","localai"))
     on.exit(options(old), add = TRUE)
 
+    with_mocked_bindings(
+        list_models = function(refresh = FALSE, ...) {
+            # empty union to trigger abort
+            data.frame(provider = character(), base_url = character(),
+                       model_id = character(), stringsAsFactors = FALSE)
+        },
+        {
+            expect_error(
+                gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE),
+                "Model 'nonexistent-model' is not available"
+            )
+        }
+    )
+})
+
+test_that("auto honors base_url hint when model missing", {
     called <- NULL
     with_mocked_bindings(
         list_models = function(refresh = FALSE, ...) {
-            # empty union forces fallback
             data.frame(provider = character(), base_url = character(),
                        model_id = character(), stringsAsFactors = FALSE)
         },
         request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, paste0("local@", base_url))
-            fake_resp(model = payload$model %||% "fallback")
+            fake_resp(model = payload$model %||% "mistral")
         },
         {
-            res <- gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE)
-            # default lmstudio root from options
-            expect_identical(called, "local@http://127.0.0.1:1234")
+            res <- gpt("hi",
+                       model = "mistralai/mistral-7b-instruct-v0.3",
+                       provider = "auto",
+                       base_url = "http://192.168.1.50:1234",
+                       print_raw = FALSE)
+            expect_identical(called, "local@http://192.168.1.50:1234")
         }
     )
 })

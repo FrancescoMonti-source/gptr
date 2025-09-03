@@ -43,6 +43,7 @@ gpt <- function(prompt,
     if (identical(provider, "auto") && is.character(model) && nzchar(model)) {
         lm <- try(list_models(refresh = FALSE), silent = TRUE)
         has <- function(nm) (!inherits(lm, "try-error") && NROW(lm) && nm %in% names(lm))
+        found <- FALSE
         if (!inherits(lm, "try-error") && NROW(lm)) {
             mdl_col <- if (has("model_id")) "model_id" else if (has("id")) "id" else NULL
             if (!is.null(mdl_col) && "provider" %in% names(lm)) {
@@ -64,8 +65,15 @@ gpt <- function(prompt,
                         backend  <- hit_provider
                         base_root <- .api_root(as.character(hit$base_url[1L]))
                     }
+                    found <- TRUE
                 }
             }
+        }
+        if (!found && (is.null(base_url) || !nzchar(base_url)) && (is.null(backend) || !nzchar(backend))) {
+            rlang::abort(
+                sprintf("Model '%s' is not available in any backend.\nTo list: list_models()", model),
+                call = NULL
+            )
         }
     }
 
