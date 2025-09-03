@@ -15,7 +15,7 @@ fake_resp <- function(model = "dummy") {
 
 test_that("auto + openai model routes to OpenAI", {
     called <- NULL
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
                 provider = "openai",
@@ -48,7 +48,7 @@ test_that("auto + openai model routes to OpenAI", {
 
 test_that("auto + local model routes to local", {
     called <- NULL
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
                 provider = "lmstudio",
@@ -85,7 +85,7 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
     on.exit(options(old), add = TRUE)
 
     called <- NULL
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
                 provider = c("openai", "ollama"),
@@ -117,28 +117,30 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
 test_that("auto + unknown model errors asking for provider", {
     delete_models_cache()
     called <- character()
-    httr2::local_mock(
+    testthat::local_mocked_bindings(
         req_perform = function(req, ...) {
             url <- httr2::req_url(req)
             called <<- c(called, url)
-            structure(list(url = url), class = "fake_resp")
+            fake_resp()
         },
+        .env = asNamespace("httr2")
+    )
+    testthat::local_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
+                                        openai_api_key = "", ...) {
             list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
         },
-        {
-            expect_error(
-                gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE),
-                "specify a provider"
-            )
-        }
+        .env = asNamespace("gptr")
+    )
+    expect_error(
+        gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE),
+        "specify a provider"
     )
 })
 
 test_that("auto with no local backend falls back to OpenAI", {
     called <- NULL
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(provider = character(), base_url = character(),
                        model_id = character(), stringsAsFactors = FALSE)
@@ -165,7 +167,7 @@ test_that("auto with no local backend falls back to OpenAI", {
 
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
             list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE),
@@ -186,7 +188,7 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
 
 test_that("missing openai model falls back to default", {
     used <- NULL
-    with_mocked_bindings(
+    testthat::with_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
             list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE), status = "ok")
@@ -207,7 +209,7 @@ test_that("missing openai model falls back to default", {
 # then that exact URL must be used, not replaced by defaults or by whatever is in the cache.
 test_that("explicit local base_url is honored", {
     called <- NULL
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
             list(df = data.frame(id = "mistralai/mistral-7b-instruct-v0.3",
@@ -231,7 +233,7 @@ test_that("explicit local base_url is honored", {
 })
 
 test_that("strict_model errors when model not installed (local)", {
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
             list(df = data.frame(id = "mistral", stringsAsFactors = FALSE), status = "ok")
@@ -256,15 +258,15 @@ test_that("strict_model errors when model not installed (local)", {
 test_that("strict_model ignored when model listing unavailable", {
     delete_models_cache()
     called <- FALSE
-    httr2::local_mock(
+    testthat::local_mocked_bindings(
         req_perform = function(req, ...) {
             called <<- TRUE
-            structure(list(), class = "httr2_response")
+            fake_resp()
         },
         resp_status = function(resp, ...) 404L,
         .env = asNamespace("httr2")
     )
-    httr2::local_mock(
+    testthat::local_mocked_bindings(
         request_local = function(payload, base_url, timeout = 30) {
             fake_resp(model = payload$model %||% "mistral")
         },
@@ -283,7 +285,7 @@ test_that("strict_model ignored when model listing unavailable", {
 
 test_that("model match is case-insensitive", {
     called <- NULL
-    httr2::with_mock(
+    testthat::with_mocked_bindings(
         .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(
                 provider = "openai",
