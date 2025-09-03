@@ -504,8 +504,6 @@ list_models <- function(provider = NULL,
   }
 
   out <- do.call(rbind, rows)
-  attr(out, "diagnostics") <- diagnostics
-
 
   # Add human-readable timestamp (UTC) where 'created' is present
   out$created <- suppressWarnings(as.numeric(out$created))
@@ -518,7 +516,9 @@ list_models <- function(provider = NULL,
     -ifelse(is.na(out$created), 0, out$created),
     tolower(ifelse(is.na(out$model_id), "", out$model_id))
   )
-  out[ord, , drop = FALSE]
+  out <- out[ord, , drop = FALSE]
+  attr(out, "diagnostics") <- diagnostics
+  out
 }
 
 # Convenience wrapper ------------------------------------------------------
