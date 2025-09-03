@@ -113,19 +113,20 @@ test_that("auto + unknown model falls back to first preferred local", {
 
     delete_models_cache()
     called <- character()
-    testthat::local_mock(
-        `httr2::req_perform` = function(req, ...) {
+    testthat::local_mocked_bindings(
+        req_perform = function(req, ...) {
             url <- httr2::req_url(req)
             called <<- c(called, url)
             structure(list(url = url), class = "fake_resp")
         },
-        `httr2::resp_status` = function(resp, ...) 404L,
-        `httr2::resp_body_json` = function(resp, ...) {
+        resp_status = function(resp, ...) 404L,
+        resp_body_json = function(resp, ...) {
             list(
                 model = "fallback",
                 choices = list(list(message = list(content = "ok")))
             )
-        }
+        },
+        .env = asNamespace("httr2")
     )
     res <- gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE)
     expect_true(grepl("^http://127\\.0\\.0\\.1:1234", tail(called, 1)))
