@@ -169,13 +169,13 @@
 #' @keywords internal
 .fetch_models_live <- function(provider,
                                base_url,
-                               openai_api_key = "",
                                timeout = getOption("gptr.request_timeout", 5)) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
   }
   if (identical(provider, "openai")) {
-    .fetch_models_live_openai(base_url, openai_api_key, timeout)
+    key <- Sys.getenv("OPENAI_API_KEY", "")
+    .fetch_models_live_openai(base_url, key, timeout)
   } else {
     .fetch_models_live_local(provider, base_url, timeout)
   }
@@ -338,10 +338,10 @@
         ttl <- getOption("gptr.model_cache_ttl", 3600)
         if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(list(df = .as_models_df(ent$models), status = "ok"))
     }
-    live <- .fetch_models_live(provider, base_url, openai_api_key)
+    live <- .fetch_models_live(provider, base_url)
     if (identical(live$status, "unreachable")) {
         Sys.sleep(0.2)
-        live <- .fetch_models_live(provider, base_url, openai_api_key)
+        live <- .fetch_models_live(provider, base_url)
         if (identical(live$status, "unreachable")) {
             return(live)
         }
