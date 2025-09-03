@@ -228,28 +228,25 @@ test_that("strict_model errors when model not installed (local)", {
 test_that("strict_model ignored when model listing unavailable", {
     delete_models_cache()
     called <- FALSE
-    httr2::with_mocked_bindings(
+    httr2::local_mocked_bindings(
         req_perform = function(req, ...) {
             called <<- TRUE
-            stop("mock req_perform failure")
+            structure(list(), class = "httr2_response")
         },
-        {
-            with_mocked_bindings(
-                request_local = function(payload, base_url, timeout = 30) {
-                    fake_resp(model = payload$model %||% "mistral")
-                },
-                {
-                    expect_error(
-                        gpt("hi",
-                            provider = "local",
-                            model = "llama3:latest",
-                            strict_model = TRUE,
-                            print_raw = FALSE),
-                        NA
-                    )
-                }
-            )
+        resp_status = function(resp, ...) 404L
+    )
+    local_mocked_bindings(
+        request_local = function(payload, base_url, timeout = 30) {
+            fake_resp(model = payload$model %||% "mistral")
         }
+    )
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            model = "llama3:latest",
+            strict_model = TRUE,
+            print_raw = FALSE),
+        NA
     )
     expect_true(called)
 })
