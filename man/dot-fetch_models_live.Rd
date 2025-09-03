@@ -10,7 +10,6 @@ a generic flow for local backends. Always uses the \verb{.http_*} wrappers.}
 .fetch_models_live(
   provider,
   base_url,
-  openai_api_key = "",
   timeout = getOption("gptr.request_timeout", 5)
 )
 }
