@@ -37,6 +37,7 @@ gpt <- function(prompt,
                 ...) {
 
     provider <- match.arg(provider)
+    provider_input <- provider
     base_root <- NULL
 
     # --- Early auto+model resolution (use cache, no heuristics) ---
@@ -171,14 +172,16 @@ gpt <- function(prompt,
             invisible(try(.fetch_models_cached(provider = "openai", base_url = bu_root,
                                                   openai_api_key = defs$api_key), silent = TRUE))
         }
-        if (!is.null(model) && nzchar(model)) {
-            ids <- tryCatch(
-                .fetch_models_cached(provider = "openai", base_url = bu_root,
-                                         openai_api_key = defs$api_key)$df$id,
-                error = function(e) character(0)
-            )
-            if (length(ids) && !tolower(model) %in% tolower(ids)) {
-                stop(sprintf("Model '%s' not found for OpenAI.\nTo list: list_models('openai')", model), call. = FALSE)
+        ids <- tryCatch(
+            .fetch_models_cached(provider = "openai", base_url = bu_root,
+                                     openai_api_key = defs$api_key)$df$id,
+            error = function(e) character(0)
+        )
+        if (length(ids) && !tolower(defs$model) %in% tolower(ids)) {
+            if (identical(provider_input, "auto")) {
+                stop(sprintf("Model '%s' not found for OpenAI. Please specify a provider.", defs$model), call. = FALSE)
+            } else {
+                defs$model <- .resolve_openai_defaults(base_url = defs$base_url, api_key = defs$api_key)$model
             }
         }
         payload <- openai_compose_payload(
@@ -203,12 +206,22 @@ gpt <- function(prompt,
             unique(na.omit(as.character(ent$df$id)))
         } else character(0)
 
-        requested_model <- model %||% getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
+        default_model <- getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
+        requested_model <- model %||% default_model
 
         if (nzchar(requested_model) && length(ids) &&
             !tolower(requested_model) %in% tolower(ids)) {
-            msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
-            if (isTRUE(strict_model)) stop(msg, call. = FALSE) else warning(msg, call. = FALSE)
+            if (identical(provider_input, "auto")) {
+                stop(sprintf("Model '%s' not found. Please specify a provider.", requested_model), call. = FALSE)
+            } else {
+                msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
+                if (isTRUE(strict_model)) {
+                    stop(msg, call. = FALSE)
+                } else {
+                    warning(msg, call. = FALSE)
+                    requested_model <- default_model
+                }
+            }
         }
 
         msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)

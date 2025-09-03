@@ -114,10 +114,7 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
     )
 })
 
-test_that("auto + unknown model falls back to first preferred local", {
-    old <- options(gptr.local_prefer = c("lmstudio","ollama","localai"))
-    on.exit(options(old), add = TRUE)
-
+test_that("auto + unknown model errors asking for provider", {
     delete_models_cache()
     called <- character()
     httr2::local_mock(
@@ -126,17 +123,17 @@ test_that("auto + unknown model falls back to first preferred local", {
             called <<- c(called, url)
             structure(list(url = url), class = "fake_resp")
         },
-        resp_status = function(resp, ...) 404L,
-        resp_body_json = function(resp, ...) {
-            list(
-                model = "fallback",
-                choices = list(list(message = list(content = "ok")))
-            )
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
         },
-        .env = asNamespace("httr2")
+        {
+            expect_error(
+                gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE),
+                "specify a provider"
+            )
+        }
     )
-    res <- gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE)
-    expect_true(grepl("^http://127\\.0\\.0\\.1:1234", tail(called, 1)))
 })
 
 test_that("auto with no local backend falls back to OpenAI", {
@@ -184,6 +181,25 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
             expect_identical(called, "openai")
         },
         .env = asNamespace("gptr")
+    )
+})
+
+test_that("missing openai model falls back to default", {
+    used <- NULL
+    with_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE), status = "ok")
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            used <<- payload$model
+            fake_resp(model = payload$model %||% "gpt-4o-mini")
+        },
+        {
+            res <- gpt("hi", model = "unknown", provider = "openai",
+                       openai_api_key = "sk-test", print_raw = FALSE)
+            expect_identical(used, "gpt-4o-mini")
+        }
     )
 })
 
