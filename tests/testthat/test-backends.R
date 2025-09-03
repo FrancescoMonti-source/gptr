@@ -226,25 +226,32 @@ test_that("strict_model errors when model not installed (local)", {
 })
 
 test_that("strict_model ignored when model listing unavailable", {
-    with_mocked_bindings(
-        .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
-        },
-        request_local = function(payload, base_url, timeout = 30) {
-            fake_resp(model = payload$model %||% "mistral")
+    delete_models_cache()
+    called <- FALSE
+    httr2::with_mocked_bindings(
+        req_perform = function(req, ...) {
+            called <<- TRUE
+            stop("mock req_perform failure")
         },
         {
-            expect_error(
-                gpt("hi",
-                    provider = "local",
-                    model = "llama3:latest",
-                    strict_model = TRUE,
-                    print_raw = FALSE),
-                NA
+            with_mocked_bindings(
+                request_local = function(payload, base_url, timeout = 30) {
+                    fake_resp(model = payload$model %||% "mistral")
+                },
+                {
+                    expect_error(
+                        gpt("hi",
+                            provider = "local",
+                            model = "llama3:latest",
+                            strict_model = TRUE,
+                            print_raw = FALSE),
+                        NA
+                    )
+                }
             )
         }
     )
+    expect_true(called)
 })
 
 test_that("model match is case-insensitive", {
