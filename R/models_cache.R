@@ -221,7 +221,8 @@
 }
 
 # Look up a cached entry in .gptr_cache by provider+base_url.
-# Returns NULL if not cached.
+# cachem's default `missing` value yields a `key_missing` sentinel; explicitly
+# return `NULL` when an entry doesn't exist so callers can rely on `is.null()`.
 .cache_get <- function(provider, base_url) {
   .gptr_cache$get(.cache_key(provider, base_url), missing = NULL)
 }
