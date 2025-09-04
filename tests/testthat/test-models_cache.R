@@ -43,7 +43,7 @@ test_that("refresh with no models returns empty data", {
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_del = function(...) invisible(TRUE),
-    .fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
+    fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
     .api_root = function(x) x,
     .env = asNamespace("gptr")
   )
@@ -53,7 +53,7 @@ test_that("refresh with no models returns empty data", {
 
 
 test_that("openai non-JSON -> non_json", {
-  f <- getFromNamespace(".fetch_models_live", "gptr")
+  f <- getFromNamespace("fetch_models_live", "gptr")
   withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(status = 200L, json_throws = TRUE)
   o <- f("openai", "https://api.openai.com")
@@ -61,7 +61,7 @@ test_that("openai non-JSON -> non_json", {
 })
 
 test_that("openai network error -> unreachable", {
-  f <- getFromNamespace(".fetch_models_live", "gptr")
+  f <- getFromNamespace("fetch_models_live", "gptr")
   withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(perform_throws = TRUE)
   o <- f("openai", "https://api.openai.com")
@@ -69,7 +69,7 @@ test_that("openai network error -> unreachable", {
 })
 
 test_that("openai 5xx -> http_503", {
-  f <- getFromNamespace(".fetch_models_live", "gptr")
+  f <- getFromNamespace("fetch_models_live", "gptr")
   withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(status = 503L)
   o <- f("openai", "https://api.openai.com")
@@ -77,7 +77,7 @@ test_that("openai 5xx -> http_503", {
 })
 
 test_that("openai ok -> df parsed and status ok", {
-  f <- getFromNamespace(".fetch_models_live", "gptr")
+  f <- getFromNamespace("fetch_models_live", "gptr")
   withr::local_envvar(OPENAI_API_KEY = "sk-test")
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
@@ -101,8 +101,8 @@ test_that("openai empty model list -> empty_cache", {
   expect_identical(diag$provider, "openai")
 })
 
-test_that("openai fallback semantics via .fetch_models_live", {
-  f <- getFromNamespace(".fetch_models_live", "gptr")
+test_that("openai fallback semantics via fetch_models_live", {
+  f <- getFromNamespace("fetch_models_live", "gptr")
   withr::local_envvar(OPENAI_API_KEY = "sk")
 
   mock_http_openai(status = 200L, json_throws = TRUE)
@@ -143,7 +143,7 @@ test_that("refresh_models skips cache when unreachable", {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
   testthat::local_mocked_bindings(
-    .fetch_models_live = live_mock,
+    fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_del = function(...) invisible(TRUE),
@@ -168,7 +168,7 @@ test_that("refresh_models retries after unreachable and caches", {
     }
   }
   testthat::local_mocked_bindings(
-    .fetch_models_live = live_mock,
+    fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_del = function(...) invisible(TRUE),
@@ -189,7 +189,7 @@ test_that(".fetch_models_cached skips cache when unreachable", {
   }
   f <- getFromNamespace(".fetch_models_cached", "gptr")
   testthat::local_mocked_bindings(
-    .fetch_models_live = live_mock,
+    fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .env = asNamespace("gptr")
@@ -213,7 +213,7 @@ test_that(".fetch_models_cached retries after unreachable and caches", {
   }
   f <- getFromNamespace(".fetch_models_cached", "gptr")
   testthat::local_mocked_bindings(
-    .fetch_models_live = live_mock,
+    fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .env = asNamespace("gptr")
@@ -453,10 +453,8 @@ test_that("list_models - second call uses cache when available", {
 
 
 
-test_that(".fetch_models_cached_* helpers are present", {
-  f_local <- getFromNamespace(".fetch_models_cached_local", "gptr")
-  f_openai <- getFromNamespace(".fetch_models_cached_openai", "gptr")
-  expect_type(f_local, "closure")
-  expect_type(f_openai, "closure")
+test_that("fetch_models_cached helper is present", {
+  f <- getFromNamespace("fetch_models_cached", "gptr")
+  expect_type(f, "closure")
 })
 

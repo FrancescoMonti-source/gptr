@@ -167,15 +167,15 @@
 #' Branches on provider to apply OpenAI-specific headers and retry logic or
 #' a generic flow for local backends.
 #' @keywords internal
-.fetch_models_live <- function(provider,
+fetch_models_live <- function(provider,
                                base_url,
+                               openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
                                timeout = getOption("gptr.request_timeout", 5)) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
   }
   if (identical(provider, "openai")) {
-    key <- Sys.getenv("OPENAI_API_KEY", "")
-    .fetch_models_live_openai(base_url, key, timeout)
+    .fetch_models_live_openai(base_url, openai_api_key, timeout)
   } else {
     .fetch_models_live_local(provider, base_url, timeout)
   }
@@ -338,10 +338,10 @@
         ttl <- getOption("gptr.model_cache_ttl", 3600)
         if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(list(df = .as_models_df(ent$models), status = "ok"))
     }
-    live <- .fetch_models_live(provider, base_url)
+    live <- fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
     if (identical(live$status, "unreachable")) {
         Sys.sleep(0.2)
-        live <- .fetch_models_live(provider, base_url)
+        live <- fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
         if (identical(live$status, "unreachable")) {
             return(live)
         }
@@ -389,43 +389,43 @@
         stringsAsFactors = FALSE
     )
 }
+#' Fetch models for a provider/base_url pair, using cache unless refreshed.
 #' @keywords internal
-.fetch_models_cached_local <- function(provider, base_url) {
+fetch_models_cached <- function(provider, base_url,
+                                refresh = FALSE,
+                                openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+  base_url <- .api_root(base_url)
+  if (isTRUE(refresh)) .cache_del(provider, base_url)
+
   ent <- .cache_get(provider, base_url)
   if (is.null(ent)) {
-    live <- .fetch_models_cached(provider, base_url)
+    live <- .fetch_models_cached(provider, base_url, openai_api_key = openai_api_key)
     mods <- live$df
-    ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
+    status <- live$status
     src <- "live"
-    if (provider == "ollama" && nrow(mods) == 0) {
+    ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
+    if (identical(provider, "ollama") && nrow(mods) == 0) {
       mods <- .ollama_tags_live(base_url)
       .cache_put(provider, base_url, mods)
       ts <- .cache_get(provider, base_url)$ts
     }
-    .row_df(provider, base_url, mods, "installed", src, ts, status = live$status)
-  } else {
-    .row_df(provider, base_url, ent$models, "installed", "cache", ent$ts)
-  }
-}
-
-#' @keywords internal
-.fetch_models_cached_openai <- function(openai_api_key,
-                                        base_url = "https://api.openai.com") {
-  ent <- .cache_get("openai", base_url)
-  if (is.null(ent)) {
-    live <- .fetch_models_live_openai(base_url, openai_api_key)
-    if (identical(live$status, "ok") && nrow(live$df) > 0) {
-      .cache_put("openai", base_url, live$df)
-      ts <- .cache_get("openai", base_url)$ts
-    } else if (identical(live$status, "ok") && nrow(live$df) == 0) {
-      live$status <- "empty_cache"
-      ts <- as.numeric(Sys.time())
-    } else {
-      ts <- as.numeric(Sys.time())
+    if (identical(provider, "openai")) {
+      if (identical(status, "ok") && nrow(mods) > 0) {
+        .cache_put("openai", base_url, mods)
+        ts <- .cache_get("openai", base_url)$ts
+      } else if (identical(status, "ok") && nrow(mods) == 0) {
+        status <- "empty_cache"
+        ts <- as.numeric(Sys.time())
+      } else {
+        ts <- as.numeric(Sys.time())
+      }
+      return(.row_df("openai", base_url, mods, "catalog", src, ts, status = status))
     }
-    .row_df("openai", base_url, live$df, "catalog", "live", ts, status = live$status)
+    .row_df(provider, base_url, mods, "installed", src, ts, status = status)
   } else {
-    .row_df("openai", base_url, ent$models, "catalog", "cache", ent$ts, status = "ok_cache")
+    status <- if (identical(provider, "openai")) "ok_cache" else NA_character_
+    avail <- if (identical(provider, "openai")) "catalog" else "installed"
+    .row_df(provider, base_url, ent$models, avail, "cache", ent$ts, status = status)
   }
 }
 
@@ -468,24 +468,16 @@ list_models <- function(provider = NULL,
   diagnostics <- list()
 
   for (p in providers) {
-    if (p %in% c("lmstudio", "ollama", "localai")) {
-      bu_default <- switch(p,
-        lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
-        ollama   = getOption("gptr.ollama_base_url", "http://127.0.0.1:11434"),
-        localai  = getOption("gptr.localai_base_url", "http://127.0.0.1:8080")
-      )
-      bu <- .api_root(base_url %||% bu_default)
-      if (isTRUE(refresh)) .cache_del(p, bu)
-      df <- .fetch_models_cached_local(p, bu)
-      diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
-      rows[[length(rows) + 1L]] <- df
-    } else if (p == "openai") {
-      bu <- .api_root(base_url %||% "https://api.openai.com")
-      if (isTRUE(refresh)) .cache_del("openai", bu)
-      df <- .fetch_models_cached_openai(openai_api_key, bu)
-      diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
-      rows[[length(rows) + 1L]] <- df
-  }
+    bu_default <- switch(p,
+      lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
+      ollama   = getOption("gptr.ollama_base_url", "http://127.0.0.1:11434"),
+      localai  = getOption("gptr.localai_base_url", "http://127.0.0.1:8080"),
+      openai   = "https://api.openai.com"
+    )
+    bu <- .api_root(base_url %||% bu_default)
+    df <- fetch_models_cached(p, bu, refresh = refresh, openai_api_key = openai_api_key)
+    diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
+    rows[[length(rows) + 1L]] <- df
   }
 
 
