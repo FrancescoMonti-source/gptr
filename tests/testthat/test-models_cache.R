@@ -463,10 +463,27 @@ test_that("list_models - second call uses cache when available", {
 
 
 
-test_that(".fetch_models_cached_* helpers are present", {
-  f_local <- getFromNamespace(".fetch_models_cached_local", "gptr")
-  f_openai <- getFromNamespace(".fetch_models_cached_openai", "gptr")
-  expect_type(f_local, "closure")
-  expect_type(f_openai, "closure")
+test_that("fetch_models_cached handles local and openai", {
+  f <- getFromNamespace("fetch_models_cached", "gptr")
+
+  fake_cache <- make_fake_cache()
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, openai_api_key = "", ...) {
+      if (provider == "openai") {
+        list(df = data.frame(id = "gpt-4o", created = 1), status = "ok")
+      } else {
+        list(df = data.frame(id = "m1", created = 1), status = "ok")
+      }
+    },
+    .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+
+  out_local <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_equal(out_local$availability, "installed")
+
+  out_openai <- f("openai", "https://api.openai.com", openai_api_key = "sk")
+  expect_equal(out_openai$availability, "catalog")
 })
 
