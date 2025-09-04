@@ -23,30 +23,23 @@ mock_http_openai <- function(status = 200L,
                              json_throws = FALSE,
                              perform_throws = FALSE) {
   if (is.null(json)) json <- list()
-  resp <- json_resp(status = status, body = json)
-  testthat::local_mocked_bindings(
-    .http_request = function(url) list(.url = url),
-    .http_req_headers = function(req, ...) req,
-    .http_req_timeout = function(req, ...) req,
-    .http_req_retry = function(req, ...) req,
-    .http_resp_status = function(resp) status,
-    .http_resp_body_json = if (json_throws) {
-      function(...) stop("boom")
-    } else {
-      function(resp, simplifyVector = FALSE) json
-    },
-    .env = asNamespace("gptr"),
-    .local_envir = parent.frame()
-  )
-  testthat::local_mocked_bindings(
-    req_perform = if (perform_throws) {
-      function(req, ...) stop("network fail")
-    } else {
-      function(req, ...) resp
-    },
-    .env = asNamespace("httr2"),
-    .local_envir = parent.frame()
-  )
+  resp <- if (json_throws) {
+    httr2::response(
+      status = status,
+      body = charToRaw("{"),
+      headers = list("content-type" = "application/json")
+    )
+  } else {
+    json_resp(status = status, body = json)
+  }
+
+  handler <- if (perform_throws) {
+    function(req) stop("network fail")
+  } else {
+    function(req) resp
+  }
+
+  httr2::local_mock(handler, .local_envir = parent.frame())
   invisible(TRUE)
 }
 
