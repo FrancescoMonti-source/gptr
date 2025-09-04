@@ -326,6 +326,25 @@ test_that(".fetch_models_cached enumerates cache contents", {
   expect_equal(out$n_models[out$provider == "openai"], 1L)
 })
 
+test_that(".fetch_models_cached defaults base_url per provider", {
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, ...) {
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    },
+    .cache_get = function(...) NULL,
+    .cache_put = function(...) NULL,
+    .env = asNamespace("gptr")
+  )
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
+
+  out1 <- f("lmstudio")
+  expect_equal(unique(out1$base_url), "http://127.0.0.1:1234")
+
+  out2 <- f("openai")
+  expect_equal(unique(out2$base_url), "https://api.openai.com")
+})
+
 test_that("invalidate clears cache", {
   inv <- getFromNamespace("delete_models_cache", "gptr")
   cache <- getFromNamespace(".gptr_cache", "gptr")

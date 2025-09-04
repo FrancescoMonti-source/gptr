@@ -239,9 +239,47 @@
 
 ## unified cached fetch -------------------------------------------------------
 #' @keywords internal
-.fetch_models_cached <- function(provider,
-                                 base_url,
+.fetch_models_cached <- function(provider = NULL,
+                                 base_url = NULL,
                                  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+
+  # enumerate existing cache entries ---------------------------------------
+  if (is.null(provider) && is.null(base_url)) {
+    keys <- .gptr_cache$keys()
+    if (!length(keys)) {
+      return(data.frame(
+        provider = character(),
+        base_url = character(),
+        n_models = integer(),
+        cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "UTC"),
+        stringsAsFactors = FALSE
+      ))
+    }
+    ents <- lapply(keys, function(k) .gptr_cache$get(k, missing = NULL))
+    out <- data.frame(
+      provider = vapply(ents, `[[`, character(1), "provider"),
+      base_url = vapply(ents, `[[`, character(1), "base_url"),
+      n_models = vapply(ents, function(e) nrow(e$models), integer(1)),
+      cached_at = as.POSIXct(vapply(ents, `[[`, numeric(1), "ts"), origin = "1970-01-01", tz = "UTC"),
+      stringsAsFactors = FALSE
+    )
+    return(out)
+  }
+
+  if (is.null(provider)) {
+    stop("argument 'provider' is missing", call. = FALSE)
+  }
+
+  if (is.null(base_url)) {
+    base_url <- switch(provider,
+      lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
+      ollama   = getOption("gptr.ollama_base_url", "http://127.0.0.1:11434"),
+      openai   = "https://api.openai.com",
+      localai  = getOption("gptr.localai_base_url", "http://127.0.0.1:8080"),
+      base_url
+    )
+  }
+
   root <- .api_root(base_url)
   availability <- if (identical(provider, "openai")) "catalog" else "installed"
   ent <- .cache_get(provider, root)
