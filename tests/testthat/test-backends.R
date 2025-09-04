@@ -11,9 +11,6 @@ fake_resp <- function(model = "dummy") {
     list(body = body, resp = resp)
 }
 
-original_resolve_model_provider <- gptr:::.resolve_model_provider
-original_fetch_models_cached <- gptr:::.fetch_models_cached
-
 test_that("auto + openai model routes to OpenAI", {
     called <- NULL
     testthat::local_mocked_bindings(
@@ -328,7 +325,7 @@ test_that("model match is case-insensitive", {
 })
 
 test_that("no backend mocks persist across tests", {
-    expect_identical(gptr:::.resolve_model_provider, original_resolve_model_provider)
-    expect_identical(gptr:::.fetch_models_cached, original_fetch_models_cached)
+    expect_identical(gptr:::.resolve_model_provider, .orig_resolve_model_provider)
+    expect_identical(gptr:::.fetch_models_cached, .orig_fetch_models_cached)
 })
 
