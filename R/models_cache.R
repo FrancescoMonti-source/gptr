@@ -267,179 +267,90 @@
   invisible(TRUE)
 }
 
-
-#' @noRd
+## unified cached fetch -------------------------------------------------------
 #' @keywords internal
-.fetch_models_cached <- function(provider = NULL, base_url = NULL,
-                                    openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
-    # Case A: both missing -> enumerate everything currently cached (summary view)
-    if (is.null(provider) && is.null(base_url)) {
-        keys <- .gptr_cache$keys()
-        if (!length(keys)) {
-            return(data.frame(
-                provider   = character(),
-                base_url   = character(),
-                n_models   = integer(),
-                cached_at  = as.POSIXct(character(), tz = "UTC"),
-                stringsAsFactors = FALSE
-            ))
-        }
-        rows <- lapply(keys, function(k) {
-            ent <- .gptr_cache$get(k, missing = NULL)
-            if (is.null(ent)) {
-                return(NULL)
-            }
-            data.frame(
-                provider  = ent$provider %||% NA_character_,
-                base_url  = ent$base_url %||% NA_character_,
-                n_models  = NROW(.as_models_df(ent$models)),
-                cached_at = if (!is.null(ent$ts)) {
-                    as.POSIXct(ent$ts, origin = "1970-01-01", tz = "UTC")
-                } else {
-                    as.POSIXct(NA, tz = "UTC")
-                },
-                stringsAsFactors = FALSE
-            )
-        })
-        rows <- Filter(Negate(is.null), rows)
-        if (!length(rows)) {
-            return(data.frame(
-                provider   = character(),
-                base_url   = character(),
-                n_models   = integer(),
-                cached_at  = as.POSIXct(character(), tz = "UTC"),
-                stringsAsFactors = FALSE
-            ))
-        }
-        return(do.call(rbind, rows))
+.fetch_models_cached <- function(provider,
+                                 base_url,
+                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+  root <- .api_root(base_url)
+  availability <- if (identical(provider, "openai")) "catalog" else "installed"
+  ent <- .cache_get(provider, root)
+  now <- as.numeric(Sys.time())
+  if (!is.null(ent)) {
+    use_cache <- FALSE
+    if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
+      use_cache <- TRUE
+    } else {
+      ttl <- getOption("gptr.model_cache_ttl", 3600)
+      if (!is.na(ent$ts) && (now - ent$ts) < ttl) use_cache <- TRUE
     }
-
-    # Case B: only provider
-    if (!is.null(provider) && is.null(base_url)) {
-        cands <- .list_local_backends()
-        cand <- cands[[provider]]
-        if (is.null(cand)) stop("Unknown provider '", provider, "'.")
-        base_url <- cand$base_url
+    if (use_cache) {
+      status <- if (identical(provider, "openai")) "ok_cache" else NA_character_
+      return(.row_df(provider, root, ent$models, availability, "cache", ent$ts, status = status))
     }
-
-    # Case C: only base_url
-    if (is.null(provider) && !is.null(base_url)) {
-        root <- .api_root(base_url)
-        keys <- .gptr_cache$keys()
-        hits <- vapply(keys, function(k) {
-            ent <- .gptr_cache$get(k, missing = NULL)
-            !is.null(ent) && identical(ent$base_url, root)
-        }, logical(1))
-
-        if (!any(hits)) return(character(0))
-        models <- unique(unlist(lapply(keys[hits], function(k) {
-            ent <- .gptr_cache$get(k, missing = NULL)
-            if (is.null(ent)) {
-                return(character(0))
-            }
-            .as_models_df(ent$models)$id
-        }), use.names = FALSE))
-        return(models %||% character(0))
+  }
+  live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+  if (identical(live$status, "unreachable")) {
+    Sys.sleep(0.2)
+    live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+  }
+  mods <- live$df
+  status <- live$status
+  ts <- now
+  if (provider == "ollama" && nrow(mods) == 0 && identical(status, "ok")) {
+    mods <- .ollama_tags_live(root)
+  }
+  if (identical(status, "ok")) {
+    if (provider == "openai") {
+      if (nrow(mods) > 0) {
+        .cache_put(provider, root, mods)
+        ts <- .cache_get(provider, root)$ts
+      } else {
+        status <- "empty_cache"
+      }
+    } else {
+      .cache_put(provider, root, mods)
+      ts <- .cache_get(provider, root)$ts
     }
-
-    # Case D: provider + base_url with TTL behavior
-    ent <- .cache_get(provider, base_url)
-    if (!is.null(ent)) {
-        if (isTRUE(getOption("gptr.check_model_once", TRUE))) return(list(df = .as_models_df(ent$models), status = "ok"))
-        ttl <- getOption("gptr.model_cache_ttl", 3600)
-        if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(list(df = .as_models_df(ent$models), status = "ok"))
-    }
-    live <- .fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
-    if (identical(live$status, "unreachable")) {
-        Sys.sleep(0.2)
-        live <- .fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
-        if (identical(live$status, "unreachable")) {
-            return(live)
-        }
-    }
-    if (identical(live$status, "ok")) {
-        .cache_put(provider, base_url, live$df)
-    }
-    live
+  }
+  .row_df(provider, root, mods, availability, "live", ts, status = status)
 }
 
 #' Resolve a model's provider from cache (minimal lookup)
 #' @keywords internal
 .resolve_model_provider <- function(model,
                                     openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
-    providers <- c("lmstudio", "ollama", "localai", "openai")
-    rows <- list()
-    if (!nzchar(model)) {
-        return(data.frame(provider = character(), base_url = character(),
-                          model_id = character(), stringsAsFactors = FALSE))
-    }
-    for (p in providers) {
-        if (p == "openai" && !nzchar(openai_api_key)) next
-        bu <- switch(p,
-            lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
-            ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
-            localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
-            openai   = "https://api.openai.com"
-        )
-        ent <- try(.fetch_models_cached(provider = p, base_url = bu,
-                                            openai_api_key = openai_api_key), silent = TRUE)
-        ids <- tryCatch({
-            if (is.list(ent) && !is.null(ent$df)) as.character(ent$df$id) else character(0)
-        }, error = function(e) character(0))
-        if (length(ids) && any(tolower(ids) == tolower(model))) {
-            rows[[length(rows) + 1L]] <- data.frame(
-                provider = p,
-                base_url = .api_root(bu),
-                model_id = model,
-                stringsAsFactors = FALSE
-            )
-        }
-    }
-    if (length(rows)) do.call(rbind, rows) else data.frame(
-        provider = character(), base_url = character(), model_id = character(),
-        stringsAsFactors = FALSE
+  providers <- c("lmstudio", "ollama", "localai", "openai")
+  rows <- list()
+  if (!nzchar(model)) {
+    return(data.frame(provider = character(), base_url = character(),
+                      model_id = character(), stringsAsFactors = FALSE))
+  }
+  for (p in providers) {
+    if (p == "openai" && !nzchar(openai_api_key)) next
+    bu <- switch(p,
+      lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
+      ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
+      localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
+      openai   = "https://api.openai.com"
     )
-}
-#' @keywords internal
-.fetch_models_cached_local <- function(provider, base_url) {
-  ent <- .cache_get(provider, base_url)
-  if (is.null(ent)) {
-    live <- .fetch_models_cached(provider, base_url)
-    mods <- live$df
-    ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
-    src <- "live"
-    if (provider == "ollama" && nrow(mods) == 0) {
-      mods <- .ollama_tags_live(base_url)
-      .cache_put(provider, base_url, mods)
-      ts <- .cache_get(provider, base_url)$ts
+    ent <- try(.fetch_models_cached(provider = p, base_url = bu,
+                                    openai_api_key = openai_api_key), silent = TRUE)
+    ids <- tryCatch(as.character(ent$model_id), error = function(e) character(0))
+    if (length(ids) && any(tolower(ids) == tolower(model))) {
+      rows[[length(rows) + 1L]] <- data.frame(
+        provider = p,
+        base_url = .api_root(bu),
+        model_id = model,
+        stringsAsFactors = FALSE
+      )
     }
-    .row_df(provider, base_url, mods, "installed", src, ts, status = live$status)
-  } else {
-    .row_df(provider, base_url, ent$models, "installed", "cache", ent$ts)
   }
+  if (length(rows)) do.call(rbind, rows) else data.frame(
+    provider = character(), base_url = character(), model_id = character(),
+    stringsAsFactors = FALSE
+  )
 }
-
-#' @keywords internal
-.fetch_models_cached_openai <- function(openai_api_key,
-                                        base_url = "https://api.openai.com") {
-  ent <- .cache_get("openai", base_url)
-  if (is.null(ent)) {
-    live <- .fetch_models_live_openai(base_url, openai_api_key)
-    if (identical(live$status, "ok") && nrow(live$df) > 0) {
-      .cache_put("openai", base_url, live$df)
-      ts <- .cache_get("openai", base_url)$ts
-    } else if (identical(live$status, "ok") && nrow(live$df) == 0) {
-      live$status <- "empty_cache"
-      ts <- as.numeric(Sys.time())
-    } else {
-      ts <- as.numeric(Sys.time())
-    }
-    .row_df("openai", base_url, live$df, "catalog", "live", ts, status = live$status)
-  } else {
-    .row_df("openai", base_url, ent$models, "catalog", "cache", ent$ts, status = "ok_cache")
-  }
-}
-
 # --- Public API --------------------------------------------------------------
 
 #' List models across local backends (LM Studio, Ollama, LocalAI) and OpenAI.
@@ -490,7 +401,7 @@ list_models <- function(provider = NULL,
         live <- .fetch_models_live(p, bu, refresh = TRUE)
         df <- .row_df(p, bu, live$df, "installed", "live", as.numeric(Sys.time()), status = live$status)
       } else {
-        df <- .fetch_models_cached_local(p, bu)
+        df <- .fetch_models_cached(p, bu, openai_api_key = openai_api_key)
       }
       diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
       rows[[length(rows) + 1L]] <- df
@@ -500,7 +411,7 @@ list_models <- function(provider = NULL,
         live <- .fetch_models_live("openai", bu, refresh = TRUE, openai_api_key = openai_api_key)
         df <- .row_df("openai", bu, live$df, "catalog", "live", as.numeric(Sys.time()), status = live$status)
       } else {
-        df <- .fetch_models_cached_openai(openai_api_key, bu)
+        df <- .fetch_models_cached("openai", bu, openai_api_key = openai_api_key)
       }
       diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
       rows[[length(rows) + 1L]] <- df

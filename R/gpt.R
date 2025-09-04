@@ -90,7 +90,7 @@ gpt <- function(prompt,
             for (bk in prefer) {
                 lm <- try(.fetch_models_cached(provider = bk, base_url = roots[[bk]],
                                                    openai_api_key = openai_api_key), silent = TRUE)
-                if (!inherits(lm, "try-error") && is.list(lm) && NROW(lm$df)) {
+                if (!inherits(lm, "try-error") && is.data.frame(lm) && NROW(lm)) {
                     base_root <- .api_root(roots[[bk]])
                     backend   <- bk
                     picked    <- TRUE
@@ -175,7 +175,7 @@ gpt <- function(prompt,
         }
         ids <- tryCatch(
             .fetch_models_cached(provider = "openai", base_url = bu_root,
-                                     openai_api_key = defs$api_key)$df$id,
+                                     openai_api_key = defs$api_key)$model_id,
             error = function(e) character(0)
         )
         if (length(ids) && !tolower(defs$model) %in% tolower(ids)) {
@@ -203,8 +203,8 @@ gpt <- function(prompt,
 
         ent <- try(.fetch_models_cached(provider = backend, base_url = base_root,
                                            openai_api_key = openai_api_key), silent = TRUE)
-        ids <- if (!inherits(ent, "try-error") && is.list(ent) && !is.null(ent$df)) {
-            unique(na.omit(as.character(ent$df$id)))
+        ids <- if (!inherits(ent, "try-error") && is.data.frame(ent)) {
+            unique(na.omit(as.character(ent$model_id)))
         } else character(0)
 
         if (isTRUE(strict_model) && !length(ids)) strict_model <- FALSE

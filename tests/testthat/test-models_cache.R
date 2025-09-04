@@ -165,7 +165,7 @@ test_that("list_models refresh=TRUE bypasses cache for locals", {
       live_called <<- TRUE
       list(df = data.frame(id = "m1", created = 1), status = "ok")
     },
-    .fetch_models_cached_local = function(...) stop("cached_local called"),
+    .fetch_models_cached = function(...) stop("cached called"),
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
@@ -183,7 +183,7 @@ test_that("list_models refresh=TRUE bypasses cache for openai", {
       live_called <<- TRUE
       list(df = data.frame(id = "gpt-4o", created = 1), status = "ok")
     },
-    .fetch_models_cached_openai = function(...) stop("cached_openai called"),
+    .fetch_models_cached = function(...) stop("cached called"),
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
@@ -207,7 +207,8 @@ test_that(".fetch_models_cached skips cache when unreachable", {
     .env = asNamespace("gptr")
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
-  expect_identical(out$status, "unreachable")
+  diag <- attr(out, "diagnostic")
+  expect_identical(diag$status, "unreachable")
   expect_identical(nrow(out$df), 0L)
   expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
 })
@@ -465,10 +466,8 @@ test_that("list_models - second call uses cache when available", {
 
 
 
-test_that(".fetch_models_cached_* helpers are present", {
-  f_local <- getFromNamespace(".fetch_models_cached_local", "gptr")
-  f_openai <- getFromNamespace(".fetch_models_cached_openai", "gptr")
-  expect_type(f_local, "closure")
-  expect_type(f_openai, "closure")
+test_that(".fetch_models_cached helper is present", {
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  expect_type(f, "closure")
 })
 
