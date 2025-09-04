@@ -240,99 +240,6 @@
 
 #' @noRd
 #' @keywords internal
-.fetch_models_cached <- function(provider = NULL, base_url = NULL,
-                                    openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
-    # Case A: both missing -> enumerate everything currently cached (summary view)
-    if (is.null(provider) && is.null(base_url)) {
-        keys <- .gptr_cache$keys()
-        if (!length(keys)) {
-            return(data.frame(
-                provider   = character(),
-                base_url   = character(),
-                n_models   = integer(),
-                cached_at  = as.POSIXct(character(), tz = "UTC"),
-                stringsAsFactors = FALSE
-            ))
-        }
-        rows <- lapply(keys, function(k) {
-            ent <- .gptr_cache$get(k, missing = NULL)
-            if (is.null(ent)) {
-                return(NULL)
-            }
-            data.frame(
-                provider  = ent$provider %||% NA_character_,
-                base_url  = ent$base_url %||% NA_character_,
-                n_models  = NROW(.as_models_df(ent$models)),
-                cached_at = if (!is.null(ent$ts)) {
-                    as.POSIXct(ent$ts, origin = "1970-01-01", tz = "UTC")
-                } else {
-                    as.POSIXct(NA, tz = "UTC")
-                },
-                stringsAsFactors = FALSE
-            )
-        })
-        rows <- Filter(Negate(is.null), rows)
-        if (!length(rows)) {
-            return(data.frame(
-                provider   = character(),
-                base_url   = character(),
-                n_models   = integer(),
-                cached_at  = as.POSIXct(character(), tz = "UTC"),
-                stringsAsFactors = FALSE
-            ))
-        }
-        return(do.call(rbind, rows))
-    }
-
-    # Case B: only provider
-    if (!is.null(provider) && is.null(base_url)) {
-        cands <- .list_local_backends()
-        cand <- cands[[provider]]
-        if (is.null(cand)) stop("Unknown provider '", provider, "'.")
-        base_url <- cand$base_url
-    }
-
-    # Case C: only base_url
-    if (is.null(provider) && !is.null(base_url)) {
-        root <- .api_root(base_url)
-        keys <- .gptr_cache$keys()
-        hits <- vapply(keys, function(k) {
-            ent <- .gptr_cache$get(k, missing = NULL)
-            !is.null(ent) && identical(ent$base_url, root)
-        }, logical(1))
-
-        if (!any(hits)) return(character(0))
-        models <- unique(unlist(lapply(keys[hits], function(k) {
-            ent <- .gptr_cache$get(k, missing = NULL)
-            if (is.null(ent)) {
-                return(character(0))
-            }
-            .as_models_df(ent$models)$id
-        }), use.names = FALSE))
-        return(models %||% character(0))
-    }
-
-    # Case D: provider + base_url with TTL behavior
-    ent <- .cache_get(provider, base_url)
-    if (!is.null(ent)) {
-        if (isTRUE(getOption("gptr.check_model_once", TRUE))) return(list(df = .as_models_df(ent$models), status = "ok"))
-        ttl <- getOption("gptr.model_cache_ttl", 3600)
-        if (!is.na(ent$ts) && (as.numeric(Sys.time()) - ent$ts) < ttl) return(list(df = .as_models_df(ent$models), status = "ok"))
-    }
-    live <- .fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
-    if (identical(live$status, "unreachable")) {
-        Sys.sleep(0.2)
-        live <- .fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
-        if (identical(live$status, "unreachable")) {
-            return(live)
-        }
-    }
-    if (identical(live$status, "ok")) {
-        .cache_put(provider, base_url, live$df)
-    }
-    live
-}
-
 #' Resolve a model's provider from cache (minimal lookup)
 #' @keywords internal
 .resolve_model_provider <- function(model,
@@ -352,9 +259,9 @@
             openai   = "https://api.openai.com"
         )
         ent <- try(.fetch_models_cached(provider = p, base_url = bu,
-                                            openai_api_key = openai_api_key), silent = TRUE)
+                                        openai_api_key = openai_api_key), silent = TRUE)
         ids <- tryCatch({
-            if (is.list(ent) && !is.null(ent$df)) as.character(ent$df$id) else character(0)
+            if (is.data.frame(ent)) as.character(ent$model_id) else character(0)
         }, error = function(e) character(0))
         if (length(ids) && any(tolower(ids) == tolower(model))) {
             rows[[length(rows) + 1L]] <- data.frame(
@@ -377,7 +284,7 @@
 #' @param refresh Logical; if TRUE, the cache is bypassed and no writes occur.
 #' @param openai_api_key Optional OpenAI API key used when `provider = "openai"`.
 #' @keywords internal
-fetch_models_cached <- function(provider,
+.fetch_models_cached <- function(provider,
                                 base_url,
                                 refresh = FALSE,
                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
@@ -457,7 +364,7 @@ list_models <- function(provider = NULL,
       openai   = "https://api.openai.com"
     )
     bu <- .api_root(base_url %||% bu_default)
-    df <- fetch_models_cached(p, bu, refresh = refresh, openai_api_key = openai_api_key)
+    df <- .fetch_models_cached(p, bu, refresh = refresh, openai_api_key = openai_api_key)
     diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
     rows[[length(rows) + 1L]] <- df
   }
