@@ -100,8 +100,10 @@
 #' a generic flow for local backends.
 #' @param provider Provider name (e.g., "openai", "ollama").
 #' @param base_url Base URL of the backend.
-#' @param refresh Logical; included for API compatibility. When `TRUE`, any
-#'   cached entry is ignored.
+#' @param refresh Logical flag indicating whether the caller wishes to bypass
+#'   cached results.  This function itself always performs a live request and
+#'   does not read from or write to the cache, but downstream callers use the
+#'   flag to signal a cache bypass.
 #' @param openai_api_key OpenAI API key used when `provider = "openai"`.
 #' @param timeout Request timeout in seconds.
 #' @keywords internal
@@ -110,10 +112,6 @@
                                refresh = FALSE,
                                openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
                                timeout = getOption("gptr.request_timeout", 5)) {
-  if (isTRUE(refresh)) {
-    # explicit no-op to emphasize refresh semantics
-    NULL
-  }
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = .as_models_df(NULL), status = "httr2_missing"))
   }
@@ -372,8 +370,15 @@
         stringsAsFactors = FALSE
     )
 }
+#' @param refresh Logical; if TRUE, the cache is skipped and the backend is
+#'   queried directly without reading from or writing to the cache.
 #' @keywords internal
-.fetch_models_cached_local <- function(provider, base_url) {
+.fetch_models_cached_local <- function(provider, base_url, refresh = FALSE) {
+  if (isTRUE(refresh)) {
+    live <- .fetch_models_live(provider, base_url, refresh = TRUE)
+    ts <- as.numeric(Sys.time())
+    return(.row_df(provider, base_url, live$df, "installed", "live", ts, status = live$status))
+  }
   ent <- .cache_get(provider, base_url)
   if (is.null(ent)) {
     live <- .fetch_models_cached(provider, base_url)
@@ -391,9 +396,17 @@
   }
 }
 
+#' @param refresh Logical; if TRUE, bypasses cache and probes the OpenAI
+#'   endpoint directly without touching the cache.
 #' @keywords internal
 .fetch_models_cached_openai <- function(openai_api_key,
-                                        base_url = "https://api.openai.com") {
+                                        base_url = "https://api.openai.com",
+                                        refresh = FALSE) {
+  if (isTRUE(refresh)) {
+    live <- .fetch_models_live("openai", base_url, refresh = TRUE, openai_api_key = openai_api_key)
+    ts <- as.numeric(Sys.time())
+    return(.row_df("openai", base_url, live$df, "catalog", "live", ts, status = live$status))
+  }
   ent <- .cache_get("openai", base_url)
   if (is.null(ent)) {
     live <- .fetch_models_live("openai", base_url, openai_api_key = openai_api_key)
@@ -419,6 +432,7 @@
 #' Behavior:
 #' - Local providers read from the in-session cache by default (fast). Use `refresh=TRUE`
 #'   to bypass the cache and probe `/v1/models` directly (Ollama falls back to `/api/tags`).
+#'   When refreshing, cached entries are neither read nor updated.
 #' - OpenAI is included if an API key is available (or explicitly provided).
 #' - Output is normalized with an `availability` column:
 #'     * "installed" for local backends
@@ -458,22 +472,12 @@ list_models <- function(provider = NULL,
         localai  = getOption("gptr.localai_base_url", "http://127.0.0.1:8080")
       )
       bu <- .api_root(base_url %||% bu_default)
-      if (isTRUE(refresh)) {
-        live <- .fetch_models_live(p, bu, refresh = TRUE)
-        df <- .row_df(p, bu, live$df, "installed", "live", as.numeric(Sys.time()), status = live$status)
-      } else {
-        df <- .fetch_models_cached_local(p, bu)
-      }
+      df <- .fetch_models_cached_local(p, bu, refresh = refresh)
       diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
       rows[[length(rows) + 1L]] <- df
     } else if (p == "openai") {
       bu <- .api_root(base_url %||% "https://api.openai.com")
-      if (isTRUE(refresh)) {
-        live <- .fetch_models_live("openai", bu, refresh = TRUE, openai_api_key = openai_api_key)
-        df <- .row_df("openai", bu, live$df, "catalog", "live", as.numeric(Sys.time()), status = live$status)
-      } else {
-        df <- .fetch_models_cached_openai(openai_api_key, bu)
-      }
+      df <- .fetch_models_cached_openai(openai_api_key, bu, refresh = refresh)
       diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
       rows[[length(rows) + 1L]] <- df
     }

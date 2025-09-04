@@ -165,7 +165,6 @@ test_that("list_models refresh=TRUE bypasses cache for locals", {
       live_called <<- TRUE
       list(df = data.frame(id = "m1", created = 1), status = "ok")
     },
-    .fetch_models_cached_local = function(...) stop("cached_local called"),
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
@@ -183,7 +182,6 @@ test_that("list_models refresh=TRUE bypasses cache for openai", {
       live_called <<- TRUE
       list(df = data.frame(id = "gpt-4o", created = 1), status = "ok")
     },
-    .fetch_models_cached_openai = function(...) stop("cached_openai called"),
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
