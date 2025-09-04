@@ -29,8 +29,10 @@
   x
 }
 
-# Given a root, build the canonical /v1/models endpoint URL for probing model lists.
-.models_endpoint <- function(root) paste0(.api_root(root), "/v1/models")
+#' @keywords internal
+#' @param root Base URL root for a provider.
+#' @returns Canonical `/v1/models` endpoint URL.
+.build_models_url <- function(root) paste0(.api_root(root), "/v1/models")
 
 
 
@@ -115,7 +117,7 @@
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = .as_models_df(NULL), status = "httr2_missing"))
   }
-  url <- .models_endpoint(base_url)
+  url <- .build_models_url(base_url)
   req <- httr2::request(url) %>%
     httr2::req_timeout(timeout)
 
