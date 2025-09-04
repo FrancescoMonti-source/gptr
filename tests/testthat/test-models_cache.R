@@ -205,8 +205,8 @@ test_that(".fetch_models_cached skips cache when unreachable", {
     .env = asNamespace("gptr")
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
-  expect_identical(out$status, "unreachable")
-  expect_identical(nrow(out$df), 0L)
+  expect_identical(attr(out, "diagnostic")$status, "unreachable")
+  expect_identical(nrow(out), 0L)
   expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
 })
 
@@ -310,18 +310,6 @@ test_that(".row_df preserves status when no models", {
 })
 
 
-test_that(".fetch_models_cached enumerates cache contents", {
-  f <- getFromNamespace(".fetch_models_cached", "gptr")
-  cache <- getFromNamespace(".gptr_cache", "gptr")
-  key_fun <- getFromNamespace(".cache_key", "gptr")
-  cache$reset()
-  cache$set(key_fun("openai", "https://api.openai.com"),
-            list(provider = "openai", base_url = "https://api.openai.com",
-                 models = data.frame(id = "gpt-4o", created = 1), ts = 1))
-  out <- f()
-  expect_true("openai" %in% out$provider)
-  expect_equal(out$n_models[out$provider == "openai"], 1L)
-})
 
 test_that("invalidate clears cache", {
   inv <- getFromNamespace("delete_models_cache", "gptr")
@@ -463,8 +451,8 @@ test_that("list_models - second call uses cache when available", {
 
 
 
-test_that("fetch_models_cached handles local and openai", {
-  f <- getFromNamespace("fetch_models_cached", "gptr")
+test_that(".fetch_models_cached handles local and openai", {
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
 
   fake_cache <- make_fake_cache()
   testthat::local_mocked_bindings(
