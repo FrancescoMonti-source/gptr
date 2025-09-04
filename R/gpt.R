@@ -43,25 +43,24 @@ gpt <- function(prompt,
     # --- Early auto+model resolution (use cache, no heuristics) ---
     if (identical(provider, "auto") && is.character(model) && nzchar(model)) {
         lm <- try(.resolve_model_provider(model, openai_api_key = openai_api_key), silent = TRUE)
-        if (!inherits(lm, "try-error") && is.data.frame(lm) && nrow(lm) > 0) {
-            hits <- lm
-            prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
-            rank_fn <- function(p) {
-                m <- match(p, c(prefer_locals, "openai"))
-                ifelse(is.na(m), 999L, m)
-            }
-            ord <- order(rank_fn(tolower(as.character(hits$provider))))
-            hit <- hits[ord[1L], , drop = FALSE]
-            hit_provider <- tolower(as.character(hit$provider))
-            if (identical(hit_provider, "openai")) {
-                provider <- "openai"
-            } else {
-                provider <- "local"
-                backend  <- hit_provider
-                base_root <- .api_root(as.character(hit$base_url[1L]))
-            }
-        } else {
+        if (inherits(lm, "try-error") || !is.data.frame(lm) || nrow(lm) < 1) {
             rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
+        }
+        hits <- lm
+        prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
+        rank_fn <- function(p) {
+            m <- match(p, c(prefer_locals, "openai"))
+            ifelse(is.na(m), 999L, m)
+        }
+        ord <- order(rank_fn(tolower(as.character(hits$provider))))
+        hit <- hits[ord[1L], , drop = FALSE]
+        hit_provider <- tolower(as.character(hit$provider))
+        if (identical(hit_provider, "openai")) {
+            provider <- "openai"
+        } else {
+            provider <- "local"
+            backend  <- hit_provider
+            base_root <- .api_root(as.character(hit$base_url[1L]))
         }
     }
 
