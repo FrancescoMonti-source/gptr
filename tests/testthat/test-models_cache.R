@@ -475,3 +475,66 @@ test_that(".fetch_models_cached handles local and openai", {
   expect_equal(out_openai$availability, "catalog")
 })
 
+
+test_that(".lookup_model_ids uses cache", {
+  f <- getFromNamespace(".lookup_model_ids", "gptr")
+  local_cache_store()
+  called <- 0L
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, openai_api_key = "", ...) {
+      called <<- called + 1L
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    },
+    .env = asNamespace("gptr")
+  )
+  ids1 <- f("lmstudio", "http://127.0.0.1:1234")
+  ids2 <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_identical(ids1, "m1")
+  expect_identical(ids2, "m1")
+  expect_equal(called, 1L)
+})
+
+test_that(".lookup_model_ids skips openai without key", {
+  f <- getFromNamespace(".lookup_model_ids", "gptr")
+  called <- 0L
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(...) { called <<- called + 1L; list(df = data.frame(), status = "ok") },
+    .env = asNamespace("gptr")
+  )
+  ids <- f("openai", "https://api.openai.com", openai_api_key = "")
+  expect_identical(ids, character())
+  expect_equal(called, 0L)
+})
+
+test_that(".resolve_model_provider uses lookup helper", {
+  f <- getFromNamespace(".resolve_model_provider", "gptr")
+  called_lookup <- 0L
+  testthat::local_mocked_bindings(
+    .lookup_model_ids = function(provider, base_url, openai_api_key = "") {
+      called_lookup <<- called_lookup + 1L
+      character()
+    },
+    .fetch_models_cached = function(...) stop("should not be called"),
+    .env = asNamespace("gptr")
+  )
+  res <- f("missing")
+  expect_equal(called_lookup, 3L) # openai skipped
+  expect_equal(nrow(res), 0L)
+})
+
+test_that(".resolve_model_provider returns provider when model found", {
+  f <- getFromNamespace(".resolve_model_provider", "gptr")
+  testthat::local_mocked_bindings(
+    .lookup_model_ids = function(provider, base_url, openai_api_key = "") {
+      if (provider == "ollama") return("my-model")
+      character()
+    },
+    .env = asNamespace("gptr")
+  )
+  res <- f("my-model", openai_api_key = "sk")
+  expect_identical(res$provider, "ollama")
+  expect_identical(res$base_url, "http://127.0.0.1:11434")
+  expect_identical(res$model_id, "my-model")
+})
+
+
