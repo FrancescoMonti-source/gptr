@@ -166,11 +166,22 @@
 #' Returns a list with a data frame of models (`df`) and a status string.
 #' Branches on provider to apply OpenAI-specific headers and retry logic or
 #' a generic flow for local backends.
+#' @param provider Provider name (e.g., "openai", "ollama").
+#' @param base_url Base URL of the backend.
+#' @param refresh Logical; included for API compatibility. When `TRUE`, any
+#'   cached entry is ignored.
+#' @param openai_api_key OpenAI API key used when `provider = "openai"`.
+#' @param timeout Request timeout in seconds.
 #' @keywords internal
 fetch_models_live <- function(provider,
                                base_url,
+                               refresh = FALSE,
                                openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
                                timeout = getOption("gptr.request_timeout", 5)) {
+  if (isTRUE(refresh)) {
+    # explicit no-op to emphasize refresh semantics
+    NULL
+  }
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
   }
@@ -435,7 +446,7 @@ fetch_models_cached <- function(provider, base_url,
 #'
 #' Behavior:
 #' - Local providers read from the in-session cache by default (fast). Use `refresh=TRUE`
-#'   to force a live probe of `/v1/models` (Ollama falls back to `/api/tags`).
+#'   to bypass the cache and probe `/v1/models` directly (Ollama falls back to `/api/tags`).
 #' - OpenAI is included if an API key is available (or explicitly provided).
 #' - Output is normalized with an `availability` column:
 #'     * "installed" for local backends
@@ -448,8 +459,8 @@ fetch_models_cached <- function(provider, base_url,
 #'   "lmstudio","ollama","localai","openai".
 #' @param base_url Optional root URL to target a specific server. If NULL,
 #'   defaults from options are used for locals, and https://api.openai.com for OpenAI.
-#' @param refresh Logical. If TRUE, forces a live probe and updates cache
-#'   (for locals) or bypasses cache (for OpenAI). Defaults to `FALSE`.
+#' @param refresh Logical. If TRUE, bypasses cache and queries providers
+#'   directly. Cached entries are left untouched.
 #' @param openai_api_key Optional OpenAI API key. If missing, falls back to
 #'   Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
 #'   an auth_missing status (no stop).

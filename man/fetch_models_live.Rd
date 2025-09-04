@@ -2,22 +2,28 @@
 % Please edit documentation in R/models_cache.R
 \name{fetch_models_live}
 \alias{fetch_models_live}
-\title{Perform a live HTTP GET on /v1/models for a given provider and base_url.
-Returns a list with a data frame of models (\code{df}) and a status string.
-Branches on provider to apply OpenAI-specific headers and retry logic or
-a generic flow for local backends.}
+\title{Perform a live HTTP GET on /v1/models for a given provider and base_url. Returns a list with a data frame of models (\code{df}) and a status string. Branches on provider to apply OpenAI-specific headers and retry logic or a generic flow for local backends.}
 \usage{
 fetch_models_live(
   provider,
   base_url,
+  refresh = FALSE,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
   timeout = getOption("gptr.request_timeout", 5)
 )
 }
+\arguments{
+\item{provider}{Provider name (e.g., "openai", "ollama").}
+
+\item{base_url}{Base URL of the backend.}
+
+\item{refresh}{Logical; included for API compatibility. When \code{TRUE}, any cached entry is ignored.}
+
+\item{openai_api_key}{OpenAI API key used when \code{provider = "openai"}.}
+
+\item{timeout}{Request timeout in seconds.}
+}
 \description{
-Perform a live HTTP GET on /v1/models for a given provider and base_url.
-Returns a list with a data frame of models (\code{df}) and a status string.
-Branches on provider to apply OpenAI-specific headers and retry logic or
-a generic flow for local backends.
+Perform a live HTTP GET on /v1/models for a given provider and base_url. Returns a list with a data frame of models (\code{df}) and a status string. Branches on provider to apply OpenAI-specific headers and retry logic or a generic flow for local backends.
 }
 \keyword{internal}
