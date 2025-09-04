@@ -21,8 +21,9 @@ a generic flow for local backends.}
 \item{base_url}{Base URL of the backend.}
 
 \item{refresh}{Logical flag indicating whether the caller wishes to bypass
-cached results. The function always performs a live request and does not read
-from or write to the cache.}
+cached results.  This function itself always performs a live request and
+does not read from or write to the cache, but downstream callers use the
+flag to signal a cache bypass.}
 
 \item{openai_api_key}{OpenAI API key used when \code{provider = "openai"}.}
 

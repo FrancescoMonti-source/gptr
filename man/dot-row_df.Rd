@@ -15,6 +15,9 @@
   base_url_normalized = FALSE
 )
 }
+\arguments{
+\item{base_url_normalized}{Logical; set TRUE when base_url is already normalized}
+}
 \description{
 list_models() helper
 }

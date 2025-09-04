@@ -2,11 +2,14 @@
 % Please edit documentation in R/utils-cache.R
 \name{.as_models_df}
 \alias{.as_models_df}
-\title{list_models() helprer}
+\title{list_models() helprer
+internal
+base_url_normalized Logical; set TRUE when base_url is already normalized}
 \usage{
 .as_models_df(x)
 }
 \description{
 list_models() helprer
+internal
+base_url_normalized Logical; set TRUE when base_url is already normalized
 }
-\keyword{internal}
