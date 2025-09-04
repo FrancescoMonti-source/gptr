@@ -17,7 +17,7 @@ test_that(".cache_key", {
   ck <- getFromNamespace(".cache_key", "gptr")
   a1 <- ck("openai", "https://api.openai.com")
   a2 <- ck("openai", "https://api.openai.com")
-  b <- ck("ollama", "http://127.0.0.1:11434")
+  b <- ck("lmstudio", "http://127.0.0.1:1234")
   expect_identical(a1, a2)
   expect_false(identical(a1, b))
 })
