@@ -192,6 +192,23 @@ test_that("list_models refresh=TRUE bypasses cache for openai", {
   expect_identical(out$source, "live")
 })
 
+test_that(".fetch_models_cached refresh=TRUE bypasses cache", {
+  live_called <- FALSE
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, ...) {
+      live_called <<- TRUE
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    },
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234", refresh = TRUE)
+  expect_true(live_called)
+  expect_identical(out$source, "live")
+})
+
 test_that(".fetch_models_cached skips cache when unreachable", {
   fake_cache <- make_fake_cache()
   live_mock <- function(provider, base_url) {
