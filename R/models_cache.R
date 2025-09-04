@@ -290,6 +290,7 @@
       )
   }
 
+
 #' Retrieve models using a cache with optional refresh.
 #'
 #' @param provider Provider name (e.g., "openai", "ollama").
@@ -341,7 +342,7 @@
         }
         if (use_cache) {
             status <- if (identical(provider, "openai")) "ok_cache" else NA_character_
-            return(.row_df(provider, root, ent$models, availability, "cache", ent$ts, status = status))
+            return(.row_df(provider, root, ent$models, availability, "cache", ent$ts, status = status, base_url_normalized = TRUE))
         }
     }
     live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
@@ -365,7 +366,7 @@
             ts <- .cache_get(provider, root)$ts
         }
     }
-    .row_df(provider, root, mods, availability, "live", ts, status = status)
+    .row_df(provider, root, mods, availability, "live", ts, status = status, base_url_normalized = TRUE)
 }
 
 # --- Public API --------------------------------------------------------------

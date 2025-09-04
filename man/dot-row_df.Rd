@@ -11,7 +11,8 @@
   availability,
   src,
   ts,
-  status = NA_character_
+  status = NA_character_,
+  base_url_normalized = FALSE
 )
 }
 \description{
