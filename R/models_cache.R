@@ -377,7 +377,7 @@
 #' @param refresh Logical; if TRUE, the cache is bypassed and no writes occur.
 #' @param openai_api_key Optional OpenAI API key used when `provider = "openai"`.
 #' @keywords internal
-fetch_models_cached <- function(provider,
+.fetch_models_cached <- function(provider,
                                 base_url,
                                 refresh = FALSE,
                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
@@ -425,7 +425,7 @@ fetch_models_cached <- function(provider,
 #' - Stable columns: provider, base_url, model_id, availability, cached_when, source.
 #' - If a backend returns no models, zero rows are returned and the status is
 #'   recorded in `attr(x, "diagnostics")`.
-#' 
+#'
 #' @param provider NULL (default, list all), or one of:
 #'   "lmstudio","ollama","localai","openai".
 #' @param base_url Optional root URL to target a specific server. If NULL,
@@ -457,7 +457,7 @@ list_models <- function(provider = NULL,
       openai   = "https://api.openai.com"
     )
     bu <- .api_root(base_url %||% bu_default)
-    df <- fetch_models_cached(p, bu, refresh = refresh, openai_api_key = openai_api_key)
+    df <- .fetch_models_cached(p, bu, refresh = refresh, openai_api_key = openai_api_key)
     diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
     rows[[length(rows) + 1L]] <- df
   }
