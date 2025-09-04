@@ -370,6 +370,7 @@
         stringsAsFactors = FALSE
     )
 }
+
 #' Retrieve models using a cache with optional refresh.
 #'
 #' @param provider Provider name (e.g., "openai", "ollama").
@@ -377,37 +378,78 @@
 #' @param refresh Logical; if TRUE, the cache is bypassed and no writes occur.
 #' @param openai_api_key Optional OpenAI API key used when `provider = "openai"`.
 #' @keywords internal
-.fetch_models_cached <- function(provider,
-                                base_url,
-                                refresh = FALSE,
-                                openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
-  availability <- if (identical(provider, "openai")) "catalog" else "installed"
+.fetch_models_cached <- function(provider = NULL,
+                                 base_url = NULL,
+                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+    if (is.null(provider)) {
+        keys <- .gptr_cache$keys()
+        if (!length(keys)) {
+            return(data.frame(
+                provider = character(),
+                base_url = character(),
+                n_models = integer(),
+                cached_when = as.POSIXct(numeric(), origin = "1970-01-01", tz = "UTC"),
+                stringsAsFactors = FALSE
+            ))
+        }
+        rows <- lapply(keys, function(k) {
+            ent <- .gptr_cache$get(k, missing = NULL)
+            data.frame(
+                provider = ent$provider,
+                base_url = ent$base_url,
+                n_models = nrow(ent$models),
+                cached_when = as.POSIXct(ent$ts, origin = "1970-01-01", tz = "UTC"),
+                stringsAsFactors = FALSE
+            )
+        })
+        return(do.call(rbind, rows))
+    }
 
-  if (isTRUE(refresh)) {
-    live <- .fetch_models_live(provider, base_url, refresh = TRUE, openai_api_key = openai_api_key)
-    ts <- as.numeric(Sys.time())
-    return(.row_df(provider, base_url, live$df, availability, "live", ts, status = live$status))
-  }
-
-  ent <- .cache_get(provider, base_url)
-  if (is.null(ent)) {
-    live <- .fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
+    if (is.null(base_url)) {
+        stop("base_url must be supplied when provider is specified", call. = FALSE)
+    }
+    root <- .api_root(base_url)
+    availability <- if (identical(provider, "openai")) "catalog" else "installed"
+    ent <- .cache_get(provider, root)
+    now <- as.numeric(Sys.time())
+    if (!is.null(ent)) {
+        use_cache <- FALSE
+        if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
+            use_cache <- TRUE
+        } else {
+            ttl <- getOption("gptr.model_cache_ttl", 3600)
+            if (!is.na(ent$ts) && (now - ent$ts) < ttl) use_cache <- TRUE
+        }
+        if (use_cache) {
+            status <- if (identical(provider, "openai")) "ok_cache" else NA_character_
+            return(.row_df(provider, root, ent$models, availability, "cache", ent$ts, status = status))
+        }
+    }
+    live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+    if (identical(live$status, "unreachable")) {
+        Sys.sleep(0.2)
+        live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+    }
     mods <- live$df
-    ts <- as.numeric(Sys.time())
-    if (provider == "ollama" && nrow(mods) == 0) {
-      mods <- .ollama_tags_live(base_url)
+    status <- live$status
+    ts <- now
+    if (provider == "ollama" && nrow(mods) == 0 && identical(status, "ok")) {
+        mods <- .ollama_tags_live(root)
     }
-    if (identical(live$status, "ok") && nrow(mods) > 0) {
-      .cache_put(provider, base_url, mods)
-      ts <- .cache_get(provider, base_url)$ts
-    } else if (identical(live$status, "ok") && nrow(mods) == 0 && identical(provider, "openai")) {
-      live$status <- "empty_cache"
+    if (identical(status, "ok")) {
+        if (provider == "openai") {
+            if (nrow(mods) > 0) {
+                .cache_put(provider, root, mods)
+                ts <- .cache_get(provider, root)$ts
+            } else {
+                status <- "empty_cache"
+            }
+        } else {
+            .cache_put(provider, root, mods)
+            ts <- .cache_get(provider, root)$ts
+        }
     }
-    return(.row_df(provider, base_url, mods, availability, "live", ts, status = live$status))
-  }
-
-  status <- if (identical(provider, "openai")) "ok_cache" else NA_character_
-  .row_df(provider, base_url, ent$models, availability, "cache", ent$ts, status = status)
+    .row_df(provider, root, mods, availability, "live", ts, status = status)
 }
 
 # --- Public API --------------------------------------------------------------
