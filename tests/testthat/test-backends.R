@@ -125,11 +125,16 @@ test_that("auto + unknown model errors asking for provider", {
         },
         .env = asNamespace("gptr")
     )
+    testthat::local_mocked_bindings(
+        .resolve_model_provider = function(...) data.frame(),
+        .env = asNamespace("gptr")
+    )
     expect_error(
         gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE),
         "Model 'nonexistent-model' is not available; specify a provider.",
         fixed = TRUE
     )
+    expect_identical(called, character())
 })
 
 test_that("auto + model resolution returning NULL errors asking for provider", {
