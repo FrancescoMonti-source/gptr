@@ -300,6 +300,7 @@
 #' @keywords internal
 .fetch_models_cached <- function(provider = NULL,
                                  base_url = NULL,
+                                 refresh = FALSE,
                                  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
     if (is.null(provider)) {
         keys <- .gptr_cache$keys()
@@ -330,8 +331,15 @@
     }
     root <- .api_root(base_url)
     availability <- if (identical(provider, "openai")) "catalog" else "installed"
-    ent <- .cache_get(provider, root)
     now <- as.numeric(Sys.time())
+
+    if (isTRUE(refresh)) {
+        live <- .fetch_models_live(provider, root, refresh = TRUE, openai_api_key = openai_api_key)
+        return(.row_df(provider, root, live$df, availability, "live", now,
+                       status = live$status, base_url_normalized = TRUE))
+    }
+
+    ent <- .cache_get(provider, root)
     if (!is.null(ent)) {
         use_cache <- FALSE
         if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
@@ -342,13 +350,15 @@
         }
         if (use_cache) {
             status <- if (identical(provider, "openai")) "ok_cache" else NA_character_
-            return(.row_df(provider, root, ent$models, availability, "cache", ent$ts, status = status, base_url_normalized = TRUE))
+            return(.row_df(provider, root, ent$models, availability, "cache", ent$ts,
+                           status = status, base_url_normalized = TRUE))
         }
     }
-    live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+
+    live <- .fetch_models_live(provider, root, refresh = FALSE, openai_api_key = openai_api_key)
     if (identical(live$status, "unreachable")) {
         Sys.sleep(0.2)
-        live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+        live <- .fetch_models_live(provider, root, refresh = FALSE, openai_api_key = openai_api_key)
     }
     mods <- live$df
     status <- live$status
