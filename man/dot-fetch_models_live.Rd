@@ -17,7 +17,7 @@
 
 \item{base_url}{Base URL of the backend.}
 
-\item{refresh}{Logical; ignored. Included for API compatibility.}
+\item{refresh}{Logical; included for API compatibility. When \code{TRUE}, any cached entry is ignored.}
 
 \item{openai_api_key}{OpenAI API key used when \code{provider = "openai"}.}
 

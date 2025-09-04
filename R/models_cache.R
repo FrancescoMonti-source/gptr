@@ -168,7 +168,8 @@
 #' a generic flow for local backends.
 #' @param provider Provider name (e.g., "openai", "ollama").
 #' @param base_url Base URL of the backend.
-#' @param refresh Logical; ignored. Included for API compatibility.
+#' @param refresh Logical; included for API compatibility. When `TRUE`, any
+#'   cached entry is ignored.
 #' @param openai_api_key OpenAI API key used when `provider = "openai"`.
 #' @param timeout Request timeout in seconds.
 #' @keywords internal
@@ -177,6 +178,10 @@
                                refresh = FALSE,
                                openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
                                timeout = getOption("gptr.request_timeout", 5)) {
+  if (isTRUE(refresh)) {
+    # explicit no-op to emphasize refresh semantics
+    NULL
+  }
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
   }
