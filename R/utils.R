@@ -142,7 +142,11 @@ show_gptr_options <- function() {
 #' @importFrom rlang %||%
 NULL
 
-
 #' @importFrom stats na.omit runif setNames
+NULL
+
 #' @importFrom utils adist browseURL head tail
+NULL
+
+#' @importFrom magrittr %>%
 NULL
