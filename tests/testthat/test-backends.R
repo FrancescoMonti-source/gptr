@@ -151,7 +151,7 @@ test_that("auto + model resolution returning NULL errors asking for provider", {
     )
 })
 
-test_that("auto + model resolution returning empty df errors asking for provider", {
+test_that("auto + model resolution returning empty data frame errors asking for provider", {
     testthat::with_mocked_bindings(
         .resolve_model_provider = function(model, openai_api_key = "", ...) {
             data.frame(provider = character(), base_url = character(),
