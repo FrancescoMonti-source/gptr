@@ -79,8 +79,7 @@ test_that("auto + local model routes to local", {
 })
 
 test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
-    old <- options(gptr.local_prefer = c("ollama","lmstudio","localai"))
-    on.exit(options(old), add = TRUE)
+    withr::local_options(list(gptr.local_prefer = c("ollama","lmstudio","localai")))
 
     called <- NULL
     testthat::with_mocked_bindings(
@@ -113,7 +112,6 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
 })
 
 test_that("auto + unknown model errors asking for provider", {
-    delete_models_cache()
     called <- character()
     testthat::local_mocked_bindings(
         req_perform = function(req, ...) {
@@ -286,7 +284,6 @@ test_that("strict_model errors when model not installed (local)", {
 })
 
 test_that("strict_model ignored when model listing unavailable", {
-    delete_models_cache()
     called_models <- FALSE
     called_chat <- FALSE
     testthat::local_mocked_bindings(
