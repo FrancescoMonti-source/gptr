@@ -119,67 +119,79 @@ test_that("openai fallback semantics via .fetch_models_live", {
 })
 
 
-test_that("refresh_models handles openai provider", {
-  fake_cache <- make_fake_cache()
-  payload <- openai_models_payload()
-  mock_http_openai(status = 200L, json = payload)
+test_that("refresh_models hits live endpoint for openai", {
+  live_called <- FALSE
+  live_mock <- function(provider, base_url, refresh = FALSE, openai_api_key = "", ...) {
+    live_called <<- TRUE
+    list(df = data.frame(id = c("gpt-4o", "gpt-4.1-mini"), created = c(1, 2)), status = "ok")
+  }
   testthat::local_mocked_bindings(
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    .cache_del = function(...) invisible(TRUE),
+    .fetch_models_live = live_mock,
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
     .env = asNamespace("gptr")
   )
   out <- refresh_models(provider = "openai", openai_api_key = "sk-test")
-  expect_true(all(out$provider == "openai"))
+  expect_true(live_called)
   expect_equal(nrow(out), 2L)
-  expect_true(all(out$status == "ok"))
-  cached <- fake_cache$get("openai", "https://api.openai.com")
-  expect_true(NROW(cached$models) == 2)
+  expect_true(all(out$source == "live"))
 })
 
-test_that("refresh_models skips cache when unreachable", {
-  fake_cache <- make_fake_cache()
-  live_mock <- function(provider, base_url) {
+test_that("refresh_models bypasses cache when unreachable", {
+  live_called <- FALSE
+  live_mock <- function(provider, base_url, refresh = FALSE, ...) {
+    live_called <<- TRUE
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
   testthat::local_mocked_bindings(
     .fetch_models_live = live_mock,
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_del = function(...) invisible(TRUE),
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
     .env = asNamespace("gptr")
   )
   out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
+  expect_true(live_called)
   expect_identical(nrow(out), 1L)
   expect_identical(out$status, "unreachable")
   expect_true(all(is.na(out$model_id)))
-  expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
 })
 
-test_that("refresh_models retries after unreachable and caches", {
-  fake_cache <- make_fake_cache()
-  calls <- 0
-  live_mock <- function(provider, base_url) {
-    calls <<- calls + 1
-    if (calls == 1) {
-      list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
-    } else {
-      list(df = data.frame(id = "m1", created = 1), status = "ok")
-    }
-  }
+test_that("list_models refresh=TRUE bypasses cache for locals", {
+  live_called <- FALSE
   testthat::local_mocked_bindings(
-    .fetch_models_live = live_mock,
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_del = function(...) invisible(TRUE),
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, ...) {
+      live_called <<- TRUE
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    },
+    .fetch_models_cached_local = function(...) stop("cached_local called"),
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
     .env = asNamespace("gptr")
   )
-  out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
-  expect_identical(nrow(out), 1L)
-  expect_identical(out$status, "ok")
-  expect_identical(out$model_id, "m1")
-  cached <- fake_cache$get("lmstudio", "http://127.0.0.1:1234")
-  expect_identical(cached$models$id, "m1")
+  out <- list_models(provider = "lmstudio", refresh = TRUE)
+  expect_true(live_called)
+  expect_identical(out$source, "live")
+})
+
+test_that("list_models refresh=TRUE bypasses cache for openai", {
+  live_called <- FALSE
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, openai_api_key = "", ...) {
+      live_called <<- TRUE
+      list(df = data.frame(id = "gpt-4o", created = 1), status = "ok")
+    },
+    .fetch_models_cached_openai = function(...) stop("cached_openai called"),
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
+    .env = asNamespace("gptr")
+  )
+  out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
+  expect_true(live_called)
+  expect_identical(out$source, "live")
 })
 
 test_that(".fetch_models_cached skips cache when unreachable", {
