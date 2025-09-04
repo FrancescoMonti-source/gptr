@@ -30,9 +30,9 @@ $.gpt_chat_callable
 browse_openai_documentation
 coalesce_blank
 coalesce_len0
-openai_compose_payload
+openai_build_payload
 openai_parse_text
-request_openai
+openai_send_request
 row_to_tibble
 trim_text
 ttl

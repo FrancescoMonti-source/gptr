@@ -21,7 +21,7 @@ Removed duplicate/obsolete code paths.
 
 Cache: only models_cache.R remains the source of truth for probing and caching model IDs.
 
-OpenAI path: untouched, continues to use .resolve_openai_defaults() and request_openai().
+OpenAI path: untouched, continues to use .resolve_openai_defaults() and openai_send_request().
 
 Docs/tests: update examples and tests to use list_models() instead of removed helpers.
 

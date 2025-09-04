@@ -7,7 +7,7 @@
 openai_parse_text(body)
 }
 \arguments{
-\item{body}{response body (list) from \code{request_openai()$body}}
+\item{body}{response body (list) from \code{openai_send_request()$body}}
 }
 \value{
 list(text, finish_reason, usage, content_parts, raw)
