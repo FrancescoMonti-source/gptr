@@ -71,34 +71,34 @@
   }
   url <- .models_endpoint(base_url)
   resp <- try(
-    .http_request(url) %>%
-      .http_req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
-      .http_req_timeout(timeout) %>%
-      .http_req_retry(
+    httr2::request(url) %>%
+      httr2::req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
+      httr2::req_timeout(timeout) %>%
+      httr2::req_retry(
         max_tries = 3,
         backoff = function(i) 0.2 * i,
         is_transient = function(r) {
-          sc <- try(.http_resp_status(r), silent = TRUE)
+          sc <- try(httr2::resp_status(r), silent = TRUE)
           if (inherits(sc, "try-error")) {
             return(TRUE)
           }
           sc %in% c(408, 429, 500, 502, 503, 504)
         }
       ) %>%
-      .http_req_perform(),
+      httr2::req_perform(),
     silent = TRUE
   )
   if (inherits(resp, "try-error")) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "unreachable"))
   }
-  sc <- .http_resp_status(resp)
+  sc <- httr2::resp_status(resp)
   if (sc == 401L) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "auth_error"))
   }
   if (sc >= 400L) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = paste0("http_", sc)))
   }
-  j <- try(.http_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
   if (inherits(j, "try-error")) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "non_json"))
   }
@@ -140,19 +140,19 @@
 
   url <- .models_endpoint(base_url)
   resp <- try(
-    .http_request(url) %>%
-      .http_req_timeout(timeout) %>%
-      .http_req_perform(),
+    httr2::request(url) %>%
+      httr2::req_timeout(timeout) %>%
+      httr2::req_perform(),
     silent = TRUE
   )
   if (inherits(resp, "try-error")) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "unreachable"))
   }
-  sc <- .http_resp_status(resp)
+  sc <- httr2::resp_status(resp)
   if (sc >= 400L) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = paste0("http_", sc)))
   }
-  j <- try(.http_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
   if (inherits(j, "try-error")) {
     return(list(df = data.frame(id = character(0), created = numeric(0)), status = "non_json"))
   }
@@ -165,7 +165,7 @@
 #' Perform a live HTTP GET on /v1/models for a given provider and base_url.
 #' Returns a list with a data frame of models (`df`) and a status string.
 #' Branches on provider to apply OpenAI-specific headers and retry logic or
-#' a generic flow for local backends. Always uses the `.http_*` wrappers.
+#' a generic flow for local backends.
 #' @keywords internal
 .fetch_models_live <- function(provider,
                                base_url,

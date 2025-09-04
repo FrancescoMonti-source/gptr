@@ -5,7 +5,7 @@
 \title{Perform a live HTTP GET on /v1/models for a given provider and base_url.
 Returns a list with a data frame of models (\code{df}) and a status string.
 Branches on provider to apply OpenAI-specific headers and retry logic or
-a generic flow for local backends. Always uses the \verb{.http_*} wrappers.}
+a generic flow for local backends.}
 \usage{
 .fetch_models_live(
   provider,
@@ -17,6 +17,6 @@ a generic flow for local backends. Always uses the \verb{.http_*} wrappers.}
 Perform a live HTTP GET on /v1/models for a given provider and base_url.
 Returns a list with a data frame of models (\code{df}) and a status string.
 Branches on provider to apply OpenAI-specific headers and retry logic or
-a generic flow for local backends. Always uses the \verb{.http_*} wrappers.
+a generic flow for local backends.
 }
 \keyword{internal}
