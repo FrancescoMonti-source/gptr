@@ -254,27 +254,8 @@ gpt_chat <- local({
         }
     }
 
-    # attach methods env + class so `$` can be overridden
+    # attach methods env + class
     attr(fun, "gpt_chat_methods") <- methods_env
     class(fun) <- c("gpt_chat_callable", class(fun))
     fun
 })
-
-#' @export
-#' @rdname gpt_chat
-#' @usage gpt_chat$<method>
-#' @details
-#' **Available methods** (call with `gpt_chat$method(...)`):
-#' - `show_history(as_text = TRUE)`
-#'   Print the conversation (or return a tibble when `as_text = FALSE`).
-#' - `reset()`
-#'   Clear the in-memory history.
-#' - `get_history()`
-#'   Return the raw list of message objects.
-#' - `save(path)` / `load(path)`
-#'   Persist or restore the history as JSON.
-`$.gpt_chat_callable` <- function(x, name) {
-    env <- attr(x, "gpt_chat_methods", exact = TRUE)
-    if (!is.environment(env)) stop("No methods environment on this gpt_chat object.")
-    get(name, envir = env, inherits = FALSE)
-}

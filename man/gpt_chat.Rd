@@ -2,7 +2,6 @@
 % Please edit documentation in R/gpt_chat.R
 \name{gpt_chat}
 \alias{gpt_chat}
-\alias{$.gpt_chat_callable}
 \title{Stateful chat with OpenAI-compatible servers (LM Studio, OpenAI, etc.)}
 \usage{
 gpt_chat(
@@ -16,9 +15,7 @@ gpt_chat(
   load_path = NULL,
   trim_max_chars = NULL,
   ...
-)
-
-gpt_chat$<method>
+  )
 }
 \arguments{
 \item{prompt}{Character scalar, the new user input. Required unless showing
@@ -67,17 +64,6 @@ as well as hosted providers such as \strong{OpenAI} (set \code{api_key}).
 – Summarise the current history via \code{gpt()}; by default replaces history with the summary message.
 }
 
-\strong{Available methods} (call with \code{gpt_chat$method(...)}):
-\itemize{
-\item \code{show_history(as_text = TRUE)}
-Print the conversation (or return a tibble when \code{as_text = FALSE}).
-\item \code{reset()}
-Clear the in-memory history.
-\item \code{get_history()}
-Return the raw list of message objects.
-\item \code{save(path)} / \code{load(path)}
-Persist or restore the history as JSON.
-}
 }
 \section{What it does}{
 
