@@ -17,7 +17,7 @@ $.gpt_chat_callable
 .list_local_backends
 .fetch_models_cached
 .fetch_models_live
-.models_endpoint
+.build_models_url
 .normalize_token
 .onAttach
 .onLoad
