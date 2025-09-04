@@ -36,6 +36,7 @@ Behavior:
 \itemize{
 \item Local providers read from the in-session cache by default (fast). Use \code{refresh=TRUE}
 to bypass the cache and probe \verb{/v1/models} directly (Ollama falls back to \verb{/api/tags}).
+When refreshing, cached entries are neither read nor updated.
 \item OpenAI is included if an API key is available (or explicitly provided).
 \item Output is normalized with an \code{availability} column:
 \itemize{

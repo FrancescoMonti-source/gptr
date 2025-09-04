@@ -63,17 +63,68 @@
 # --- Live probe --------------------------------------------------------------
 
 #' @keywords internal
-.fetch_models_live_openai <- function(base_url,
-                                      openai_api_key = "",
-                                      timeout = getOption("gptr.request_timeout", 5)) {
-  if (!nzchar(openai_api_key)) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "auth_missing"))
+.parse_openai_models <- function(obj) {
+  if (is.list(obj) && is.list(obj$data)) {
+    return(.as_models_df(obj$data))
+  }
+  .as_models_df(NULL)
+}
+
+#' @keywords internal
+.extract_model_ids <- function(obj) {
+  if (is.list(obj$data)) {
+    return(vapply(obj$data, function(m) m$id %||% "", ""))
+  }
+  if (is.list(obj$models)) {
+    return(vapply(obj$models, function(m) m$id %||% "", ""))
+  }
+  if (is.list(obj)) {
+    return(vapply(obj, function(m) m$id %||% "", ""))
+  }
+  if (is.character(obj)) {
+    return(obj)
+  }
+  character(0)
+}
+
+#' @keywords internal
+.parse_local_models <- function(obj) {
+  ids <- .extract_model_ids(obj)
+  ids <- unique(ids[nzchar(ids)])
+  .as_models_df(ids)
+}
+
+#' Perform a live HTTP GET on /v1/models for a given provider and base_url.
+#' Returns a list with a data frame of models (`df`) and a status string.
+#' Branches on provider to apply OpenAI-specific headers and retry logic or
+#' a generic flow for local backends.
+#' @param provider Provider name (e.g., "openai", "ollama").
+#' @param base_url Base URL of the backend.
+#' @param refresh Logical flag indicating whether the caller wishes to bypass
+#'   cached results.  This function itself always performs a live request and
+#'   does not read from or write to the cache, but downstream callers use the
+#'   flag to signal a cache bypass.
+#' @param openai_api_key OpenAI API key used when `provider = "openai"`.
+#' @param timeout Request timeout in seconds.
+#' @keywords internal
+.fetch_models_live <- function(provider,
+                               base_url,
+                               refresh = FALSE,
+                               openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+                               timeout = getOption("gptr.request_timeout", 5)) {
+  if (!requireNamespace("httr2", quietly = TRUE)) {
+    return(list(df = .as_models_df(NULL), status = "httr2_missing"))
   }
   url <- .models_endpoint(base_url)
-  resp <- try(
-    httr2::request(url) %>%
+  req <- httr2::request(url) %>%
+    httr2::req_timeout(timeout)
+
+  if (identical(provider, "openai")) {
+    if (!nzchar(openai_api_key)) {
+      return(list(df = .as_models_df(NULL), status = "auth_missing"))
+    }
+    req <- req %>%
       httr2::req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
-      httr2::req_timeout(timeout) %>%
       httr2::req_retry(
         max_tries = 3,
         backoff = function(i) 0.2 * i,
@@ -84,112 +135,31 @@
           }
           sc %in% c(408, 429, 500, 502, 503, 504)
         }
-      ) %>%
-      httr2::req_perform(),
-    silent = TRUE
-  )
+      )
+  }
+
+  resp <- try(req %>% httr2::req_perform(), silent = TRUE)
   if (inherits(resp, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "unreachable"))
+    return(list(df = .as_models_df(NULL), status = "unreachable"))
   }
   sc <- httr2::resp_status(resp)
-  if (sc == 401L) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "auth_error"))
+  if (identical(provider, "openai") && sc == 401L) {
+    return(list(df = .as_models_df(NULL), status = "auth_error"))
   }
   if (sc >= 400L) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = paste0("http_", sc)))
+    return(list(df = .as_models_df(NULL), status = paste0("http_", sc)))
   }
   j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
   if (inherits(j, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "non_json"))
-  }
-  if (is.list(j) && is.list(j$data)) {
-    rows <- lapply(j$data, function(m) {
-      id <- tryCatch(m$id, error = function(e) NULL)
-      cr <- tryCatch(m$created, error = function(e) NA_real_)
-      if (!is.character(id) || length(id) != 1L || !nzchar(id)) {
-        return(NULL)
-      }
-      data.frame(id = id, created = as.numeric(cr), stringsAsFactors = FALSE)
-    })
-    rows <- Filter(Negate(is.null), rows)
-    df <- if (length(rows)) do.call(rbind, rows) else data.frame(id = character(0), created = numeric(0))
-    return(list(df = df, status = "ok"))
-  }
-  list(df = data.frame(id = character(0), created = numeric(0)), status = "ok")
-}
-
-#' @keywords internal
-.fetch_models_live_local <- function(provider,
-                                     base_url,
-                                     timeout = getOption("gptr.request_timeout", 5)) {
-  pick_ids <- function(obj) {
-    if (is.list(obj$data)) {
-      return(vapply(obj$data, function(m) m$id %||% "", ""))
-    }
-    if (is.list(obj$models)) {
-      return(vapply(obj$models, function(m) m$id %||% "", ""))
-    }
-    if (is.list(obj)) {
-      return(vapply(obj, function(m) m$id %||% "", ""))
-    }
-    if (is.character(obj)) {
-      return(obj)
-    }
-    character(0)
+    return(list(df = .as_models_df(NULL), status = "non_json"))
   }
 
-  url <- .models_endpoint(base_url)
-  resp <- try(
-    httr2::request(url) %>%
-      httr2::req_timeout(timeout) %>%
-      httr2::req_perform(),
-    silent = TRUE
-  )
-  if (inherits(resp, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "unreachable"))
-  }
-  sc <- httr2::resp_status(resp)
-  if (sc >= 400L) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = paste0("http_", sc)))
-  }
-  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
-  if (inherits(j, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "non_json"))
-  }
-  ids <- pick_ids(j)
-  ids <- unique(ids[nzchar(ids)])
-  df <- data.frame(id = ids, created = rep(NA_real_, length(ids)), stringsAsFactors = FALSE)
-  list(df = df, status = "ok")
-}
-
-#' Perform a live HTTP GET on /v1/models for a given provider and base_url.
-#' Returns a list with a data frame of models (`df`) and a status string.
-#' Branches on provider to apply OpenAI-specific headers and retry logic or
-#' a generic flow for local backends.
-#' @param provider Provider name (e.g., "openai", "ollama").
-#' @param base_url Base URL of the backend.
-#' @param refresh Logical; included for API compatibility. When `TRUE`, any
-#'   cached entry is ignored.
-#' @param openai_api_key OpenAI API key used when `provider = "openai"`.
-#' @param timeout Request timeout in seconds.
-#' @keywords internal
-.fetch_models_live <- function(provider,
-                               base_url,
-                               refresh = FALSE,
-                               openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-                               timeout = getOption("gptr.request_timeout", 5)) {
-  if (isTRUE(refresh)) {
-    # explicit no-op to emphasize refresh semantics
-    NULL
-  }
-  if (!requireNamespace("httr2", quietly = TRUE)) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
-  }
-  if (identical(provider, "openai")) {
-    .fetch_models_live_openai(base_url, openai_api_key, timeout)
+  df <- if (identical(provider, "openai")) {
+    .parse_openai_models(j)
   } else {
-    .fetch_models_live_local(provider, base_url, timeout)
+    .parse_local_models(j)
   }
+  list(df = df, status = "ok")
 }
 
 #' @keywords internal
@@ -320,30 +290,87 @@
 #' @keywords internal
 .resolve_model_provider <- function(model,
                                     openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
-  providers <- c("lmstudio", "ollama", "localai", "openai")
-  rows <- list()
-  if (!nzchar(model)) {
-    return(data.frame(provider = character(), base_url = character(),
-                      model_id = character(), stringsAsFactors = FALSE))
-  }
-  for (p in providers) {
-    if (p == "openai" && !nzchar(openai_api_key)) next
-    bu <- switch(p,
-      lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
-      ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
-      localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
-      openai   = "https://api.openai.com"
-    )
-    ent <- try(.fetch_models_cached(provider = p, base_url = bu,
-                                    openai_api_key = openai_api_key), silent = TRUE)
-    ids <- tryCatch(as.character(ent$model_id), error = function(e) character(0))
-    if (length(ids) && any(tolower(ids) == tolower(model))) {
-      rows[[length(rows) + 1L]] <- data.frame(
-        provider = p,
-        base_url = .api_root(bu),
-        model_id = model,
+    providers <- c("lmstudio", "ollama", "localai", "openai")
+    rows <- list()
+    if (!nzchar(model)) {
+        return(data.frame(provider = character(), base_url = character(),
+                          model_id = character(), stringsAsFactors = FALSE))
+    }
+    for (p in providers) {
+        if (p == "openai" && !nzchar(openai_api_key)) next
+        bu <- switch(p,
+            lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
+            ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
+            localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
+            openai   = "https://api.openai.com"
+        )
+        ent <- try(.fetch_models_cached(provider = p, base_url = bu,
+                                            openai_api_key = openai_api_key), silent = TRUE)
+        ids <- tryCatch({
+            if (is.list(ent) && !is.null(ent$df)) as.character(ent$df$id) else character(0)
+        }, error = function(e) character(0))
+        if (length(ids) && any(tolower(ids) == tolower(model))) {
+            rows[[length(rows) + 1L]] <- data.frame(
+                provider = p,
+                base_url = .api_root(bu),
+                model_id = model,
+                stringsAsFactors = FALSE
+            )
+        }
+    }
+    if (length(rows)) do.call(rbind, rows) else data.frame(
+        provider = character(), base_url = character(), model_id = character(),
         stringsAsFactors = FALSE
-      )
+    )
+}
+#' @param refresh Logical; if TRUE, the cache is skipped and the backend is
+#'   queried directly without reading from or writing to the cache.
+#' @keywords internal
+.fetch_models_cached_local <- function(provider, base_url, refresh = FALSE) {
+  if (isTRUE(refresh)) {
+    live <- .fetch_models_live(provider, base_url, refresh = TRUE)
+    ts <- as.numeric(Sys.time())
+    return(.row_df(provider, base_url, live$df, "installed", "live", ts, status = live$status))
+  }
+  ent <- .cache_get(provider, base_url)
+  if (is.null(ent)) {
+    live <- .fetch_models_cached(provider, base_url)
+    mods <- live$df
+    ts <- .cache_get(provider, base_url)$ts %||% as.numeric(Sys.time())
+    src <- "live"
+    if (provider == "ollama" && nrow(mods) == 0) {
+      mods <- .ollama_tags_live(base_url)
+      .cache_put(provider, base_url, mods)
+      ts <- .cache_get(provider, base_url)$ts
+    }
+    .row_df(provider, base_url, mods, "installed", src, ts, status = live$status)
+  } else {
+    .row_df(provider, base_url, ent$models, "installed", "cache", ent$ts)
+  }
+}
+
+#' @param refresh Logical; if TRUE, bypasses cache and probes the OpenAI
+#'   endpoint directly without touching the cache.
+#' @keywords internal
+.fetch_models_cached_openai <- function(openai_api_key,
+                                        base_url = "https://api.openai.com",
+                                        refresh = FALSE) {
+  if (isTRUE(refresh)) {
+    live <- .fetch_models_live("openai", base_url, refresh = TRUE, openai_api_key = openai_api_key)
+    ts <- as.numeric(Sys.time())
+    return(.row_df("openai", base_url, live$df, "catalog", "live", ts, status = live$status))
+  }
+  ent <- .cache_get("openai", base_url)
+  if (is.null(ent)) {
+    live <- .fetch_models_live("openai", base_url, openai_api_key = openai_api_key)
+    if (identical(live$status, "ok") && nrow(live$df) > 0) {
+      .cache_put("openai", base_url, live$df)
+      ts <- .cache_get("openai", base_url)$ts
+    } else if (identical(live$status, "ok") && nrow(live$df) == 0) {
+      live$status <- "empty_cache"
+      ts <- as.numeric(Sys.time())
+    } else {
+      ts <- as.numeric(Sys.time())
     }
   }
   if (length(rows)) do.call(rbind, rows) else data.frame(
@@ -358,6 +385,7 @@
 #' Behavior:
 #' - Local providers read from the in-session cache by default (fast). Use `refresh=TRUE`
 #'   to bypass the cache and probe `/v1/models` directly (Ollama falls back to `/api/tags`).
+#'   When refreshing, cached entries are neither read nor updated.
 #' - OpenAI is included if an API key is available (or explicitly provided).
 #' - Output is normalized with an `availability` column:
 #'     * "installed" for local backends
@@ -397,12 +425,14 @@ list_models <- function(provider = NULL,
         localai  = getOption("gptr.localai_base_url", "http://127.0.0.1:8080")
       )
       bu <- .api_root(base_url %||% bu_default)
+
       if (isTRUE(refresh)) {
         live <- .fetch_models_live(p, bu, refresh = TRUE)
         df <- .row_df(p, bu, live$df, "installed", "live", as.numeric(Sys.time()), status = live$status)
       } else {
         df <- .fetch_models_cached(p, bu, openai_api_key = openai_api_key)
       }
+
       diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
       rows[[length(rows) + 1L]] <- df
     } else if (p == "openai") {
@@ -413,6 +443,7 @@ list_models <- function(provider = NULL,
       } else {
         df <- .fetch_models_cached("openai", bu, openai_api_key = openai_api_key)
       }
+
       diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
       rows[[length(rows) + 1L]] <- df
     }

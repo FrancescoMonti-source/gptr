@@ -20,8 +20,9 @@ a generic flow for local backends.}
 
 \item{base_url}{Base URL of the backend.}
 
-\item{refresh}{Logical; included for API compatibility. When \code{TRUE}, any
-cached entry is ignored.}
+\item{refresh}{Logical flag indicating whether the caller wishes to bypass
+cached results. The function always performs a live request and does not read
+from or write to the cache.}
 
 \item{openai_api_key}{OpenAI API key used when \code{provider = "openai"}.}
 
