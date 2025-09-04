@@ -300,8 +300,8 @@
 #' @keywords internal
 .fetch_models_cached <- function(provider = NULL,
                                  base_url = NULL,
-                                 refresh = FALSE,
-                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+                                 openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+                                 refresh = FALSE) {
     if (is.null(provider)) {
         keys <- .gptr_cache$keys()
         if (!length(keys)) {
