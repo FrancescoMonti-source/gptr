@@ -43,10 +43,7 @@ gpt <- function(prompt,
     # --- Early auto+model resolution (use cache, no heuristics) ---
     if (identical(provider, "auto") && is.character(model) && nzchar(model)) {
         lm <- try(.resolve_model_provider(model, openai_api_key = openai_api_key), silent = TRUE)
-        if (inherits(lm, "try-error") || !is.data.frame(lm)) {
-            rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
-        }
-        if (nrow(lm) == 0) {
+        if (inherits(lm, "try-error") || !is.data.frame(lm) || nrow(lm) < 1) {
             rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
         }
         hits <- lm
