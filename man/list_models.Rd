@@ -18,8 +18,8 @@ list_models(
 \item{base_url}{Optional root URL to target a specific server. If NULL,
 defaults from options are used for locals, and https://api.openai.com for OpenAI.}
 
-\item{refresh}{Logical. If TRUE, bypasses cache and queries providers directly.
-Cached entries are left untouched. Defaults to \code{FALSE}.}
+\item{refresh}{Logical. If TRUE, bypasses cache and queries providers
+directly. Cached entries are left untouched.}
 
 \item{openai_api_key}{Optional OpenAI API key. If missing, falls back to
 Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
