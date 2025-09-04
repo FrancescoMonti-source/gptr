@@ -392,10 +392,10 @@ fetch_models_cached <- function(provider,
   ent <- .cache_get(provider, base_url)
   if (is.null(ent)) {
     live <- .fetch_models_live(provider, base_url, openai_api_key = openai_api_key)
-    mods <- live$df
+    mods <- .as_models_df(live$df)
     ts <- as.numeric(Sys.time())
     if (provider == "ollama" && nrow(mods) == 0) {
-      mods <- .ollama_tags_live(base_url)
+      mods <- .as_models_df(.ollama_tags_live(base_url))
     }
     if (identical(live$status, "ok") && nrow(mods) > 0) {
       .cache_put(provider, base_url, mods)
