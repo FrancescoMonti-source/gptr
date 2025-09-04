@@ -162,36 +162,6 @@
   list(df = df, status = "ok")
 }
 
-#' @keywords internal
-.ollama_tags_live <- function(base_url, timeout = getOption("gptr.request_timeout", 5)) {
-  if (!requireNamespace("httr2", quietly = TRUE)) {
-    return(character(0))
-  }
-  root <- .api_root(base_url)
-  proto <- sub("^(https?://).*", "\\1", root)
-  host <- sub("^https?://", "", root)
-  host <- sub("/.*$", "", host)
-  url <- paste0(ifelse(nzchar(proto), proto, "http://"), host, "/api/tags")
-
-  resp <- try(
-    httr2::request(url) %>%
-      httr2::req_timeout(timeout) %>%
-      httr2::req_retry(max_tries = 3, backoff = function(i) 0.2 * i) %>%
-      httr2::req_perform(),
-    silent = TRUE
-  )
-  if (inherits(resp, "try-error") || httr2::resp_status(resp) >= 400L) {
-    return(character(0))
-  }
-  j <- try(httr2::resp_body_json(resp, simplifyVector = TRUE), silent = TRUE)
-  if (inherits(j, "try-error") || !is.list(j) || !is.data.frame(j$models)) {
-    return(character(0))
-  }
-  m <- j$models$name
-  if (is.null(m)) m <- j$models$id
-  unique(as.character(m[nzchar(m)]))
-}
-
 # --- Cache primitives --------------------------------------------------------
 
 # Construct a unique cache key string from provider+base_url using
@@ -340,9 +310,6 @@
     mods <- live$df
     status <- live$status
     ts <- now
-    if (provider == "ollama" && nrow(mods) == 0 && identical(status, "ok")) {
-        mods <- .ollama_tags_live(root)
-    }
     if (identical(status, "ok")) {
         if (provider == "openai") {
             if (nrow(mods) > 0) {
@@ -365,7 +332,7 @@
 #'
 #' Behavior:
 #' - Local providers read from the in-session cache by default (fast). Use `refresh=TRUE`
-#'   to bypass the cache and probe `/v1/models` directly (Ollama falls back to `/api/tags`).
+#'   to bypass the cache and probe `/v1/models` directly.
 #'   When refreshing, cached entries are neither read nor updated.
 #' - OpenAI is included if an API key is available (or explicitly provided).
 #' - Output is normalized with an `availability` column:

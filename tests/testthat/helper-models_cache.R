@@ -123,10 +123,3 @@ openai_models_payload <- function() {
   )
 }
 
-ollama_tags_payload <- function() {
-  list(models = data.frame(
-    name = c("mistral:instruct", "llama3.1"),
-    stringsAsFactors = FALSE
-  ))
-}
-

@@ -19,7 +19,6 @@ $.gpt_chat_callable
 .fetch_models_live
 .models_endpoint
 .normalize_token
-.ollama_tags_live
 .onAttach
 .onLoad
 .packageName
