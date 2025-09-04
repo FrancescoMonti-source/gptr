@@ -211,8 +211,8 @@
 #' Uses cached entries when valid and falls back to a live probe when needed.
 #' Skips OpenAI when no API key is available.
 #' @keywords internal
-.lookup_model_ids <- function(provider, base_url,
-                              openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+.get_cached_model_ids <- function(provider, base_url,
+                                  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
   if (identical(provider, "openai") && !nzchar(openai_api_key)) {
     return(character())
   }
@@ -273,7 +273,7 @@
               localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
               openai   = "https://api.openai.com"
           )
-          ids <- try(.lookup_model_ids(p, bu, openai_api_key = openai_api_key), silent = TRUE)
+          ids <- try(.get_cached_model_ids(p, bu, openai_api_key = openai_api_key), silent = TRUE)
           ids <- if (inherits(ids, "try-error")) character() else as.character(ids)
           if (length(ids) && any(tolower(ids) == tolower(model))) {
               rows[[length(rows) + 1L]] <- data.frame(
