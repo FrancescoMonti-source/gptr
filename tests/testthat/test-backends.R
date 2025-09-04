@@ -26,7 +26,7 @@ test_that("auto + openai model routes to OpenAI", {
                                             openai_api_key = "", ...) {
             data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
         },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
             fake_resp(model = payload$model %||% "gpt-4o-mini")
         },
@@ -61,7 +61,7 @@ test_that("auto + local model routes to local", {
             called <<- c(called, paste0("local@", base_url))
             fake_resp(model = payload$model %||% "mistral")
         },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
             fake_resp(model = payload$model %||% "gpt")
         },
@@ -94,7 +94,7 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
             called <<- c(called, paste0("local@", base_url))
             fake_resp(model = payload$model %||% "o1-mini")
         },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
             fake_resp(model = payload$model %||% "o1-mini")
         },
@@ -171,7 +171,7 @@ test_that("auto with no local backend falls back to OpenAI", {
                                             openai_api_key = "", ...) {
             data.frame(model_id = character(), stringsAsFactors = FALSE)
         },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
             fake_resp(model = payload$model %||% "fallback")
         },
@@ -192,7 +192,7 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
                                             openai_api_key = "", ...) {
             data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
         },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
             called <<- c(called, "openai")
             fake_resp(model = payload$model %||% "gpt-4o-mini")
         },
@@ -210,7 +210,7 @@ test_that("missing openai model falls back to default", {
                                             openai_api_key = "", ...) {
             data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
         },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
             used <<- payload$model
             fake_resp(model = payload$model %||% "gpt-4o-mini")
         }
@@ -311,7 +311,7 @@ test_that("model match is case-insensitive", {
                                             openai_api_key = "", ...) {
             data.frame(model_id = "GPT-4O-MINI", stringsAsFactors = FALSE)
         },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
             called <<- "openai"
             fake_resp(model = payload$model %||% "GPT-4O-MINI")
         },

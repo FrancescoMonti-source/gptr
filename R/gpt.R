@@ -166,7 +166,7 @@ gpt <- function(prompt,
 
     # ---------------- provider == "openai" ----------------
     if (provider == "openai") {
-        msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
+        msgs <- openai_build_messages(system = system, user = prompt, image_paths = image_paths)
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
         bu_root <- .api_root(defs$base_url)
         if (is.null(.cache_get("openai", bu_root))) {
@@ -185,7 +185,7 @@ gpt <- function(prompt,
                 defs$model <- .resolve_openai_defaults(base_url = defs$base_url, api_key = defs$api_key)$model
             }
         }
-        payload <- openai_compose_payload(
+        payload <- openai_build_payload(
             messages        = msgs,
             model           = defs$model,
             temperature     = temperature,
@@ -193,7 +193,7 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- request_openai(payload, base_url = defs$base_url, api_key = defs$api_key)
+        res <- openai_send_request(payload, base_url = defs$base_url, api_key = defs$api_key)
         return(.handle_return(res, backend_name = "openai", model_name = defs$model))
     }
 
@@ -227,8 +227,8 @@ gpt <- function(prompt,
             }
         }
 
-        msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
-        payload <- openai_compose_payload(
+        msgs <- openai_build_messages(system = system, user = prompt, image_paths = image_paths)
+        payload <- openai_build_payload(
             messages        = msgs,
             model           = requested_model,
             temperature     = temperature,

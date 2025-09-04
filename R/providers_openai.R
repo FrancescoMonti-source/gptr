@@ -28,9 +28,9 @@
 #'   as "type": "input_file" with a data URL (base64). Requires `base64enc`.
 #' @return A list suitable for OpenAI `messages`
 #' @export
-openai_make_messages <- function(system = NULL, user = NULL,
-                                 image_paths = NULL, file_paths = NULL,
-                                 on_missing = c("warn", "skip", "error")) {
+openai_build_messages <- function(system = NULL, user = NULL,
+                                  image_paths = NULL, file_paths = NULL,
+                                  on_missing = c("warn", "skip", "error")) {
   on_missing <- match.arg(on_missing)
   have_b64 <- requireNamespace("base64enc", quietly = TRUE)
 
@@ -148,7 +148,7 @@ openai_make_messages <- function(system = NULL, user = NULL,
 
 #' Compose OpenAI Chat Completions payload
 #' @keywords internal
-#' @param messages list created by `openai_make_messages()` or equivalent
+#' @param messages list created by `openai_build_messages()` or equivalent
 #' @param model character model id
 #' @param temperature numeric scalar
 #' @param seed optional integer for determinism (when supported)
@@ -157,17 +157,17 @@ openai_make_messages <- function(system = NULL, user = NULL,
 #' @param tools tool spec list (optional, pass-through)
 #' @param top_p,max_tokens,frequency_penalty,presence_penalty optional tuning params
 #' @param extra named list of extra params passed through as-is
-openai_compose_payload <- function(messages,
-                                   model,
-                                   temperature = 0.2,
-                                   seed = NULL,
-                                   response_format = NULL,
-                                   tools = NULL,
-                                   top_p = NULL,
-                                   max_tokens = NULL,
-                                   frequency_penalty = NULL,
-                                   presence_penalty = NULL,
-                                   extra = NULL) {
+openai_build_payload <- function(messages,
+                                  model,
+                                  temperature = 0.2,
+                                  seed = NULL,
+                                  response_format = NULL,
+                                  tools = NULL,
+                                  top_p = NULL,
+                                  max_tokens = NULL,
+                                  frequency_penalty = NULL,
+                                  presence_penalty = NULL,
+                                  extra = NULL) {
   payload <- list(
     model = model,
     messages = messages,
@@ -199,21 +199,21 @@ openai_compose_payload <- function(messages,
 
 #' Perform a Chat Completions request to OpenAI (httr2)
 #' @keywords internal
-#' @param payload list as created by `openai_compose_payload()`
+#' @param payload list as created by `openai_build_payload()`
 #' @param base_url chat completions endpoint (default resolved by options)
 #' @param api_key OpenAI API key (default: Sys.getenv("OPENAI_API_KEY"))
 #' @param timeout seconds (numeric)
 #' @return list with `body`, `resp` (httr2 response). Use `openai_parse_text()` to get text.
-request_openai <- function(payload,
-                           base_url = NULL,
-                           api_key = NULL,
-                           timeout = getOption("gptr.timeout", 30)) {
+openai_send_request <- function(payload,
+                                base_url = NULL,
+                                api_key = NULL,
+                                timeout = getOption("gptr.timeout", 30)) {
     # --- Strict inputs (no internal defaulting/resolution) ---
     if (is.null(base_url) || !nzchar(base_url)) {
-        stop("request_openai(): `base_url` is required and must be non-empty. Resolve it before calling (e.g., via .resolve_openai_defaults()).", call. = FALSE)
+        stop("openai_send_request(): `base_url` is required and must be non-empty. Resolve it before calling (e.g., via .resolve_openai_defaults()).", call. = FALSE)
     }
     if (is.null(api_key) || !nzchar(api_key)) {
-        stop("request_openai(): `api_key` is required and must be non-empty. Set OPENAI_API_KEY or pass `api_key=`.", call. = FALSE)
+        stop("openai_send_request(): `api_key` is required and must be non-empty. Set OPENAI_API_KEY or pass `api_key=`.", call. = FALSE)
     }
 
     ua <- sprintf("gptr/%s (+openai)", tryCatch(as.character(utils::packageVersion("gptr")), error = function(e) "0.0.0"))
@@ -256,7 +256,7 @@ request_openai <- function(payload,
 
 #' Extract assistant text and metadata from OpenAI Chat response
 #' @keywords internal
-#' @param body response body (list) from `request_openai()$body`
+#' @param body response body (list) from `openai_send_request()$body`
 #' @return list(text, finish_reason, usage, content_parts, raw)
 openai_parse_text <- function(body) {
   if (is.null(body) || is.null(body$choices) || !length(body$choices)) {
