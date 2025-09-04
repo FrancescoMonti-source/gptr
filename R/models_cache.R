@@ -63,103 +63,35 @@
 # --- Live probe --------------------------------------------------------------
 
 #' @keywords internal
-.fetch_models_live_openai <- function(base_url,
-                                      openai_api_key = "",
-                                      timeout = getOption("gptr.request_timeout", 5)) {
-  if (!nzchar(openai_api_key)) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "auth_missing"))
+.parse_openai_models <- function(obj) {
+  if (is.list(obj) && is.list(obj$data)) {
+    return(.as_models_df(obj$data))
   }
-  url <- .models_endpoint(base_url)
-  resp <- try(
-    httr2::request(url) %>%
-      httr2::req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
-      httr2::req_timeout(timeout) %>%
-      httr2::req_retry(
-        max_tries = 3,
-        backoff = function(i) 0.2 * i,
-        is_transient = function(r) {
-          sc <- try(httr2::resp_status(r), silent = TRUE)
-          if (inherits(sc, "try-error")) {
-            return(TRUE)
-          }
-          sc %in% c(408, 429, 500, 502, 503, 504)
-        }
-      ) %>%
-      httr2::req_perform(),
-    silent = TRUE
-  )
-  if (inherits(resp, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "unreachable"))
-  }
-  sc <- httr2::resp_status(resp)
-  if (sc == 401L) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "auth_error"))
-  }
-  if (sc >= 400L) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = paste0("http_", sc)))
-  }
-  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
-  if (inherits(j, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "non_json"))
-  }
-  if (is.list(j) && is.list(j$data)) {
-    rows <- lapply(j$data, function(m) {
-      id <- tryCatch(m$id, error = function(e) NULL)
-      cr <- tryCatch(m$created, error = function(e) NA_real_)
-      if (!is.character(id) || length(id) != 1L || !nzchar(id)) {
-        return(NULL)
-      }
-      data.frame(id = id, created = as.numeric(cr), stringsAsFactors = FALSE)
-    })
-    rows <- Filter(Negate(is.null), rows)
-    df <- if (length(rows)) do.call(rbind, rows) else data.frame(id = character(0), created = numeric(0))
-    return(list(df = df, status = "ok"))
-  }
-  list(df = data.frame(id = character(0), created = numeric(0)), status = "ok")
+  .as_models_df(NULL)
 }
 
 #' @keywords internal
-.fetch_models_live_local <- function(provider,
-                                     base_url,
-                                     timeout = getOption("gptr.request_timeout", 5)) {
-  pick_ids <- function(obj) {
-    if (is.list(obj$data)) {
-      return(vapply(obj$data, function(m) m$id %||% "", ""))
-    }
-    if (is.list(obj$models)) {
-      return(vapply(obj$models, function(m) m$id %||% "", ""))
-    }
-    if (is.list(obj)) {
-      return(vapply(obj, function(m) m$id %||% "", ""))
-    }
-    if (is.character(obj)) {
-      return(obj)
-    }
-    character(0)
+.extract_model_ids <- function(obj) {
+  if (is.list(obj$data)) {
+    return(vapply(obj$data, function(m) m$id %||% "", ""))
   }
+  if (is.list(obj$models)) {
+    return(vapply(obj$models, function(m) m$id %||% "", ""))
+  }
+  if (is.list(obj)) {
+    return(vapply(obj, function(m) m$id %||% "", ""))
+  }
+  if (is.character(obj)) {
+    return(obj)
+  }
+  character(0)
+}
 
-  url <- .models_endpoint(base_url)
-  resp <- try(
-    httr2::request(url) %>%
-      httr2::req_timeout(timeout) %>%
-      httr2::req_perform(),
-    silent = TRUE
-  )
-  if (inherits(resp, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "unreachable"))
-  }
-  sc <- httr2::resp_status(resp)
-  if (sc >= 400L) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = paste0("http_", sc)))
-  }
-  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
-  if (inherits(j, "try-error")) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "non_json"))
-  }
-  ids <- pick_ids(j)
+#' @keywords internal
+.parse_local_models <- function(obj) {
+  ids <- .extract_model_ids(obj)
   ids <- unique(ids[nzchar(ids)])
-  df <- data.frame(id = ids, created = rep(NA_real_, length(ids)), stringsAsFactors = FALSE)
-  list(df = df, status = "ok")
+  .as_models_df(ids)
 }
 
 #' Perform a live HTTP GET on /v1/models for a given provider and base_url.
@@ -183,13 +115,53 @@
     NULL
   }
   if (!requireNamespace("httr2", quietly = TRUE)) {
-    return(list(df = data.frame(id = character(0), created = numeric(0)), status = "httr2_missing"))
+    return(list(df = .as_models_df(NULL), status = "httr2_missing"))
   }
+  url <- .models_endpoint(base_url)
+  req <- httr2::request(url) %>%
+    httr2::req_timeout(timeout)
+
   if (identical(provider, "openai")) {
-    .fetch_models_live_openai(base_url, openai_api_key, timeout)
-  } else {
-    .fetch_models_live_local(provider, base_url, timeout)
+    if (!nzchar(openai_api_key)) {
+      return(list(df = .as_models_df(NULL), status = "auth_missing"))
+    }
+    req <- req %>%
+      httr2::req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
+      httr2::req_retry(
+        max_tries = 3,
+        backoff = function(i) 0.2 * i,
+        is_transient = function(r) {
+          sc <- try(httr2::resp_status(r), silent = TRUE)
+          if (inherits(sc, "try-error")) {
+            return(TRUE)
+          }
+          sc %in% c(408, 429, 500, 502, 503, 504)
+        }
+      )
   }
+
+  resp <- try(req %>% httr2::req_perform(), silent = TRUE)
+  if (inherits(resp, "try-error")) {
+    return(list(df = .as_models_df(NULL), status = "unreachable"))
+  }
+  sc <- httr2::resp_status(resp)
+  if (identical(provider, "openai") && sc == 401L) {
+    return(list(df = .as_models_df(NULL), status = "auth_error"))
+  }
+  if (sc >= 400L) {
+    return(list(df = .as_models_df(NULL), status = paste0("http_", sc)))
+  }
+  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+  if (inherits(j, "try-error")) {
+    return(list(df = .as_models_df(NULL), status = "non_json"))
+  }
+
+  df <- if (identical(provider, "openai")) {
+    .parse_openai_models(j)
+  } else {
+    .parse_local_models(j)
+  }
+  list(df = df, status = "ok")
 }
 
 #' @keywords internal
@@ -424,7 +396,7 @@
                                         base_url = "https://api.openai.com") {
   ent <- .cache_get("openai", base_url)
   if (is.null(ent)) {
-    live <- .fetch_models_live_openai(base_url, openai_api_key)
+    live <- .fetch_models_live("openai", base_url, openai_api_key = openai_api_key)
     if (identical(live$status, "ok") && nrow(live$df) > 0) {
       .cache_put("openai", base_url, live$df)
       ts <- .cache_get("openai", base_url)$ts

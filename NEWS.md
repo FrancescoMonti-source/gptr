@@ -1,7 +1,7 @@
 # gptr (development version)
 
 * Renamed internal helpers for clarity: `.collect_local_models` → `.fetch_local_models_cached` and `.collect_openai_models` → `.fetch_openai_models_cached`.
-* `.list_models_live` and provider-specific variants are now `.fetch_models_live`, `.fetch_models_live_openai`, and `.fetch_models_live_local` for clearer intent.
+* `.fetch_models_live` now handles OpenAI and local providers directly; removed provider-specific helpers.
 * `list_models()` now defaults to `refresh = FALSE`; use new `refresh_models()` (replacing `refresh_models_cache()`) to force a live probe.
 
 # gptr 0.4.3
