@@ -475,3 +475,60 @@ test_that(".fetch_models_cached handles local and openai", {
   expect_equal(out_openai$availability, "catalog")
 })
 
+
+# new tests for base_url normalization and provider resolution
+
+test_that(".fetch_models_cached normalizes base_url once", {
+  calls <- 0
+  cache <- new.env(parent = emptyenv())
+  live <- function(provider, base_url, ...) {
+    list(df = data.frame(id = "m", created = 1), status = "ok")
+  }
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = live,
+    .cache_get = function(p, u) {
+      key <- paste(p, u)
+      if (exists(key, envir = cache, inherits = FALSE)) cache[[key]] else NULL
+    },
+    .cache_put = function(p, u, m) {
+      key <- paste(p, u)
+      cache[[key]] <- list(ts = fixed_ts, models = m)
+      invisible(TRUE)
+    },
+    .api_root = function(x) { calls <<- calls + 1; gptr:::.api_root(x) },
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234/v1/models/")
+  expect_equal(out$base_url, "http://127.0.0.1:1234")
+  expect_identical(calls, 1L)
+})
+
+test_that(".resolve_model_provider reuses canonical base_url", {
+  calls <- 0
+  testthat::local_mocked_bindings(
+    .fetch_models_cached = function(provider, base_url, openai_api_key = "", ...) {
+      if (identical(provider, "lmstudio")) {
+        data.frame(
+          provider = provider,
+          base_url = "http://127.0.0.1:1234",
+          model_id = "m",
+          stringsAsFactors = FALSE
+        )
+      } else {
+        data.frame(
+          provider = provider,
+          base_url = character(),
+          model_id = character(),
+          stringsAsFactors = FALSE
+        )
+      }
+    },
+    .api_root = function(x) { calls <<- calls + 1; gptr:::.api_root(x) },
+    .env = asNamespace("gptr")
+  )
+  out <- getFromNamespace(".resolve_model_provider", "gptr")("m", openai_api_key = "")
+  expect_equal(out$base_url, "http://127.0.0.1:1234")
+  expect_identical(calls, 0L)
+})
+
