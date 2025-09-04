@@ -476,6 +476,7 @@ test_that(".fetch_models_cached handles local and openai", {
 })
 
 
+
 # new tests for base_url normalization and provider resolution
 
 test_that(".fetch_models_cached normalizes base_url once", {
@@ -531,4 +532,6 @@ test_that(".resolve_model_provider reuses canonical base_url", {
   expect_equal(out$base_url, "http://127.0.0.1:1234")
   expect_identical(calls, 0L)
 })
+
+=======
 

@@ -206,47 +206,90 @@
   .gptr_cache$remove(.cache_key(provider, base_url))
   invisible(TRUE)
 }
+#' Return model IDs for a provider/base_url pair using cache when possible.
+#'
+#' Uses cached entries when valid and falls back to a live probe when needed.
+#' Skips OpenAI when no API key is available.
+#' @keywords internal
+.lookup_model_ids <- function(provider, base_url,
+                              openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+  if (identical(provider, "openai") && !nzchar(openai_api_key)) {
+    return(character())
+  }
+  root <- .api_root(base_url)
+  ent <- .cache_get(provider, root)
+  now <- as.numeric(Sys.time())
+  if (!is.null(ent)) {
+    use_cache <- FALSE
+    if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
+      use_cache <- TRUE
+    } else {
+      ttl <- getOption("gptr.model_cache_ttl", 3600)
+      if (!is.na(ent$ts) && (now - ent$ts) < ttl) use_cache <- TRUE
+    }
+    if (use_cache) {
+      ids <- tryCatch(ent$models$id, error = function(e) character())
+      return(ids %||% character())
+    }
+  }
+
+  live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+  if (identical(live$status, "unreachable")) {
+    Sys.sleep(0.2)
+    live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+  }
+  if (!identical(live$status, "ok")) {
+    return(character())
+  }
+  mods <- live$df
+  if (identical(provider, "openai")) {
+    if (nrow(mods) == 0) return(character())
+    .cache_put(provider, root, mods)
+    return(mods$id %||% character())
+  }
+  .cache_put(provider, root, mods)
+  mods$id %||% character()
+}
+
 
 
 #' @noRd
 #' @keywords internal
 #' Resolve a model's provider from cache (minimal lookup)
 #' @keywords internal
-.resolve_model_provider <- function(model,
-                                    openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
-    providers <- c("lmstudio", "ollama", "localai", "openai")
-    rows <- list()
-    if (!nzchar(model)) {
-        return(data.frame(provider = character(), base_url = character(),
-                          model_id = character(), stringsAsFactors = FALSE))
-    }
-    for (p in providers) {
-        if (p == "openai" && !nzchar(openai_api_key)) next
-        bu <- switch(p,
-            lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
-            ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
-            localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
-            openai   = "https://api.openai.com"
-        )
-        ent <- try(.fetch_models_cached(provider = p, base_url = bu,
-                                        openai_api_key = openai_api_key), silent = TRUE)
-        ids <- tryCatch({
-            if (is.data.frame(ent)) as.character(ent$model_id) else character(0)
-        }, error = function(e) character(0))
-        if (length(ids) && any(tolower(ids) == tolower(model))) {
-            rows[[length(rows) + 1L]] <- data.frame(
-                provider = p,
-                base_url = ent$base_url[1L],
-                model_id = model,
-                stringsAsFactors = FALSE
-            )
-        }
-    }
-    if (length(rows)) do.call(rbind, rows) else data.frame(
-        provider = character(), base_url = character(), model_id = character(),
-        stringsAsFactors = FALSE
-    )
-}
+  .resolve_model_provider <- function(model,
+                                      openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+      providers <- c("lmstudio", "ollama", "localai", "openai")
+      rows <- list()
+      if (!nzchar(model)) {
+          return(data.frame(provider = character(), base_url = character(),
+                            model_id = character(), stringsAsFactors = FALSE))
+      }
+      for (p in providers) {
+          if (p == "openai" && !nzchar(openai_api_key)) next
+          bu <- switch(p,
+              lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
+              ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
+              localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
+              openai   = "https://api.openai.com"
+          )
+          ids <- try(.lookup_model_ids(p, bu, openai_api_key = openai_api_key), silent = TRUE)
+          ids <- if (inherits(ids, "try-error")) character() else as.character(ids)
+          if (length(ids) && any(tolower(ids) == tolower(model))) {
+              rows[[length(rows) + 1L]] <- data.frame(
+                  provider = p,
+                  base_url = .api_root(bu),
+                  model_id = model,
+                  stringsAsFactors = FALSE
+              )
+          }
+      }
+      if (length(rows)) do.call(rbind, rows) else data.frame(
+          provider = character(), base_url = character(), model_id = character(),
+          stringsAsFactors = FALSE
+      )
+  }
+
 
 #' Retrieve models using a cache with optional refresh.
 #'
