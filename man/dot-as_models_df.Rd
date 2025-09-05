@@ -2,14 +2,17 @@
 % Please edit documentation in R/utils-cache.R
 \name{.as_models_df}
 \alias{.as_models_df}
-\title{list_models() helprer
-internal
-base_url_normalized Logical; set TRUE when base_url is already normalized}
+\title{Convert objects to a models data frame}
 \usage{
 .as_models_df(x)
 }
-\description{
-list_models() helprer
-internal
-base_url_normalized Logical; set TRUE when base_url is already normalized
+\arguments{
+\item{x}{Object to convert. Can be \code{NULL}, a data frame, character vector, named vector, or list describing model IDs and creation times.}
 }
+\value{
+A data frame with columns \code{id} and \code{created}.
+}
+\description{
+Normalizes various representations of model metadata into a data frame with \code{id} and \code{created} columns.
+}
+\keyword{internal}

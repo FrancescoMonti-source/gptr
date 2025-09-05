@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils-cache.R
 \name{.row_df}
 \alias{.row_df}
-\title{list_models() helper}
+\title{Create a row for the models cache}
 \usage{
 .row_df(
   provider,
@@ -16,9 +16,19 @@
 )
 }
 \arguments{
-\item{base_url_normalized}{Logical; set TRUE when base_url is already normalized}
+\item{provider}{Character identifier of the model provider.}
+\item{base_url}{Base URL of the provider's API.}
+\item{models_df}{Data frame of models to expand into rows.}
+\item{availability}{Character vector indicating model availability.}
+\item{src}{Source of the model information.}
+\item{ts}{Numeric timestamp when the data were cached.}
+\item{status}{Character string describing the request status.}
+\item{base_url_normalized}{Logical; set \code{TRUE} when \code{base_url} is already normalized.}
+}
+\value{
+A data frame with one row per model and a diagnostic attribute.
 }
 \description{
-list_models() helper
+Builds a data frame representing model information returned by a provider.
 }
 \keyword{internal}
