@@ -31,7 +31,7 @@ gpt(
 
 \item{provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".}
 
-\item{base_url}{“Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”}
+\item{base_url}{"Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions)."}
 
 \item{openai_api_key}{Optional API key for OpenAI; defaults to env var.}
 
@@ -43,7 +43,7 @@ gpt(
 
 \item{response_format}{NULL, "json_object", or a full list (OpenAI API shape).}
 
-\item{backend}{“Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').”}
+\item{backend}{"Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai')."}
 
 \item{print_raw}{Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.}
 
