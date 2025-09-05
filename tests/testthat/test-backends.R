@@ -345,6 +345,27 @@ test_that("model match is case-insensitive", {
     expect_identical(called, "openai")
 })
 
+test_that("local model match is case-insensitive", {
+    called <- FALSE
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistral-7b", stringsAsFactors = FALSE), status = "ok")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- TRUE
+            fake_resp(model = payload$model %||% "mistral-7b")
+        },
+        .env = asNamespace("gptr")
+    )
+    expect_error(
+        gpt("hi", model = "MISTRAL-7B", provider = "local",
+            base_url = "http://127.0.0.1:1234", print_raw = FALSE),
+        NA
+    )
+    expect_true(called)
+})
+
 test_that("no backend mocks persist across tests", {
     expect_identical(gptr:::.resolve_model_provider, .orig_resolve_model_provider)
     expect_identical(gptr:::.fetch_models_cached, .orig_fetch_models_cached)
