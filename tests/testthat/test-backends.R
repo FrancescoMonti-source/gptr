@@ -227,20 +227,24 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
 })
 
 test_that("missing openai model falls back to default", {
+    expected_model <- getOption("gptr.openai_model")
     used <- NULL
     testthat::local_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
-            list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE), status = "ok")
+            list(
+                df = data.frame(id = expected_model, stringsAsFactors = FALSE),
+                status = "ok"
+            )
         },
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             used <<- payload$model
-            fake_resp(model = payload$model %||% "gpt-4o-mini")
+            fake_resp(model = payload$model %||% expected_model)
         }
     )
     res <- gpt("hi", model = "unknown", provider = "openai",
                openai_api_key = "sk-test", print_raw = FALSE)
-    expect_identical(used, "gpt-4o-mini")
+    expect_identical(used, expected_model)
 })
 
 # If the user explicitly says provider = "local" and gives a base_url = "http://…"
