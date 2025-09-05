@@ -169,7 +169,7 @@ gpt <- function(prompt,
         msgs <- openai_build_messages(system = system, user = prompt, image_paths = image_paths)
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
         bu_root <- .api_root(defs$base_url)
-        if (is.null(.cache_get("openai", bu_root))) {
+        if (is.null(.cache_get("openai", bu_root, base_url_normalized = TRUE))) {
             invisible(try(.fetch_models_cached(provider = "openai", base_url = bu_root,
                                                   openai_api_key = defs$api_key), silent = TRUE))
         }

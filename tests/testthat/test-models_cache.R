@@ -40,8 +40,8 @@ test_that("cache put / get / del", {
 test_that("refresh with no models returns empty data", {
   fake_cache <- make_fake_cache()
   testthat::local_mocked_bindings(
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
     .cache_del = function(...) invisible(TRUE),
     .fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
     .api_root = function(x) x,
@@ -217,8 +217,8 @@ test_that(".fetch_models_cached skips cache when unreachable", {
   f <- getFromNamespace(".fetch_models_cached", "gptr")
   testthat::local_mocked_bindings(
     .fetch_models_live = live_mock,
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
     .env = asNamespace("gptr")
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
@@ -241,8 +241,8 @@ test_that(".fetch_models_cached retries after unreachable and caches", {
   f <- getFromNamespace(".fetch_models_cached", "gptr")
   testthat::local_mocked_bindings(
     .fetch_models_live = live_mock,
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
     .env = asNamespace("gptr")
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
@@ -353,7 +353,7 @@ test_that("delete_models_cache removes by provider", {
             list(provider = "lmstudio", base_url = "http://127.0.0.1:1234", models = list(), ts = 1))
   calls <- list()
   testthat::local_mocked_bindings(
-    .cache_del = function(p, u) {
+    .cache_del = function(p, u, ...) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
       invisible(TRUE)
@@ -377,7 +377,7 @@ test_that("delete_models_cache removes by base_url", {
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   calls <- list()
   testthat::local_mocked_bindings(
-    .cache_del = function(p, u) {
+    .cache_del = function(p, u, ...) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
       invisible(TRUE)
@@ -401,7 +401,7 @@ test_that("delete_models_cache removes by provider and base_url", {
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   calls <- list()
   testthat::local_mocked_bindings(
-    .cache_del = function(p, u) {
+    .cache_del = function(p, u, ...) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
       invisible(TRUE)
@@ -480,8 +480,8 @@ test_that(".fetch_models_cached handles local and openai", {
         list(df = data.frame(id = "m1", created = 1), status = "ok")
       }
     },
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
     .env = asNamespace("gptr")
   )
 
@@ -505,11 +505,11 @@ test_that(".fetch_models_cached normalizes base_url once", {
   f <- getFromNamespace(".fetch_models_cached", "gptr")
   testthat::local_mocked_bindings(
     .fetch_models_live = live,
-    .cache_get = function(p, u) {
+    .cache_get = function(p, u, ...) {
       key <- paste(p, u)
       if (exists(key, envir = cache, inherits = FALSE)) cache[[key]] else NULL
     },
-    .cache_put = function(p, u, m) {
+    .cache_put = function(p, u, m, ...) {
       key <- paste(p, u)
       cache[[key]] <- list(ts = fixed_ts, models = m)
       invisible(TRUE)
@@ -522,33 +522,45 @@ test_that(".fetch_models_cached normalizes base_url once", {
   expect_identical(calls, 1L)
 })
 
-test_that(".resolve_model_provider reuses canonical base_url", {
-  calls <- 0
+test_that(".get_cached_model_ids respects base_url_normalized", {
+  stub_fetch <- function(provider, base_url, ...) {
+    list(df = data.frame(id = "m", created = 1), status = "ok")
+  }
   testthat::local_mocked_bindings(
-    .fetch_models_cached = function(provider, base_url, openai_api_key = "", ...) {
-      if (identical(provider, "lmstudio")) {
-        data.frame(
-          provider = provider,
-          base_url = "http://127.0.0.1:1234",
-          model_id = "m",
-          stringsAsFactors = FALSE
-        )
-      } else {
-        data.frame(
-          provider = provider,
-          base_url = character(),
-          model_id = character(),
-          stringsAsFactors = FALSE
-        )
-      }
-    },
-    .api_root = function(x) { calls <<- calls + 1; gptr:::.api_root(x) },
+    .fetch_models_live = stub_fetch,
+    .api_root = function(x) stop("should not be called"),
     .env = asNamespace("gptr")
   )
-  out <- getFromNamespace(".resolve_model_provider", "gptr")("m", openai_api_key = "")
-  expect_equal(out$base_url, "http://127.0.0.1:1234")
-  expect_identical(calls, 0L)
+  out <- getFromNamespace(".get_cached_model_ids", "gptr")(
+    "lmstudio", "http://127.0.0.1:1234", base_url_normalized = TRUE
+  )
+  expect_identical(out, "m")
 })
 
-=======
+test_that(".resolve_model_provider normalizes each URL once", {
+  count <- 0
+  stub_fetch <- function(provider, base_url, ...) {
+    list(df = data.frame(id = "m", created = 1), status = "ok")
+  }
+  testthat::local_envvar(OPENAI_API_KEY = "sk-test")
+  withr::local_options(
+    gptr.lmstudio_base_url = "http://127.0.0.1:1234/v1/",
+    gptr.ollama_base_url   = "http://127.0.0.1:11434/",
+    gptr.localai_base_url  = "http://127.0.0.1:8080/v1/"
+  )
+  testthat::local_mocked_bindings(
+    .fetch_models_live = stub_fetch,
+    .api_root = function(x) { count <<- count + 1; gptr:::.api_root(x) },
+    .env = asNamespace("gptr")
+  )
+  out <- getFromNamespace(".resolve_model_provider", "gptr")("m", openai_api_key = "sk-test")
+  expect_setequal(out$provider, c("lmstudio", "ollama", "localai", "openai"))
+  expect_true(all(out$base_url %in% c(
+    "http://127.0.0.1:1234",
+    "http://127.0.0.1:11434",
+    "http://127.0.0.1:8080",
+    "https://api.openai.com"
+  )))
+  expect_identical(count, 4L)
+})
 

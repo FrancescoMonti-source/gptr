@@ -168,33 +168,39 @@
 
 # Construct a unique cache key string from provider+base_url using
 # only lowercase letters and numbers (cachem restriction).
-.cache_key <- function(provider, base_url) {
-  root <- .api_root(base_url)
+.cache_key <- function(provider, base_url, base_url_normalized = FALSE) {
+  root <- if (base_url_normalized) base_url else .api_root(base_url)
   paste0(provider, digest::sha1(root))
 }
 
 # Look up a cached entry in .gptr_cache by provider+base_url.
 # cachem's default `missing` value yields a `key_missing` sentinel; explicitly
 # return `NULL` when an entry doesn't exist so callers can rely on `is.null()`.
-.cache_get <- function(provider, base_url) {
-  .gptr_cache$get(.cache_key(provider, base_url), missing = NULL)
+.cache_get <- function(provider, base_url, base_url_normalized = FALSE) {
+  .gptr_cache$get(
+    .cache_key(provider, base_url, base_url_normalized = base_url_normalized),
+    missing = NULL
+  )
 }
 
 #' Save a cache entry for provider+base_url with a vector of model IDs and timestamp.
+#' @param base_url_normalized Logical; set TRUE when `base_url` is already normalized.
 #' @keywords internal
-.cache_put <- function(provider, base_url, models) {
+.cache_put <- function(provider, base_url, models, base_url_normalized = FALSE) {
+  root <- if (base_url_normalized) base_url else .api_root(base_url)
   entry <- list(
     provider = provider,
-    base_url = .api_root(base_url),
+    base_url = root,
     models   = models,
     ts       = as.numeric(Sys.time())
   )
+  key <- .cache_key(provider, root, base_url_normalized = TRUE)
   if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
-    .gptr_cache$set(.cache_key(provider, base_url), entry)
+    .gptr_cache$set(key, entry)
   } else {
     ttl <- getOption("gptr.model_cache_ttl", 3600)
     .gptr_cache$set(
-      .cache_key(provider, base_url),
+      key,
       entry,
       expires = Sys.time() + ttl
     )
@@ -203,9 +209,12 @@
 
 
 #' Remove a cache entry for provider+base_url from the cache.
+#' @param base_url_normalized Logical; set TRUE when `base_url` is already normalized.
 #' @keywords internal
-.cache_del <- function(provider, base_url) {
-  .gptr_cache$remove(.cache_key(provider, base_url))
+.cache_del <- function(provider, base_url, base_url_normalized = FALSE) {
+  .gptr_cache$remove(
+    .cache_key(provider, base_url, base_url_normalized = base_url_normalized)
+  )
   invisible(TRUE)
 }
 #' Return model IDs for a provider/base_url pair using cache when possible.
@@ -213,13 +222,15 @@
 #' Uses cached entries when valid and falls back to a live probe when needed.
 #' Skips OpenAI when no API key is available.
 #' @keywords internal
+#' @param base_url_normalized Logical; set TRUE when `base_url` is already normalized.
 .get_cached_model_ids <- function(provider, base_url,
-                                  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+                                  openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+                                  base_url_normalized = FALSE) {
   if (identical(provider, "openai") && !nzchar(openai_api_key)) {
     return(character())
   }
-  root <- .api_root(base_url)
-  ent <- .cache_get(provider, root)
+  root <- if (base_url_normalized) base_url else .api_root(base_url)
+  ent <- .cache_get(provider, root, base_url_normalized = TRUE)
   now <- as.numeric(Sys.time())
   if (!is.null(ent)) {
     use_cache <- FALSE
@@ -246,10 +257,10 @@
   mods <- live$df
   if (identical(provider, "openai")) {
     if (nrow(mods) == 0) return(character())
-    .cache_put(provider, root, mods)
+    .cache_put(provider, root, mods, base_url_normalized = TRUE)
     return(mods$id %||% character())
   }
-  .cache_put(provider, root, mods)
+  .cache_put(provider, root, mods, base_url_normalized = TRUE)
   mods$id %||% character()
 }
 
@@ -275,12 +286,17 @@
               localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080"),
               openai   = "https://api.openai.com"
           )
-          ids <- try(.get_cached_model_ids(p, bu, openai_api_key = openai_api_key), silent = TRUE)
+          root <- .api_root(bu)
+          ids <- try(
+              .get_cached_model_ids(p, root, openai_api_key = openai_api_key,
+                                    base_url_normalized = TRUE),
+              silent = TRUE
+          )
           ids <- if (inherits(ids, "try-error")) character() else as.character(ids)
           if (length(ids) && any(tolower(ids) == tolower(model))) {
               rows[[length(rows) + 1L]] <- data.frame(
                   provider = p,
-                  base_url = .api_root(bu),
+                  base_url = root,
                   model_id = model,
                   stringsAsFactors = FALSE
               )
@@ -341,7 +357,7 @@
                        status = live$status, base_url_normalized = TRUE))
     }
 
-    ent <- .cache_get(provider, root)
+    ent <- .cache_get(provider, root, base_url_normalized = TRUE)
     if (!is.null(ent)) {
         use_cache <- FALSE
         if (isTRUE(getOption("gptr.check_model_once", TRUE))) {
@@ -368,14 +384,14 @@
     if (identical(status, "ok")) {
         if (provider == "openai") {
             if (nrow(mods) > 0) {
-                .cache_put(provider, root, mods)
-                ts <- .cache_get(provider, root)$ts
+                .cache_put(provider, root, mods, base_url_normalized = TRUE)
+                ts <- .cache_get(provider, root, base_url_normalized = TRUE)$ts
             } else {
                 status <- "empty_cache"
             }
         } else {
-            .cache_put(provider, root, mods)
-            ts <- .cache_get(provider, root)$ts
+            .cache_put(provider, root, mods, base_url_normalized = TRUE)
+            ts <- .cache_get(provider, root, base_url_normalized = TRUE)$ts
         }
     }
     .row_df(provider, root, mods, availability, "live", ts, status = status, base_url_normalized = TRUE)
@@ -504,7 +520,7 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
         for (k in keys) {
             ent <- .gptr_cache$get(k, missing = NULL)
             if (!is.null(ent) && identical(ent$provider, provider)) {
-                .cache_del(ent$provider, ent$base_url)
+                .cache_del(ent$provider, ent$base_url, base_url_normalized = TRUE)
             }
         }
         return(invisible(TRUE))
@@ -516,14 +532,15 @@ delete_models_cache <- function(provider = NULL, base_url = NULL) {
         for (k in keys) {
             ent <- .gptr_cache$get(k, missing = NULL)
             if (!is.null(ent) && identical(ent$base_url, root)) {
-                .cache_del(ent$provider, ent$base_url)
+                .cache_del(ent$provider, ent$base_url, base_url_normalized = TRUE)
             }
         }
         return(invisible(TRUE))
     }
 
     # both provider and base_url
-    .cache_del(provider, base_url)
+    root <- .api_root(base_url)
+    .cache_del(provider, root, base_url_normalized = TRUE)
     invisible(TRUE)
 }
 

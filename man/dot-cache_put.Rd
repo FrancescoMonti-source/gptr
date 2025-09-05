@@ -4,7 +4,7 @@
 \alias{.cache_put}
 \title{Save a cache entry for provider+base_url with a vector of model IDs and timestamp.}
 \usage{
-.cache_put(provider, base_url, models)
+.cache_put(provider, base_url, models, base_url_normalized = FALSE)
 }
 \description{
 Save a cache entry for provider+base_url with a vector of model IDs and timestamp.

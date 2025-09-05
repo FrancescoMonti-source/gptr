@@ -4,7 +4,7 @@
 \alias{.cache_del}
 \title{Remove a cache entry for provider+base_url from the cache.}
 \usage{
-.cache_del(provider, base_url)
+.cache_del(provider, base_url, base_url_normalized = FALSE)
 }
 \description{
 Remove a cache entry for provider+base_url from the cache.

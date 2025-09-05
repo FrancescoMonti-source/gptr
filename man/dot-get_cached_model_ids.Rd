@@ -7,7 +7,8 @@
 .get_cached_model_ids(
   provider,
   base_url,
-  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")
+  openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+  base_url_normalized = FALSE
 )
 }
 \description{
