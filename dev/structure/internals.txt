@@ -2,7 +2,6 @@ $.gpt_chat_callable
 .__NAMESPACE__.
 .__S3MethodsTable__.
 .api_root
-.as_models_df
 .cache_del
 .cache_get
 .cache_key
@@ -18,6 +17,7 @@ $.gpt_chat_callable
 .fetch_models_cached
 .fetch_models_live
 .build_models_url
+.normalize_models_df
 .normalize_token
 .onAttach
 .onLoad

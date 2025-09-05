@@ -1,7 +1,7 @@
 #' list_models() helprer
 #'  internal
 #'  base_url_normalized Logical; set TRUE when base_url is already normalized
-.as_models_df <- function(x) {
+.normalize_models_df <- function(x) {
     if (is.null(x)) {
         return(data.frame(id = character(0), created = numeric(0), stringsAsFactors = FALSE))
     }
@@ -55,7 +55,7 @@
 #' @param base_url_normalized Logical; set TRUE when base_url is already normalized
 .assemble_models_df <- function(provider, base_url, models_df, availability, src, ts, status = NA_character_, base_url_normalized = FALSE) {
     base_url <- if (base_url_normalized) base_url else .api_root(base_url)
-    models_df <- .as_models_df(models_df)
+    models_df <- .normalize_models_df(models_df)
     ts <- if (length(ts)) ts else NA_real_  # coalesce: legacy cache entries may omit ts
 
     if (nrow(models_df) == 0) {
