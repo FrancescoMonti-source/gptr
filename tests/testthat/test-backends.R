@@ -186,6 +186,27 @@ test_that("auto with no local backend falls back to OpenAI", {
     expect_identical(called, "openai")
 })
 
+test_that("auto with empty caches uses default local base URL", {
+    called <- NULL
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, base_url)
+            fake_resp(model = payload$model %||% "local")
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, paste0("openai@", base_url))
+            fake_resp(model = payload$model %||% "openai")
+        },
+        .env = asNamespace("gptr")
+    )
+    res <- gpt("hi", provider = "auto", openai_api_key = "", print_raw = FALSE)
+    expect_identical(called, "http://127.0.0.1:1234")
+})
+
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
     testthat::local_mocked_bindings(
