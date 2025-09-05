@@ -341,15 +341,15 @@ test_that(".row_df repeats provider/base/url and status", {
   expect_equal(attr(r, "diagnostic")$status, "ok")
 })
 
-test_that(".row_df returns zero rows when no models and status is NA", {
-  f <- getFromNamespace(".row_df", "gptr")
+test_that(".assemble_models_df returns zero rows when no models and status is NA", {
+  f <- getFromNamespace(".assemble_models_df", "gptr")
   r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
          "catalog", "live", fixed_ts)
   expect_equal(nrow(r), 0)
 })
 
-test_that(".row_df preserves status when no models", {
-  f <- getFromNamespace(".row_df", "gptr")
+test_that(".assemble_models_df preserves status when no models", {
+  f <- getFromNamespace(".assemble_models_df", "gptr")
   r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
          "catalog", "live", fixed_ts, status = "auth_missing")
   expect_equal(nrow(r), 0)
