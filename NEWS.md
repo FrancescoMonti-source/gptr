@@ -15,7 +15,7 @@ Local backends now always use root host URLs (http://127.0.0.1:1234) rather than
 
 Discovery and preflight handled through list_models() / refresh_models().
 
-Local calls unified on request_local(), which appends /v1/chat/completions.
+Local calls unified on .request_local(), which appends /v1/chat/completions.
 
 Removed duplicate/obsolete code paths.
 

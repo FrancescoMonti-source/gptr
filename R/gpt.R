@@ -236,7 +236,7 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- request_local(payload, base_url = base_root)
+        res <- .request_local(payload, base_url = base_root)
 
         used_model <- tryCatch({
             b <- if (is.character(res$body)) jsonlite::fromJSON(res$body, simplifyVector = FALSE) else res$body
