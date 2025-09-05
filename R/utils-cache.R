@@ -1,25 +1,7 @@
-#' #' Clear gptr internal caches (backend detection, model list, ping)
-#' #'
-#' #' Useful in tests to ensure a clean state.
-#' gpt_clear_caches <- function() {
-#'   .gptr_state$detected_backend <- NULL
-#'   .gptr_state$models_cache <- NULL
-#'   .gptr_state$models_base <- NULL
-#'   .gptr_state$warned_missing <- FALSE
-#'   .gptr_state$ping_cache <- new.env(parent = emptyenv())
-#'   invisible(TRUE)
-#' }
-#'
-#'
-#' gpt_refresh_models <- function(base_url = getOption("gptr.local_base_url", NULL)) {
-#'   if (is.null(base_url) || !nzchar(base_url)) stop("Provide base_url or set options(gptr.local_base_url).", call. = FALSE)
-#'   invisible(.get_model_ids(base_url, force = TRUE))
-#' }
-#'
-#'
 #' list_models() helprer
-#' @keywords internal
-.as_models_df <- function(x) {
+#'  internal
+#'  base_url_normalized Logical; set TRUE when base_url is already normalized
+.normalize_models_df <- function(x) {
     if (is.null(x)) {
         return(data.frame(id = character(0), created = numeric(0), stringsAsFactors = FALSE))
     }
@@ -68,33 +50,41 @@
     data.frame(id = character(0), created = numeric(0), stringsAsFactors = FALSE)
 }
 
-#' list_models() helper
+#' Assemble a standardized models data frame
 #' @keywords internal
-.row_df <- function(provider, base_url, models_df, availability, src, ts, status = NA_character_) {
-    base_url <- .api_root(base_url)
-    models_df <- .as_models_df(models_df)
+#' @param base_url_normalized Logical; set TRUE when base_url is already normalized
+.assemble_models_df <- function(provider, base_url, models_df, availability, src, ts, status = NA_character_, base_url_normalized = FALSE) {
+    base_url <- if (base_url_normalized) base_url else .api_root(base_url)
+    models_df <- .normalize_models_df(models_df)
+    ts <- if (length(ts)) ts else NA_real_  # coalesce: legacy cache entries may omit ts
+
     if (nrow(models_df) == 0) {
-        return(data.frame(
-            provider = provider,
-            base_url = base_url,
-            model_id = NA_character_,
-            created = NA_real_,
-            availability = availability,
-            cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "Europe/Paris"),
-            source = src,
-            status = status,
+        df <- data.frame(
+            provider = character(),
+            base_url = character(),
+            model_id = character(),
+            created = numeric(),
+            availability = character(),
+            cached_at = as.POSIXct(numeric(), origin = "1970-01-01", tz = "UTC"),
+            source = character(),
+            status = character(),
             stringsAsFactors = FALSE
-        ))
+        )
+        attr(df, "diagnostic") <- list(provider = provider, base_url = base_url, status = status)
+        return(df)
     }
-    data.frame(
+
+    df <- data.frame(
         provider = provider,
         base_url = base_url,
         model_id = models_df$id,
         created = models_df$created,
         availability = availability,
-        cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "Europe/Paris"),
+        cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "UTC"),
         source = src,
         status = status,
         stringsAsFactors = FALSE
     )
+    attr(df, "diagnostic") <- list(provider = provider, base_url = base_url, status = status)
+    df
 }

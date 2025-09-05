@@ -7,8 +7,7 @@ gpt_column
 json_fix_parse_validate
 json_keys_align
 list_models
-openai_make_messages
+openai_build_messages
 patch_failed_rows
-refresh_models_cache
-request_local
+refresh_models
 show_gptr_options

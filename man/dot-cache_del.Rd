@@ -2,13 +2,14 @@
 % Please edit documentation in R/models_cache.R
 \name{.cache_del}
 \alias{.cache_del}
-\title{Remove a cache entry for provider+base_url from .gptr_cache.
-Returns 1 if removed, 0 if nothing existed.}
+\title{Remove a cache entry for provider+base_url from the cache.}
 \usage{
-.cache_del(provider, base_url)
+.cache_del(provider, base_url, base_url_normalized = FALSE)
+}
+\arguments{
+\item{base_url_normalized}{Logical; set TRUE when \code{base_url} is already normalized.}
 }
 \description{
-Remove a cache entry for provider+base_url from .gptr_cache.
-Returns 1 if removed, 0 if nothing existed.
+Remove a cache entry for provider+base_url from the cache.
 }
 \keyword{internal}

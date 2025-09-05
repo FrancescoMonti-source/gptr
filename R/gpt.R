@@ -7,8 +7,8 @@
 #' @param model Optional model id. If NULL, resolved per provider defaults.
 #' @param temperature Numeric scalar (default 0.2).
 #' @param provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
-#' @param base_url “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”
-#' @param backend “Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').”
+#' @param base_url "Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions)."
+#' @param backend "Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai')."
 #' @param openai_api_key Optional API key for OpenAI; defaults to env var.
 #' @param image_path Optional path or vector of paths to images to include.
 #' @param system Optional system prompt.
@@ -37,37 +37,32 @@ gpt <- function(prompt,
                 ...) {
 
     provider <- match.arg(provider)
+    provider_input <- provider
     base_root <- NULL
 
     # --- Early auto+model resolution (use cache, no heuristics) ---
     if (identical(provider, "auto") && is.character(model) && nzchar(model)) {
-        lm <- try(list_models(refresh = FALSE), silent = TRUE)
-        has <- function(nm) (!inherits(lm, "try-error") && NROW(lm) && nm %in% names(lm))
-        found <- FALSE
-        if (!inherits(lm, "try-error") && NROW(lm)) {
-            mdl_col <- if (has("model_id")) "model_id" else if (has("id")) "id" else NULL
-            if (!is.null(mdl_col) && "provider" %in% names(lm)) {
-                match_idx <- which(tolower(as.character(lm[[mdl_col]])) == tolower(model))
-                if (length(match_idx)) {
-                    hits <- lm[match_idx, , drop = FALSE]
-                    prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
-                    rank_fn <- function(p) {
-                        m <- match(p, c(prefer_locals, "openai"))
-                        ifelse(is.na(m), 999L, m)
-                    }
-                    ord <- order(rank_fn(tolower(as.character(hits$provider))))
-                    hit <- hits[ord[1L], , drop = FALSE]
-                    hit_provider <- tolower(as.character(hit$provider))
-                    if (identical(hit_provider, "openai")) {
-                        provider <- "openai"
-                    } else {
-                        provider <- "local"
-                        backend  <- hit_provider
-                        base_root <- .api_root(as.character(hit$base_url[1L]))
-                    }
-                    found <- TRUE
-                }
-            }
+
+        lm <- try(.resolve_model_provider(model, openai_api_key = openai_api_key), silent = TRUE)
+        if (inherits(lm, "try-error") || !is.data.frame(lm) || nrow(lm) < 1) {
+            rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
+        }
+        hits <- lm
+        prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
+        rank_fn <- function(p) {
+            m <- match(p, c(prefer_locals, "openai"))
+            ifelse(is.na(m), 999L, m)
+        }
+        ord <- order(rank_fn(tolower(as.character(hits$provider))))
+        hit <- hits[ord[1L], , drop = FALSE]
+        hit_provider <- tolower(as.character(hit$provider))
+        if (identical(hit_provider, "openai")) {
+            provider <- "openai"
+        } else {
+            provider <- "local"
+            backend  <- hit_provider
+            base_root <- .api_root(as.character(hit$base_url[1L]))
+
         }
         if (!found && (is.null(base_url) || !nzchar(base_url)) && (is.null(backend) || !nzchar(backend))) {
             rlang::abort(
@@ -99,24 +94,30 @@ gpt <- function(prompt,
             base_root <- .api_root(roots[[backend]])
             provider  <- "local"
         } else {
-            lm <- try(list_models(refresh = FALSE), silent = TRUE)
             picked <- FALSE
-            if (!inherits(lm, "try-error") && NROW(lm)) {
-                for (bk in prefer) {
-                    hit <- lm[tolower(lm$provider) == tolower(bk), , drop = FALSE]
-                    if (NROW(hit)) {
-                        base_root <- .api_root(as.character(hit$base_url[1L]))
-                        backend   <- bk
-                        picked    <- TRUE
-                        break
-                    }
+            for (bk in prefer) {
+                lm <- try(.fetch_models_cached(provider = bk, base_url = roots[[bk]],
+                                                   openai_api_key = openai_api_key), silent = TRUE)
+                if (!inherits(lm, "try-error") && is.data.frame(lm) && NROW(lm)) {
+                    base_root <- .api_root(roots[[bk]])
+                    backend   <- bk
+                    picked    <- TRUE
+                    break
                 }
             }
             if (!picked || is.null(base_root)) {
-                backend   <- prefer[[1L]]
-                base_root <- .api_root(roots[[backend]])
+                if (nzchar(openai_api_key)) {
+                    provider <- "openai"
+                    backend <- NULL
+                    base_root <- NULL
+                } else {
+                    backend   <- prefer[[1L]]
+                    base_root <- .api_root(roots[[backend]])
+                    provider  <- "local"
+                }
+            } else {
+                provider <- "local"
             }
-            provider <- "local"
         }
     }
 
@@ -173,16 +174,26 @@ gpt <- function(prompt,
 
     # ---------------- provider == "openai" ----------------
     if (provider == "openai") {
-        msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
+        msgs <- openai_build_messages(system = system, user = prompt, image_paths = image_paths)
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
-        if (!is.null(model) && nzchar(model)) {
-            ids <- tryCatch(list_models(provider = "openai", openai_api_key = defs$api_key)$id,
-                            error = function(e) character(0))
-            if (length(ids) && !tolower(model) %in% tolower(ids)) {
-                stop(sprintf("Model '%s' not found for OpenAI.\nTo list: list_models('openai')", model), call. = FALSE)
+        bu_root <- .api_root(defs$base_url)
+        if (is.null(.cache_get("openai", bu_root, base_url_normalized = TRUE))) {
+            invisible(try(.fetch_models_cached(provider = "openai", base_url = bu_root,
+                                                  openai_api_key = defs$api_key), silent = TRUE))
+        }
+        ids <- tryCatch(
+            .fetch_models_cached(provider = "openai", base_url = bu_root,
+                                     openai_api_key = defs$api_key)$model_id,
+            error = function(e) character(0)
+        )
+        if (length(ids) && !tolower(defs$model) %in% tolower(ids)) {
+            if (identical(provider_input, "auto")) {
+                stop(sprintf("Model '%s' not found for OpenAI. Please specify a provider.", defs$model), call. = FALSE)
+            } else {
+                defs$model <- .resolve_openai_defaults(base_url = defs$base_url, api_key = defs$api_key)$model
             }
         }
-        payload <- openai_compose_payload(
+        payload <- openai_build_payload(
             messages        = msgs,
             model           = defs$model,
             temperature     = temperature,
@@ -190,29 +201,42 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- request_openai(payload, base_url = defs$base_url, api_key = defs$api_key)
+        res <- openai_send_request(payload, base_url = defs$base_url, api_key = defs$api_key)
         return(.handle_return(res, backend_name = "openai", model_name = defs$model))
     }
 
     # ---------------- provider == "local" ----------------
     if (provider == "local") {
         stopifnot(!is.null(base_root), nzchar(base_root))
-        ms <- try(list_models(provider = backend, base_url = base_root, refresh = FALSE), silent = TRUE)
-        ids <- if (!inherits(ms, "try-error") && NROW(ms) && "model_id" %in% names(ms)) {
-            unique(na.omit(as.character(ms$model_id)))
-        } else if (!inherits(ms, "try-error") && NROW(ms) && "id" %in% names(ms)) {
-            unique(na.omit(as.character(ms$id)))
+
+        ent <- try(.fetch_models_cached(provider = backend, base_url = base_root,
+                                           openai_api_key = openai_api_key), silent = TRUE)
+        ids <- if (!inherits(ent, "try-error") && is.data.frame(ent)) {
+            unique(na.omit(as.character(ent$model_id)))
         } else character(0)
 
-        requested_model <- model %||% getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
+        if (isTRUE(strict_model) && !length(ids)) strict_model <- FALSE
 
-        if (nzchar(requested_model) && length(ids) && !tolower(requested_model) %in% tolower(ids)) {
-            msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
-            if (isTRUE(strict_model)) stop(msg, call. = FALSE) else warning(msg, call. = FALSE)
+        default_model <- getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
+        requested_model <- model %||% default_model
+
+        if (nzchar(requested_model) && length(ids) &&
+            !tolower(requested_model) %in% tolower(ids)) {
+            if (identical(provider_input, "auto")) {
+                stop(sprintf("Model '%s' not found. Please specify a provider.", requested_model), call. = FALSE)
+            } else {
+                msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
+                if (isTRUE(strict_model)) {
+                    stop(msg, call. = FALSE)
+                } else {
+                    warning(msg, call. = FALSE)
+                    requested_model <- default_model
+                }
+            }
         }
 
-        msgs <- openai_make_messages(system = system, user = prompt, image_paths = image_paths)
-        payload <- openai_compose_payload(
+        msgs <- openai_build_messages(system = system, user = prompt, image_paths = image_paths)
+        payload <- openai_build_payload(
             messages        = msgs,
             model           = requested_model,
             temperature     = temperature,
@@ -220,7 +244,7 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- request_local(payload, base_url = base_root)
+        res <- .request_local(payload, base_url = base_root)
 
         used_model <- tryCatch({
             b <- if (is.character(res$body)) jsonlite::fromJSON(res$body, simplifyVector = FALSE) else res$body

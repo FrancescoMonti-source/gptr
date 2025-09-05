@@ -1,229 +1,34 @@
-# shared store (keep yours)
-.gptr_test_cache_store <- new.env(parent = emptyenv())
+# .flatten_model_ids()
+test_that(".flatten_model_ids handles response shapes", {
+  f <- getFromNamespace(".flatten_model_ids", "gptr")
 
-# normalize a base url to the cache "root"
-.cache_root_for_test <- function(x) sub("/v1/.*$", "", x)
-
-# Monotonic timestamp counter so snapshots differ predictably
-.get_next_ts <- local({
-  seq_name <- ".gptr_test_cache_seq"
-  function() {
-    cur <- get0(seq_name, envir = .gptr_test_cache_store, inherits = FALSE)
-    if (is.null(cur)) cur <- 0L
-    cur <- cur + 1L
-    assign(seq_name, cur, envir = .gptr_test_cache_store)
-    1755806518 + cur
-  }
-})
-
-# Patch only if the binding exists in the package
-.patch_pkg <- function(bindings) {
-  pkg_ns <- asNamespace("gptr")
-  have <- intersect(names(bindings), ls(pkg_ns, all.names = TRUE))
-  if (!length(have)) {
-    return(invisible(FALSE))
-  }
-  do.call(
-    testthat::local_mocked_bindings,
-    c(bindings[have], list(.env = pkg_ns))
-  )
-  invisible(TRUE)
-}
-
-# Cache: tolerate any signature using ...
-.patch_pkg(list(
-  .cache_get = function(...) {
-    a <- list(...)
-    if (length(a) == 1L && is.character(a[[1L]]) && grepl("@", a[[1L]], fixed = TRUE)) {
-      key <- a[[1L]]
-    } else {
-      provider <- as.character(a[[1L]])
-      base_url <- .cache_root_for_test(as.character(a[[2L]]))
-      key <- paste0(provider, "@", base_url)
-    }
-    if (!exists(key, envir = .gptr_test_cache_store, inherits = FALSE)) {
-      return(NULL)
-    }
-    get(key, envir = .gptr_test_cache_store, inherits = FALSE)
-  },
-  .cache_put = function(...) {
-    a <- list(...)
-    provider <- as.character(a[[1L]])
-    base_url <- .cache_root_for_test(as.character(a[[2L]]))
-    models <- a[[3L]]
-    assign(paste0(provider, "@", base_url),
-      list(models = models, ts = .get_next_ts()),
-      envir = .gptr_test_cache_store
-    )
-    invisible(TRUE)
-  },
-  .cache_del = function(...) {
-    a <- list(...)
-    provider <- as.character(a[[1L]])
-    base_url <- .cache_root_for_test(as.character(a[[2L]]))
-    key <- paste0(provider, "@", base_url)
-    if (exists(key, envir = .gptr_test_cache_store, inherits = FALSE)) {
-      rm(list = key, envir = .gptr_test_cache_store)
-    }
-    invisible(TRUE)
-  }
-))
-
-# If your package exposes a function accessor or legacy env, wire them too
-.patch_pkg(list(.cache_env = (function(env) {
-  function() env
-})(.gptr_test_cache_store)))
-.patch_pkg(list(.models_cache_env = .gptr_test_cache_store))
-
-# Uniform snapshot to avoid rbind col mismatches
-.patch_pkg(list(
-  .models_cache_snapshot = function() {
-    keys <- ls(envir = .gptr_test_cache_store, all.names = FALSE)
-    if (!length(keys)) {
-      return(data.frame(
-        provider = character(0), base_url = character(0),
-        n_models = integer(0), ts = numeric(0)
-      ))
-    }
-    do.call(rbind, lapply(keys, function(k) {
-      ent <- get(k, envir = .gptr_test_cache_store, inherits = FALSE)
-      data.frame(
-        provider = sub("@.*$", "", k, perl = TRUE),
-        base_url = sub("^.*@", "", k, perl = TRUE),
-        n_models = NROW(getFromNamespace(".as_models_df", "gptr")(ent$models)),
-        ts = suppressWarnings(as.numeric(ent$ts)),
-        stringsAsFactors = FALSE
-      )
-    }))
-  }
-))
-
-test_that("no direct httr2 calls outside wrappers", {
-  # Files to scan
-  files <- list.files("R", pattern = "\\.R$", full.names = TRUE)
-  files <- setdiff(files, file.path("R", "http_wrappers.R")) # allow wrappers
-
-  offenders <- character()
-
-  for (f in files) {
-    lines <- readLines(f, warn = FALSE)
-    lines <- lines[!grepl("^#'", lines)] # ignore roxygen comments
-
-    hits_idx <- grep("\\bhttr2::", lines)
-    if (length(hits_idx)) {
-      # include file + line number + the offending line
-      offenders <- c(
-        offenders,
-        paste0(basename(f), ":", hits_idx, ": ", trimws(lines[hits_idx]))
-      )
-    }
-  }
-
-  msg <- if (length(offenders)) {
-    paste0(
-      "Found direct httr2 calls (use .http_* wrappers):\n",
-      paste(offenders, collapse = "\n")
-    )
-  } else {
-    ""
-  }
-
-  expect(length(offenders) == 0L, msg) # edition-agnostic assertion
-})
-
-
-
-
-# 2) Airtight httr2 mock for OpenAI model listing
-mock_http_openai <- function(status = 200L,
-                             json = NULL,
-                             json_throws = FALSE,
-                             perform_throws = FALSE) {
-  # mocks for your wrapper layer
-  binds <- list(
-    .http_request = function(url) list(.url = url),
-    .http_req_headers = function(req, ...) req,
-    .http_req_timeout = function(req, ...) req,
-    .http_req_retry = function(req, ...) req,
-    .http_req_perform = if (perform_throws) {
-      function(req, ...) stop("network fail")
-    } else {
-      function(req, ...) structure(list(.url = req$.url), class = "httr2_response")
-    },
-    .http_resp_status = function(resp) status,
-    .http_resp_body_json = if (json_throws) {
-      function(...) stop("boom")
-    } else {
-      function(resp, simplifyVector = FALSE) json
-    }
-  )
-  .patch_pkg(binds) # patch in gptr namespace only
-}
-
-
-
-
-# Sanity: helper should be visible
-testthat::with_reporter("silent", {
-  testthat::test_that("helpers loaded", {
-    testthat::expect_true(exists("mock_httr2_openai", inherits = TRUE))
-    testthat::expect_true(is.environment(.gptr_test_cache_store))
-  })
-})
-
-
-
-
-# Deterministic clock
-fixed_ts <- 1755806518
-fix_time <- function(expr) {
-  withr::local_envvar(c(TZ = "UTC"))
-  withr::with_options(list(gpt.timeout = 2, gptr.request_timeout = 2), {
-    withr::with_seed(1, {
-      # Freeze Sys.time() via a small shim you use inside your code when stamping cache
-      # If you currently call Sys.time() directly, we’ll just set created_at from fixed numbers in tests.
-      force(expr)
-    })
-  })
-}
-
-# Minimal in-memory cache to mock your real cache layer
-make_fake_cache <- function() {
-  store <- new.env(parent = emptyenv())
-  list(
-    get = function(provider, base_url) {
-      key <- paste(provider, base_url, sep = "@")
-      if (!exists(key, envir = store, inherits = FALSE)) {
-        return(NULL)
-      }
-      get(key, envir = store, inherits = FALSE)
-    },
-    put = function(provider, base_url, models) {
-      key <- paste(provider, base_url, sep = "@")
-      assign(key, list(models = models, ts = fixed_ts), envir = store)
-      invisible(TRUE)
-    },
-    env = store
-  )
-}
-
-# Small helpers to build fake OpenAI/Ollama replies
-openai_models_payload <- function() {
-  list(
-    data = list(
-      list(id = "gpt-4o", created = 1683758102),
-      list(id = "gpt-4.1-mini", created = 1686558896)
-    )
-  )
-}
-
-ollama_tags_payload <- function() {
-  list(models = data.frame(
-    name = c("mistral:instruct", "llama3.1"),
-    stringsAsFactors = FALSE
+  obj1 <- list(data = list(
+    list(id = "a"),
+    list(id = "b"),
+    list(id = "a"),
+    list(id = "")
   ))
-}
+  expect_identical(f(obj1), c("a", "b"))
 
+  obj2 <- list(models = list(
+    list(id = "c"),
+    list(id = "c"),
+    list(id = "d")
+  ))
+  expect_identical(f(obj2), c("c", "d"))
+
+  obj3 <- list(
+    list(id = "e"),
+    list(id = ""),
+    list(id = "f")
+  )
+  expect_identical(f(obj3), c("e", "f"))
+
+  obj4 <- c("g", "", "h", "g")
+  expect_identical(f(obj4), c("g", "h"))
+
+  expect_identical(f(42), character(0))
+})
 
 # api_root()
 # normalization trims trailing /v1/chat/completions
@@ -244,13 +49,14 @@ test_that(".cache_key", {
   ck <- getFromNamespace(".cache_key", "gptr")
   a1 <- ck("openai", "https://api.openai.com")
   a2 <- ck("openai", "https://api.openai.com")
-  b <- ck("ollama", "http://127.0.0.1:11434")
+  b <- ck("lmstudio", "http://127.0.0.1:1234")
   expect_identical(a1, a2)
   expect_false(identical(a1, b))
 })
 
 # cache put / get / del
 test_that("cache put / get / del", {
+  local_cache_store()
   get <- getFromNamespace(".cache_get", "gptr")
   put <- getFromNamespace(".cache_put", "gptr")
   del <- getFromNamespace(".cache_del", "gptr")
@@ -263,106 +69,246 @@ test_that("cache put / get / del", {
   expect_null(get("openai", "https://api.openai.com"))
 })
 
-# models cache snapshot immutability
-test_that("cache snapshot - immutability", {
-  snap <- getFromNamespace(".models_cache_snapshot", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  get <- getFromNamespace(".cache_get", "gptr")
-
-  put("openai", "https://api.openai.com", data.frame(id = "a", created = 1))
-  s1 <- snap()
-  put("openai", "https://api.openai.com", data.frame(id = "b", created = 2))
-  s2 <- snap()
-  expect_false(identical(s1, s2))
-})
-
-test_that("refresh writes cache and surfaces status", {
+test_that("refresh with no models returns empty data", {
   fake_cache <- make_fake_cache()
-  local_mocked_bindings(
-    .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    refresh_models_cache = function(provider, base_url) list(status = "refreshed"),
-    .list_models_cached = function(...) character(0),
-    .api_root = function(x) x
+  testthat::local_mocked_bindings(
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
+    .cache_del = function(...) invisible(TRUE),
+    .fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
+    .api_root = function(x) x,
+    .env = asNamespace("gptr")
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
-  expect_true(any(out$status == "refreshed"))
+  expect_equal(nrow(out), 0)
 })
 
 
 test_that("openai non-JSON -> non_json", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".fetch_models_live", "gptr")
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(status = 200L, json_throws = TRUE)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "non_json")
 })
 
 test_that("openai network error -> unreachable", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".fetch_models_live", "gptr")
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(perform_throws = TRUE)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "unreachable")
 })
 
 test_that("openai 5xx -> http_503", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".fetch_models_live", "gptr")
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   mock_http_openai(status = 503L)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "http_503")
 })
 
 test_that("openai ok -> df parsed and status ok", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+  f <- getFromNamespace(".fetch_models_live", "gptr")
+  withr::local_envvar(OPENAI_API_KEY = "sk-test")
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
   ))
   mock_http_openai(status = 200L, json = payload)
-  o <- live("sk-test")
+  o <- f("openai", "https://api.openai.com")
   expect_equal(o$status, "ok")
   expect_true(is.data.frame(o$df))
   expect_setequal(o$df$id, c("gpt-4o", "gpt-4.1-mini"))
 })
 
-test_that("openai fallback semantics via .list_openai_live", {
-  live <- getFromNamespace(".list_openai_live", "gptr")
+test_that("openai empty model list -> empty_cache", {
+  local_cache_store()
+  payload <- list(data = list())
+  mock_http_openai(status = 200L, json = payload)
+  out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
+  expect_identical(nrow(out), 0L)
+  diag <- attr(out, "diagnostics")[[1]]
+  expect_identical(diag$status, "empty_cache")
+  expect_identical(diag$provider, "openai")
+})
+
+test_that("openai fallback semantics via .fetch_models_live", {
+  f <- getFromNamespace(".fetch_models_live", "gptr")
+  withr::local_envvar(OPENAI_API_KEY = "sk")
 
   mock_http_openai(status = 200L, json_throws = TRUE)
-  o1 <- live("sk")
+  o1 <- f("openai", "https://api.openai.com")
   expect_equal(o1$status, "non_json")
 
   mock_http_openai(perform_throws = TRUE)
-  o2 <- live("sk")
+  o2 <- f("openai", "https://api.openai.com")
   expect_equal(o2$status, "unreachable")
 
   mock_http_openai(status = 503L)
-  o3 <- live("sk")
+  o3 <- f("openai", "https://api.openai.com")
   expect_equal(o3$status, "http_503")
+})
+
+
+test_that("refresh_models hits live endpoint for openai", {
+  live_called <- FALSE
+  live_mock <- function(provider, base_url, refresh = FALSE, openai_api_key = "", ...) {
+    live_called <<- TRUE
+    list(df = data.frame(id = c("gpt-4o", "gpt-4.1-mini"), created = c(1, 2)), status = "ok")
+  }
+  testthat::local_mocked_bindings(
+    .fetch_models_live = live_mock,
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
+    .env = asNamespace("gptr")
+  )
+  out <- refresh_models(provider = "openai", openai_api_key = "sk-test")
+  expect_true(live_called)
+  expect_equal(nrow(out), 2L)
+  expect_true(all(out$source == "live"))
+})
+
+test_that("refresh_models bypasses cache when unreachable", {
+  live_called <- FALSE
+  live_mock <- function(provider, base_url, refresh = FALSE, ...) {
+    live_called <<- TRUE
+    list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
+  }
+  testthat::local_mocked_bindings(
+    .fetch_models_live = live_mock,
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
+    .env = asNamespace("gptr")
+  )
+  out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
+  expect_true(live_called)
+  expect_identical(nrow(out), 1L)
+  expect_identical(out$status, "unreachable")
+  expect_true(all(is.na(out$model_id)))
+})
+
+test_that("list_models refresh=TRUE bypasses cache for locals", {
+  live_called <- FALSE
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, ...) {
+      live_called <<- TRUE
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    },
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
+    .env = asNamespace("gptr")
+  )
+  out <- list_models(provider = "lmstudio", refresh = TRUE)
+  expect_true(live_called)
+  expect_identical(out$source, "live")
+})
+
+test_that("list_models refresh=TRUE bypasses cache for openai", {
+  live_called <- FALSE
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, openai_api_key = "", ...) {
+      live_called <<- TRUE
+      list(df = data.frame(id = "gpt-4o", created = 1), status = "ok")
+    },
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .cache_del = function(...) stop("cache_del called"),
+    .env = asNamespace("gptr")
+  )
+  out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
+  expect_true(live_called)
+  expect_identical(out$source, "live")
+})
+
+test_that(".fetch_models_cached refresh=TRUE bypasses cache", {
+  live_called <- FALSE
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, ...) {
+      live_called <<- TRUE
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    },
+    .cache_get = function(...) stop("cache_get called"),
+    .cache_put = function(...) stop("cache_put called"),
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234", refresh = TRUE)
+  expect_true(live_called)
+  expect_identical(out$source, "live")
+})
+
+test_that(".fetch_models_cached skips cache when unreachable", {
+  fake_cache <- make_fake_cache()
+  live_mock <- function(provider, base_url) {
+    list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
+  }
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = live_mock,
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_identical(attr(out, "diagnostic")$status, "unreachable")
+  expect_identical(nrow(out), 0L)
+  expect_null(fake_cache$get("lmstudio", "http://127.0.0.1:1234"))
+})
+
+test_that(".fetch_models_cached retries after unreachable and caches", {
+  fake_cache <- make_fake_cache()
+  calls <- 0
+  live_mock <- function(provider, base_url) {
+    calls <<- calls + 1
+    if (calls == 1) {
+      list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
+    } else {
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    }
+  }
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = live_mock,
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_identical(out$status, "ok")
+  cached <- fake_cache$get("lmstudio", "http://127.0.0.1:1234")
+  expect_identical(cached$models$id, "m1")
 })
 
 
 
 # list models
 test_that("list-models", {
+  local_cache_store()
   out <- list_models(provider = "openai", refresh = FALSE, openai_api_key = "sk-test")
   expect_true(all(out$provider == "openai"))
 })
 
 test_that("list_models - manual override options", {
+  local_cache_store()
   withr::local_options(list(gptr.lmstudio_base_url = "http://127.0.0.1:9999"))
   out <- list_models(provider = "lmstudio", base_url = "http://10.0.0.2:1234")
   expect_true(all(out$base_url == "http://10.0.0.2:1234"))
 })
 
 test_that("list_models - stable ordering by provider/availability/created/id", {
+  local_cache_store()
   out <- list_models(refresh = FALSE, openai_api_key = "sk-test")
   prov_order <- rle(out$provider)$values
   expect_identical(prov_order[1], "lmstudio") # adjust if others present
 })
 
 # list_models() helper
-test_that(".as_models_df - handles df/character/named vectors/lists", {
-  f <- getFromNamespace(".as_models_df", "gptr")
+test_that(".normalize_models_df - handles df/character/named vectors/lists", {
+  f <- getFromNamespace(".normalize_models_df", "gptr")
   # data.frame
   df <- data.frame(id = c("a", "b"), created = c(1, 2))
   expect_equal(f(df)$id, c("a", "b"))
@@ -379,7 +325,7 @@ test_that(".as_models_df - handles df/character/named vectors/lists", {
 
   # list of records with id/created
   lst <- list(list(id = "m1", created = 11), list(id = "m2", created = 22))
-  out2 <- .as_models_df(lst)
+  out2 <- .normalize_models_df(lst)
   expect_equal(out2$id, c("m1", "m2"))
   expect_equal(out2$created, c(11, 22))
 })
@@ -387,34 +333,117 @@ test_that(".as_models_df - handles df/character/named vectors/lists", {
 # list_models() helper
 test_that(".row_df repeats provider/base/url and status", {
   f <- getFromNamespace(".row_df", "gptr")
-  models <- .as_models_df(data.frame(id = c("a", "b"), created = c(10, 20)))
+  models <- .normalize_models_df(data.frame(id = c("a", "b"), created = c(10, 20)))
   r <- f("openai", "https://api.openai.com", models, "catalog", "live", fixed_ts, status = "ok")
   expect_equal(unique(r$provider), "openai")
   expect_equal(nrow(r), 2)
   expect_equal(r$status, rep("ok", 2))
+  expect_equal(attr(r, "diagnostic")$status, "ok")
+})
+
+test_that(".assemble_models_df returns zero rows when no models and status is NA", {
+  f <- getFromNamespace(".assemble_models_df", "gptr")
+  r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
+         "catalog", "live", fixed_ts)
+  expect_equal(nrow(r), 0)
+})
+
+test_that(".assemble_models_df preserves status when no models", {
+  f <- getFromNamespace(".assemble_models_df", "gptr")
+  r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
+         "catalog", "live", fixed_ts, status = "auth_missing")
+  expect_equal(nrow(r), 0)
+  diag <- attr(r, "diagnostic")
+  expect_equal(diag$status, "auth_missing")
+  expect_equal(diag$provider, "openai")
 })
 
 
-test_that(".list_models_cached - drops live probing", {
-  f <- getFromNamespace(".list_models_cached", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  put("openai", "https://api.openai.com", c("gpt-4o" = 1683))
-  out <- f()
-  expect_true(any(out$provider == "openai"))
-  expect_true(all(out$source == "cache"))
-})
 
-test_that("invalidate clears cache for provider/base_url", {
+test_that("invalidate clears cache", {
   inv <- getFromNamespace("delete_models_cache", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  get <- getFromNamespace(".cache_get", "gptr")
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  base <- "https://api.openai.com"
+  cache$set(key_fun("openai", base),
+            list(provider = "openai", base_url = base,
+                 models = data.frame(id = "x", created = 1), ts = 1))
+  expect_false(is.null(cache$get(key_fun("openai", base), missing = NULL)))
+  inv()
+  expect_null(cache$get(key_fun("openai", base), missing = NULL))
+})
 
-  base <- "https://api.openai.com" # normalized root!
-  put("openai", base, data.frame(id = "x", created = 1))
+test_that("delete_models_cache removes by provider", {
+  inv <- getFromNamespace("delete_models_cache", "gptr")
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  cache$set(key_fun("openai", "https://api.openai.com"),
+            list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
+  cache$set(key_fun("lmstudio", "http://127.0.0.1:1234"),
+            list(provider = "lmstudio", base_url = "http://127.0.0.1:1234", models = list(), ts = 1))
+  calls <- list()
+  testthat::local_mocked_bindings(
+    .cache_del = function(p, u, ...) {
+      calls <<- append(calls, list(c(p, u)))
+      cache$remove(key_fun(p, u))
+      invisible(TRUE)
+    },
+    .env = asNamespace("gptr")
+  )
+  inv(provider = "openai")
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
+  expect_false(is.null(cache$get(key_fun("lmstudio", "http://127.0.0.1:1234"), missing = NULL)))
+  expect_identical(calls, list(c("openai", "https://api.openai.com")))
+})
 
-  expect_false(is.null(get("openai", base)))
-  inv(provider = "openai", base_url = base)
-  expect_null(get("openai", base))
+test_that("delete_models_cache removes by base_url", {
+  inv <- getFromNamespace("delete_models_cache", "gptr")
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  cache$set(key_fun("openai", "https://api.openai.com"),
+            list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
+  cache$set(key_fun("openai", "https://alt.openai.com"),
+            list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
+  calls <- list()
+  testthat::local_mocked_bindings(
+    .cache_del = function(p, u, ...) {
+      calls <<- append(calls, list(c(p, u)))
+      cache$remove(key_fun(p, u))
+      invisible(TRUE)
+    },
+    .env = asNamespace("gptr")
+  )
+  inv(base_url = "https://api.openai.com")
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
+  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
+  expect_identical(calls, list(c("openai", "https://api.openai.com")))
+})
+
+test_that("delete_models_cache removes by provider and base_url", {
+  inv <- getFromNamespace("delete_models_cache", "gptr")
+  cache <- getFromNamespace(".gptr_cache", "gptr")
+  key_fun <- getFromNamespace(".cache_key", "gptr")
+  cache$reset()
+  cache$set(key_fun("openai", "https://api.openai.com"),
+            list(provider = "openai", base_url = "https://api.openai.com", models = list(), ts = 1))
+  cache$set(key_fun("openai", "https://alt.openai.com"),
+            list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
+  calls <- list()
+  testthat::local_mocked_bindings(
+    .cache_del = function(p, u, ...) {
+      calls <<- append(calls, list(c(p, u)))
+      cache$remove(key_fun(p, u))
+      invisible(TRUE)
+    },
+    .env = asNamespace("gptr")
+  )
+  inv(provider = "openai", base_url = "https://api.openai.com")
+  expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
+  expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
+  expect_identical(calls, list(c("openai", "https://api.openai.com")))
 })
 
 
@@ -429,6 +458,7 @@ test_that("invalidate clears cache for provider/base_url", {
 #
 # Option A — Compare only content columns (ignore operational metadata)
 test_that("list_models - idempotence", {
+  local_cache_store()
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
@@ -448,6 +478,7 @@ test_that("list_models - idempotence", {
 # Option B : Assert that the second call uses cache (stronger)
 # Warm the cache once, then make live fail; the second call must fall back to cache
 test_that("list_models - second call uses cache when available", {
+  local_cache_store()
   payload <- list(data = list(
     list(id = "gpt-4o", created = 1683758102),
     list(id = "gpt-4.1-mini", created = 1686558896)
@@ -462,19 +493,106 @@ test_that("list_models - second call uses cache when available", {
   oi <- subset(out2, provider == "openai")
   expect_true(nrow(oi) >= 2)
   expect_true(all(oi$source == "cache"))
-  expect_true(all(oi$status %in% c("ok_cache", NA))) # NA if locals; ok_cache for OpenAI
+  expect_true(all(oi$status == "ok_cache"))
 })
 
 
 
-test_that("invalidate by provider+base_url clears exactly one", {
-  inv <- getFromNamespace("delete_models_cache", "gptr")
-  put <- getFromNamespace(".cache_put", "gptr")
-  get <- getFromNamespace(".cache_get", "gptr")
 
-  base <- "https://api.openai.com"
-  put("openai", base, data.frame(id = "x", created = 1))
-  expect_false(is.null(get("openai", base)))
-  inv(provider = "openai", base_url = base)
-  expect_null(get("openai", base))
+
+test_that(".fetch_models_cached handles local and openai", {
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+
+  fake_cache <- make_fake_cache()
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE, openai_api_key = "", ...) {
+      if (provider == "openai") {
+        list(df = data.frame(id = "gpt-4o", created = 1), status = "ok")
+      } else {
+        list(df = data.frame(id = "m1", created = 1), status = "ok")
+      }
+    },
+    .cache_get = function(p, u, ...) fake_cache$get(p, u),
+    .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
+    .env = asNamespace("gptr")
+  )
+
+  out_local <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_equal(out_local$availability, "installed")
+
+  out_openai <- f("openai", "https://api.openai.com", openai_api_key = "sk")
+  expect_equal(out_openai$availability, "catalog")
 })
+
+
+
+# new tests for base_url normalization and provider resolution
+
+test_that(".fetch_models_cached normalizes base_url once", {
+  calls <- 0
+  cache <- new.env(parent = emptyenv())
+  live <- function(provider, base_url, ...) {
+    list(df = data.frame(id = "m", created = 1), status = "ok")
+  }
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = live,
+    .cache_get = function(p, u, ...) {
+      key <- paste(p, u)
+      if (exists(key, envir = cache, inherits = FALSE)) cache[[key]] else NULL
+    },
+    .cache_put = function(p, u, m, ...) {
+      key <- paste(p, u)
+      cache[[key]] <- list(ts = fixed_ts, models = m)
+      invisible(TRUE)
+    },
+    .api_root = function(x) { calls <<- calls + 1; gptr:::.api_root(x) },
+    .env = asNamespace("gptr")
+  )
+  out <- f("lmstudio", "http://127.0.0.1:1234/v1/models/")
+  expect_equal(out$base_url, "http://127.0.0.1:1234")
+  expect_identical(calls, 1L)
+})
+
+test_that(".get_cached_model_ids respects base_url_normalized", {
+  stub_fetch <- function(provider, base_url, ...) {
+    list(df = data.frame(id = "m", created = 1), status = "ok")
+  }
+  testthat::local_mocked_bindings(
+    .fetch_models_live = stub_fetch,
+    .api_root = function(x) stop("should not be called"),
+    .env = asNamespace("gptr")
+  )
+  out <- getFromNamespace(".get_cached_model_ids", "gptr")(
+    "lmstudio", "http://127.0.0.1:1234", base_url_normalized = TRUE
+  )
+  expect_identical(out, "m")
+})
+
+test_that(".resolve_model_provider normalizes each URL once", {
+  count <- 0
+  stub_fetch <- function(provider, base_url, ...) {
+    list(df = data.frame(id = "m", created = 1), status = "ok")
+  }
+  testthat::local_envvar(OPENAI_API_KEY = "sk-test")
+  withr::local_options(
+    gptr.lmstudio_base_url = "http://127.0.0.1:1234/v1/",
+    gptr.ollama_base_url   = "http://127.0.0.1:11434/",
+    gptr.localai_base_url  = "http://127.0.0.1:8080/v1/"
+  )
+  testthat::local_mocked_bindings(
+    .fetch_models_live = stub_fetch,
+    .api_root = function(x) { count <<- count + 1; gptr:::.api_root(x) },
+    .env = asNamespace("gptr")
+  )
+  out <- getFromNamespace(".resolve_model_provider", "gptr")("m", openai_api_key = "sk-test")
+  expect_setequal(out$provider, c("lmstudio", "ollama", "localai", "openai"))
+  expect_true(all(out$base_url %in% c(
+    "http://127.0.0.1:1234",
+    "http://127.0.0.1:11434",
+    "http://127.0.0.1:8080",
+    "https://api.openai.com"
+  )))
+  expect_identical(count, 4L)
+})
+

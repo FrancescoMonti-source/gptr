@@ -18,8 +18,8 @@ list_models(
 \item{base_url}{Optional root URL to target a specific server. If NULL,
 defaults from options are used for locals, and https://api.openai.com for OpenAI.}
 
-\item{refresh}{Logical. If TRUE, forces a live probe and updates cache
-(for locals) or bypasses cache (for OpenAI).}
+\item{refresh}{Logical. If TRUE, bypasses cache and queries providers
+directly. Cached entries are left untouched.}
 
 \item{openai_api_key}{Optional OpenAI API key. If missing, falls back to
 Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
@@ -27,13 +27,16 @@ an auth_missing status (no stop).}
 }
 \value{
 data.frame with columns:
-provider, base_url, model_id, availability, cached_when, source, and optional status.
+provider, base_url, model_id, availability, cached_when, source, and status.
+Status diagnostics for each backend are also attached via
+\code{attr(x, "diagnostics")}.
 }
 \description{
 Behavior:
 \itemize{
 \item Local providers read from the in-session cache by default (fast). Use \code{refresh=TRUE}
-to force a live probe of \verb{/v1/models} (Ollama falls back to \verb{/api/tags}).
+to bypass the cache and probe \verb{/v1/models} directly.
+When refreshing, cached entries are neither read nor updated.
 \item OpenAI is included if an API key is available (or explicitly provided).
 \item Output is normalized with an \code{availability} column:
 \itemize{
@@ -41,5 +44,7 @@ to force a live probe of \verb{/v1/models} (Ollama falls back to \verb{/api/tags
 \item "catalog"   for OpenAI (account/catalog listing)
 }
 \item Stable columns: provider, base_url, model_id, availability, cached_when, source.
+\item If a backend returns no models, zero rows are returned and the status is
+recorded in \code{attr(x, "diagnostics")}.
 }
 }
