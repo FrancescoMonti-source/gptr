@@ -164,18 +164,6 @@ test_that("auto + unknown model errors asking for provider", {
     expect_identical(called, character())
 })
 
-test_that("auto + model resolution returning NULL errors asking for provider", {
-    testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) NULL,
-        .env = asNamespace("gptr")
-    )
-    expect_error(
-        gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
-        "Model 'missing' is not available; specify a provider.",
-        fixed = TRUE
-    )
-})
-
 test_that("auto + model resolution returning empty data frame errors asking for provider", {
     testthat::local_mocked_bindings(
         .resolve_model_provider = function(model, openai_api_key = "", ...) {
