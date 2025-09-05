@@ -215,7 +215,8 @@ test_that("missing openai model falls back to default", {
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             used <<- payload$model
             fake_resp(model = payload$model %||% "gpt-4o-mini")
-        }
+        },
+        .env = asNamespace("gptr")
     )
     res <- gpt("hi", model = "unknown", provider = "openai",
                openai_api_key = "sk-test", print_raw = FALSE)
