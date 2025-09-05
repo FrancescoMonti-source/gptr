@@ -351,8 +351,8 @@
 
     if (isTRUE(refresh)) {
         live <- .fetch_models_live(provider, root, refresh = TRUE, openai_api_key = openai_api_key)
-        return(.row_df(provider, root, live$df, availability, "live", now,
-                       status = live$status, base_url_normalized = TRUE))
+        return(.assemble_models_df(provider, root, live$df, availability, "live", now,
+                                   status = live$status, base_url_normalized = TRUE))
     }
 
     ent <- .cache_get(provider, root, base_url_normalized = TRUE)
@@ -366,8 +366,8 @@
         }
         if (use_cache) {
             status <- if (identical(provider, "openai")) "ok_cache" else NA_character_
-            return(.row_df(provider, root, ent$models, availability, "cache", ent$ts,
-                           status = status, base_url_normalized = TRUE))
+            return(.assemble_models_df(provider, root, ent$models, availability, "cache", ent$ts,
+                                       status = status, base_url_normalized = TRUE))
         }
     }
 
@@ -392,7 +392,7 @@
             ts <- .cache_get(provider, root, base_url_normalized = TRUE)$ts
         }
     }
-    .row_df(provider, root, mods, availability, "live", ts, status = status, base_url_normalized = TRUE)
+    .assemble_models_df(provider, root, mods, availability, "live", ts, status = status, base_url_normalized = TRUE)
 }
 
 # --- Public API --------------------------------------------------------------

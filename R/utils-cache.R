@@ -50,10 +50,10 @@
     data.frame(id = character(0), created = numeric(0), stringsAsFactors = FALSE)
 }
 
-#' list_models() helper
+#' Assemble a standardized models data frame
 #' @keywords internal
 #' @param base_url_normalized Logical; set TRUE when base_url is already normalized
-.row_df <- function(provider, base_url, models_df, availability, src, ts, status = NA_character_, base_url_normalized = FALSE) {
+.assemble_models_df <- function(provider, base_url, models_df, availability, src, ts, status = NA_character_, base_url_normalized = FALSE) {
     base_url <- if (base_url_normalized) base_url else .api_root(base_url)
     models_df <- .as_models_df(models_df)
     ts <- if (length(ts)) ts else NA_real_  # coalesce: legacy cache entries may omit ts
