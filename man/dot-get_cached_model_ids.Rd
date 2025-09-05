@@ -11,6 +11,9 @@
   base_url_normalized = FALSE
 )
 }
+\arguments{
+\item{base_url_normalized}{Logical; set TRUE when \code{base_url} is already normalized.}
+}
 \description{
 Uses cached entries when valid and falls back to a live probe when needed.
 Skips OpenAI when no API key is available.

@@ -6,6 +6,9 @@
 \usage{
 .cache_del(provider, base_url, base_url_normalized = FALSE)
 }
+\arguments{
+\item{base_url_normalized}{Logical; set TRUE when \code{base_url} is already normalized.}
+}
 \description{
 Remove a cache entry for provider+base_url from the cache.
 }
