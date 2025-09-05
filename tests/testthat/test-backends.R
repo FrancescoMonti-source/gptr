@@ -74,6 +74,36 @@ test_that("auto + local model routes to local", {
     expect_match(called, "^local@http://127\\.0\\.0\\.1:1234$")
 })
 
+test_that("auto chooses local backend when available", {
+    called <- NULL
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            if (identical(provider, "lmstudio")) {
+                list(
+                    df = data.frame(id = "mistralai/mistral-7b-instruct-v0.3",
+                                    stringsAsFactors = FALSE),
+                    status = "ok"
+                )
+            } else {
+                list(df = data.frame(id = character(), stringsAsFactors = FALSE),
+                     status = "ok")
+            }
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, paste0("local@", base_url))
+            fake_resp(model = payload$model %||% "mistral")
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "gpt")
+        },
+        .env = asNamespace("gptr")
+    )
+    res <- gpt("hi", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    expect_identical(called, "local@http://127.0.0.1:1234")
+})
+
 test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
     withr::local_options(list(gptr.local_prefer = c("ollama","lmstudio","localai")))
 
@@ -203,6 +233,33 @@ test_that("auto with empty caches uses default local base URL", {
     expect_identical(called, "http://127.0.0.1:1234")
 })
 
+aliases <- c("lmstudio","ollama","localai")
+defaults <- c(
+    lmstudio = "http://127.0.0.1:1234",
+    ollama   = "http://127.0.0.1:11434",
+    localai  = "http://127.0.0.1:8080"
+)
+for (alias in aliases) {
+    test_that(sprintf("provider=%s uses default local base URL", alias), {
+        called <- NULL
+        testthat::local_mocked_bindings(
+            .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+                list(df = data.frame(id = "local-model", stringsAsFactors = FALSE),
+                     status = "ok")
+            },
+            request_local = function(payload, base_url, timeout = 30) {
+                called <<- c(called, base_url)
+                fake_resp(model = payload$model %||% "local-model")
+            },
+            .env = asNamespace("gptr")
+        )
+        res <- gpt("hi", provider = alias, print_raw = FALSE)
+        expect_identical(called, defaults[[alias]])
+        expect_identical(attr(res, "backend"), alias)
+    })
+}
+
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
     testthat::local_mocked_bindings(
@@ -223,20 +280,25 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
 })
 
 test_that("missing openai model falls back to default", {
+    expected_model <- getOption("gptr.openai_model")
     used <- NULL
     testthat::local_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
-            list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE), status = "ok")
+            list(
+                df = data.frame(id = expected_model, stringsAsFactors = FALSE),
+                status = "ok"
+            )
         },
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             used <<- payload$model
             fake_resp(model = payload$model %||% "gpt-4o-mini")
-        }
+        },
+        .env = asNamespace("gptr")
     )
     res <- gpt("hi", model = "unknown", provider = "openai",
                openai_api_key = "sk-test", print_raw = FALSE)
-    expect_identical(used, "gpt-4o-mini")
+    expect_identical(used, expected_model)
 })
 
 # If the user explicitly says provider = "local" and gives a base_url = "http://…"
@@ -360,6 +422,36 @@ test_that("local model match is case-insensitive", {
         NA
     )
     expect_true(called)
+})
+
+test_that("gpt surfaces parse errors from request_local", {
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistral-7b", stringsAsFactors = FALSE),
+                 status = "ok")
+        },
+        .env = asNamespace("gptr")
+    )
+    testthat::local_mocked_bindings(
+        req_perform = function(req, ...) {
+            httr2::response(
+                status = 200L,
+                body = charToRaw("{"),
+                headers = list("content-type" = "application/json")
+            )
+        },
+        .env = asNamespace("httr2")
+    )
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            model = "mistral-7b",
+            base_url = "http://127.0.0.1:1234",
+            print_raw = FALSE),
+        "Local backend HTTP 200",
+        fixed = FALSE
+    )
 })
 
 test_that("no backend mocks persist across tests", {
