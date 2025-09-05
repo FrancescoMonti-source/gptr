@@ -74,6 +74,36 @@ test_that("auto + local model routes to local", {
     expect_match(called, "^local@http://127\\.0\\.0\\.1:1234$")
 })
 
+test_that("auto chooses local backend when available", {
+    called <- NULL
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            if (identical(provider, "lmstudio")) {
+                list(
+                    df = data.frame(id = "mistralai/mistral-7b-instruct-v0.3",
+                                    stringsAsFactors = FALSE),
+                    status = "ok"
+                )
+            } else {
+                list(df = data.frame(id = character(), stringsAsFactors = FALSE),
+                     status = "ok")
+            }
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, paste0("local@", base_url))
+            fake_resp(model = payload$model %||% "mistral")
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "gpt")
+        },
+        .env = asNamespace("gptr")
+    )
+    res <- gpt("hi", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    expect_identical(called, "local@http://127.0.0.1:1234")
+})
+
 test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
     withr::local_options(list(gptr.local_prefer = c("ollama","lmstudio","localai")))
 
