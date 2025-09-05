@@ -334,7 +334,7 @@ test_that(".as_models_df - handles df/character/named vectors/lists", {
 test_that(".row_df repeats provider/base/url and status", {
   f <- getFromNamespace(".row_df", "gptr")
   models <- .as_models_df(data.frame(id = c("a", "b"), created = c(10, 20)))
-  r <- f("openai", "https://api.openai.com", models, "catalog", "live", fixed_ts, status = "ok")
+  r <- f("openai", "https://api.openai.com", models, "catalog", source = "live", timestamp = fixed_ts, status = "ok")
   expect_equal(unique(r$provider), "openai")
   expect_equal(nrow(r), 2)
   expect_equal(r$status, rep("ok", 2))
@@ -344,14 +344,14 @@ test_that(".row_df repeats provider/base/url and status", {
 test_that(".row_df returns zero rows when no models and status is NA", {
   f <- getFromNamespace(".row_df", "gptr")
   r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
-         "catalog", "live", fixed_ts)
+         "catalog", source = "live", timestamp = fixed_ts)
   expect_equal(nrow(r), 0)
 })
 
 test_that(".row_df preserves status when no models", {
   f <- getFromNamespace(".row_df", "gptr")
   r <- f("openai", "https://api.openai.com", data.frame(id = character(), created = numeric()),
-         "catalog", "live", fixed_ts, status = "auth_missing")
+         "catalog", source = "live", timestamp = fixed_ts, status = "auth_missing")
   expect_equal(nrow(r), 0)
   diag <- attr(r, "diagnostic")
   expect_equal(diag$status, "auth_missing")

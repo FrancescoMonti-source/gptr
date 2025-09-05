@@ -53,10 +53,10 @@
 #' list_models() helper
 #' @keywords internal
 #' @param base_url_normalized Logical; set TRUE when base_url is already normalized
-.row_df <- function(provider, base_url, models_df, availability, src, ts, status = NA_character_, base_url_normalized = FALSE) {
+.row_df <- function(provider, base_url, models_df, availability, source, timestamp, status = NA_character_, base_url_normalized = FALSE) {
     base_url <- if (base_url_normalized) base_url else .api_root(base_url)
     models_df <- .as_models_df(models_df)
-    ts <- if (length(ts)) ts else NA_real_  # coalesce: legacy cache entries may omit ts
+    timestamp <- if (length(timestamp)) timestamp else NA_real_  # coalesce: legacy cache entries may omit timestamp
 
     if (nrow(models_df) == 0) {
         df <- data.frame(
@@ -80,8 +80,8 @@
         model_id = models_df$id,
         created = models_df$created,
         availability = availability,
-        cached_at = as.POSIXct(ts, origin = "1970-01-01", tz = "UTC"),
-        source = src,
+        cached_at = as.POSIXct(timestamp, origin = "1970-01-01", tz = "UTC"),
+        source = source,
         status = status,
         stringsAsFactors = FALSE
     )

@@ -9,8 +9,8 @@
   base_url,
   models_df,
   availability,
-  src,
-  ts,
+  source,
+  timestamp,
   status = NA_character_,
   base_url_normalized = FALSE
 )
