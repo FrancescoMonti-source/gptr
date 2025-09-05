@@ -366,6 +366,36 @@ test_that("local model match is case-insensitive", {
     expect_true(called)
 })
 
+test_that("gpt surfaces parse errors from request_local", {
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistral-7b", stringsAsFactors = FALSE),
+                 status = "ok")
+        },
+        .env = asNamespace("gptr")
+    )
+    testthat::local_mocked_bindings(
+        req_perform = function(req, ...) {
+            httr2::response(
+                status = 200L,
+                body = charToRaw("{"),
+                headers = list("content-type" = "application/json")
+            )
+        },
+        .env = asNamespace("httr2")
+    )
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            model = "mistral-7b",
+            base_url = "http://127.0.0.1:1234",
+            print_raw = FALSE),
+        "Local backend HTTP 200",
+        fixed = FALSE
+    )
+})
+
 test_that("no backend mocks persist across tests", {
     expect_identical(gptr:::.resolve_model_provider, .orig_resolve_model_provider)
     expect_identical(gptr:::.fetch_models_cached, .orig_fetch_models_cached)
