@@ -164,19 +164,27 @@ test_that("auto + unknown model errors asking for provider", {
     expect_identical(called, character())
 })
 
-test_that("auto + model resolution returning empty data frame errors asking for provider", {
-    testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(provider = character(), base_url = character(),
-                       model_id = character(), stringsAsFactors = FALSE)
-        },
-        .env = asNamespace("gptr")
+test_that("auto + model resolution returning no results errors asking for provider", {
+    no_results <- list(
+        NULL,
+        data.frame(
+            provider = character(),
+            base_url = character(),
+            model_id = character(),
+            stringsAsFactors = FALSE
+        )
     )
-    expect_error(
-        gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
-        "Model 'missing' is not available; specify a provider.",
-        fixed = TRUE
-    )
+    for (res in no_results) {
+        testthat::local_mocked_bindings(
+            .resolve_model_provider = function(model, openai_api_key = "", ...) res,
+            .env = asNamespace("gptr")
+        )
+        expect_error(
+            gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
+            "Model 'missing' is not available; specify a provider.",
+            fixed = TRUE
+        )
+    }
 })
 
 test_that("auto with no local backend falls back to OpenAI", {
