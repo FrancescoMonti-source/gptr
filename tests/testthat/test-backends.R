@@ -70,7 +70,7 @@ test_that("auto + local model routes to local", {
     )
     res <- gpt("hi", model = "mistralai/mistral-7b-instruct-v0.3",
                provider = "auto", print_raw = FALSE)
-    expect_true(length(called) == 1L)
+    expect_length(called, 1)
     expect_match(called, "^local@http://127\\.0\\.0\\.1:1234$")
 })
 
