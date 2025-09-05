@@ -307,8 +307,8 @@ test_that("list_models - stable ordering by provider/availability/created/id", {
 })
 
 # list_models() helper
-test_that(".as_models_df - handles df/character/named vectors/lists", {
-  f <- getFromNamespace(".as_models_df", "gptr")
+test_that(".normalize_models_df - handles df/character/named vectors/lists", {
+  f <- getFromNamespace(".normalize_models_df", "gptr")
   # data.frame
   df <- data.frame(id = c("a", "b"), created = c(1, 2))
   expect_equal(f(df)$id, c("a", "b"))
@@ -325,7 +325,7 @@ test_that(".as_models_df - handles df/character/named vectors/lists", {
 
   # list of records with id/created
   lst <- list(list(id = "m1", created = 11), list(id = "m2", created = 22))
-  out2 <- .as_models_df(lst)
+  out2 <- .normalize_models_df(lst)
   expect_equal(out2$id, c("m1", "m2"))
   expect_equal(out2$created, c(11, 22))
 })
@@ -333,7 +333,7 @@ test_that(".as_models_df - handles df/character/named vectors/lists", {
 # list_models() helper
 test_that(".row_df repeats provider/base/url and status", {
   f <- getFromNamespace(".row_df", "gptr")
-  models <- .as_models_df(data.frame(id = c("a", "b"), created = c(10, 20)))
+  models <- .normalize_models_df(data.frame(id = c("a", "b"), created = c(10, 20)))
   r <- f("openai", "https://api.openai.com", models, "catalog", "live", fixed_ts, status = "ok")
   expect_equal(unique(r$provider), "openai")
   expect_equal(nrow(r), 2)

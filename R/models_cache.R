@@ -67,9 +67,9 @@
 #' @keywords internal
 .parse_openai_models <- function(obj) {
   if (is.list(obj) && is.list(obj$data)) {
-    return(.as_models_df(obj$data))
+    return(.normalize_models_df(obj$data))
   }
-  .as_models_df(NULL)
+  .normalize_models_df(NULL)
 }
 
 #' @keywords internal
@@ -91,7 +91,7 @@
 #' @keywords internal
 .parse_local_models <- function(obj) {
   ids <- .flatten_model_ids(obj)
-  .as_models_df(ids)
+  .normalize_models_df(ids)
 }
 
 #' Perform a live HTTP GET on /v1/models for a given provider and base_url.
@@ -113,7 +113,7 @@
                                openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
                                timeout = getOption("gptr.request_timeout", 5)) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
-    return(list(df = .as_models_df(NULL), status = "httr2_missing"))
+    return(list(df = .normalize_models_df(NULL), status = "httr2_missing"))
   }
   url <- .build_models_url(base_url)
   req <- httr2::request(url) %>%
@@ -121,7 +121,7 @@
 
   if (identical(provider, "openai")) {
     if (!nzchar(openai_api_key)) {
-      return(list(df = .as_models_df(NULL), status = "auth_missing"))
+      return(list(df = .normalize_models_df(NULL), status = "auth_missing"))
     }
     req <- req %>%
       httr2::req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
@@ -140,18 +140,18 @@
 
   resp <- try(req %>% httr2::req_perform(), silent = TRUE)
   if (inherits(resp, "try-error")) {
-    return(list(df = .as_models_df(NULL), status = "unreachable"))
+    return(list(df = .normalize_models_df(NULL), status = "unreachable"))
   }
   sc <- httr2::resp_status(resp)
   if (identical(provider, "openai") && sc == 401L) {
-    return(list(df = .as_models_df(NULL), status = "auth_error"))
+    return(list(df = .normalize_models_df(NULL), status = "auth_error"))
   }
   if (sc >= 400L) {
-    return(list(df = .as_models_df(NULL), status = paste0("http_", sc)))
+    return(list(df = .normalize_models_df(NULL), status = paste0("http_", sc)))
   }
   j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
   if (inherits(j, "try-error")) {
-    return(list(df = .as_models_df(NULL), status = "non_json"))
+    return(list(df = .normalize_models_df(NULL), status = "non_json"))
   }
 
   df <- if (identical(provider, "openai")) {
