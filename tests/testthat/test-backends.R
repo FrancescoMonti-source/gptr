@@ -207,6 +207,33 @@ test_that("auto with empty caches uses default local base URL", {
     expect_identical(called, "http://127.0.0.1:1234")
 })
 
+aliases <- c("lmstudio","ollama","localai")
+defaults <- c(
+    lmstudio = "http://127.0.0.1:1234",
+    ollama   = "http://127.0.0.1:11434",
+    localai  = "http://127.0.0.1:8080"
+)
+for (alias in aliases) {
+    test_that(sprintf("provider=%s uses default local base URL", alias), {
+        called <- NULL
+        testthat::local_mocked_bindings(
+            .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+                list(df = data.frame(id = "local-model", stringsAsFactors = FALSE),
+                     status = "ok")
+            },
+            request_local = function(payload, base_url, timeout = 30) {
+                called <<- c(called, base_url)
+                fake_resp(model = payload$model %||% "local-model")
+            },
+            .env = asNamespace("gptr")
+        )
+        res <- gpt("hi", provider = alias, print_raw = FALSE)
+        expect_identical(called, defaults[[alias]])
+        expect_identical(attr(res, "backend"), alias)
+    })
+}
+
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
     testthat::local_mocked_bindings(
