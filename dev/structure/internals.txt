@@ -24,7 +24,7 @@ $.gpt_chat_callable
 .packageName
 .parse_key_spec
 .resolve_openai_defaults
-.row_df
+.assemble_models_df
 .tidy_json
 browse_openai_documentation
 coalesce_blank
