@@ -17,7 +17,6 @@ gpt(
   response_format = NULL,
   backend = NULL,
   strict_model = getOption("gptr.strict_model", TRUE),
-  allow_backend_autoswitch = getOption("gptr.local_autoswitch", TRUE),
   print_raw = FALSE,
   ...
 )
