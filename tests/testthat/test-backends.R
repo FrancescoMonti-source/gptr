@@ -30,7 +30,7 @@ test_that("auto + openai model routes to OpenAI", {
             called <<- c(called, "openai")
             fake_resp(model = payload$model %||% "gpt-4o-mini")
         },
-        request_local = function(payload, base_url, timeout = 30) {
+        .request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, "local")
             fake_resp(model = payload$model %||% "local-model")
         },
@@ -57,7 +57,7 @@ test_that("auto + local model routes to local", {
             data.frame(model_id = "mistralai/mistral-7b-instruct-v0.3",
                        stringsAsFactors = FALSE)
         },
-        request_local = function(payload, base_url, timeout = 30) {
+        .request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, paste0("local@", base_url))
             fake_resp(model = payload$model %||% "mistral")
         },
@@ -90,7 +90,7 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
                                             openai_api_key = "", ...) {
             data.frame(model_id = "o1-mini", stringsAsFactors = FALSE)
         },
-        request_local = function(payload, base_url, timeout = 30) {
+        .request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, paste0("local@", base_url))
             fake_resp(model = payload$model %||% "o1-mini")
         },
@@ -175,7 +175,7 @@ test_that("auto with no local backend falls back to OpenAI", {
             called <<- c(called, "openai")
             fake_resp(model = payload$model %||% "fallback")
         },
-        request_local = function(payload, base_url, timeout = 30) {
+        .request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, "local")
             fake_resp(model = payload$model %||% "local")
         },
@@ -230,7 +230,7 @@ test_that("explicit local base_url is honored", {
             data.frame(model_id = "mistralai/mistral-7b-instruct-v0.3",
                        stringsAsFactors = FALSE)
         },
-        request_local = function(payload, base_url, timeout = 30) {
+        .request_local = function(payload, base_url, timeout = 30) {
             called <<- c(called, paste0("local@", base_url))
             fake_resp(model = payload$model %||% "mistral")
         },
@@ -251,7 +251,7 @@ test_that("strict_model errors when model not installed (local)", {
                                             openai_api_key = "", ...) {
             data.frame(model_id = "mistral", stringsAsFactors = FALSE)
         },
-        request_local = function(payload, base_url, timeout = 30) {
+        .request_local = function(payload, base_url, timeout = 30) {
             fake_resp(model = payload$model %||% "mistral")
         },
         .env = asNamespace("gptr")
@@ -278,7 +278,7 @@ test_that("strict_model ignored when model listing unavailable", {
         .env = asNamespace("httr2")
     )
     testthat::local_mocked_bindings(
-        request_local = function(payload, base_url, timeout = 30) {
+        .request_local = function(payload, base_url, timeout = 30) {
             called_chat <<- TRUE
             fake_resp(model = "fallback")
         },

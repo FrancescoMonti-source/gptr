@@ -10,5 +10,4 @@ list_models
 openai_build_messages
 patch_failed_rows
 refresh_models
-request_local
 show_gptr_options

@@ -224,8 +224,7 @@
 #' @return list(status = <int>, body = <parsed json list>)
 #' @importFrom httr2 request req_url_path_append req_headers req_body_json req_body_raw
 #' @importFrom httr2 req_user_agent req_timeout req_retry req_perform resp_status resp_body_json
-#' @export
-request_local <- function(payload,
+.request_local <- function(payload,
                           base_url,
                           timeout_sec = getOption("gptr.timeout_sec", 180),
                           max_tries = getOption("gptr.max_tries", 2),
