@@ -73,26 +73,24 @@
 }
 
 #' @keywords internal
-.extract_model_ids <- function(obj) {
-  if (is.list(obj$data)) {
-    return(vapply(obj$data, function(m) m$id %||% "", ""))
+.flatten_model_ids <- function(obj) {
+  ids <- if (is.list(obj$data)) {
+    vapply(obj$data, function(m) m$id %||% "", "")
+  } else if (is.list(obj$models)) {
+    vapply(obj$models, function(m) m$id %||% "", "")
+  } else if (is.list(obj)) {
+    vapply(obj, function(m) m$id %||% "", "")
+  } else if (is.character(obj)) {
+    obj
+  } else {
+    character(0)
   }
-  if (is.list(obj$models)) {
-    return(vapply(obj$models, function(m) m$id %||% "", ""))
-  }
-  if (is.list(obj)) {
-    return(vapply(obj, function(m) m$id %||% "", ""))
-  }
-  if (is.character(obj)) {
-    return(obj)
-  }
-  character(0)
+  unique(ids[nzchar(ids)])
 }
 
 #' @keywords internal
 .parse_local_models <- function(obj) {
-  ids <- .extract_model_ids(obj)
-  ids <- unique(ids[nzchar(ids)])
+  ids <- .flatten_model_ids(obj)
   .as_models_df(ids)
 }
 

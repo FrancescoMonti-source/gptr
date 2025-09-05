@@ -1,3 +1,35 @@
+# .flatten_model_ids()
+test_that(".flatten_model_ids handles response shapes", {
+  f <- getFromNamespace(".flatten_model_ids", "gptr")
+
+  obj1 <- list(data = list(
+    list(id = "a"),
+    list(id = "b"),
+    list(id = "a"),
+    list(id = "")
+  ))
+  expect_identical(f(obj1), c("a", "b"))
+
+  obj2 <- list(models = list(
+    list(id = "c"),
+    list(id = "c"),
+    list(id = "d")
+  ))
+  expect_identical(f(obj2), c("c", "d"))
+
+  obj3 <- list(
+    list(id = "e"),
+    list(id = ""),
+    list(id = "f")
+  )
+  expect_identical(f(obj3), c("e", "f"))
+
+  obj4 <- c("g", "", "h", "g")
+  expect_identical(f(obj4), c("g", "h"))
+
+  expect_identical(f(42), character(0))
+})
+
 # api_root()
 # normalization trims trailing /v1/chat/completions
 # keeps scheme/host
