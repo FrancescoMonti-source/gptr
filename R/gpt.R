@@ -14,6 +14,8 @@
 #' @param system Optional system prompt.
 #' @param seed Optional integer for determinism (when supported).
 #' @param response_format NULL, "json_object", or a full list (OpenAI API shape).
+#' @param strict_model Logical. If TRUE (default), error if the server uses a different model than requested.
+#' @param allow_backend_autoswitch Logical. If FALSE, disables automatic fallback between providers/backends. Defaults to TRUE.
 #' @param print_raw Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.
 #' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
@@ -32,6 +34,7 @@ gpt <- function(prompt,
                 response_format = NULL,
                 backend = NULL,
                 strict_model = getOption("gptr.strict_model", TRUE),
+                allow_backend_autoswitch = getOption("gptr.allow_backend_autoswitch", TRUE),
                 print_raw = FALSE,
                 ...) {
 
@@ -97,6 +100,9 @@ gpt <- function(prompt,
                 }
             }
             if (!picked || is.null(base_root)) {
+                if (!isTRUE(allow_backend_autoswitch)) {
+                    stop("No local backends available and allow_backend_autoswitch is FALSE.", call. = FALSE)
+                }
                 if (nzchar(openai_api_key)) {
                     provider <- "openai"
                     backend <- NULL

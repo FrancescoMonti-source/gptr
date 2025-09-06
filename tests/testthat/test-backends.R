@@ -192,8 +192,35 @@ test_that("auto with no local backend falls back to OpenAI", {
             called <<- c(called, "local")
             fake_resp(model = payload$model %||% "local")
         })
-    res <- gpt("hi", provider = "auto", openai_api_key = "sk", print_raw = FALSE)
+    res <- gpt("hi", provider = "auto", openai_api_key = "sk", allow_backend_autoswitch = TRUE, print_raw = FALSE)
     expect_identical(called, "openai")
+})
+
+test_that("allow_backend_autoswitch=FALSE errors without fallback", {
+    called <- NULL
+    local_gptr_mock(
+        .resolve_model_provider = function(model, openai_api_key = "", ...) {
+            data.frame(provider = character(), base_url = character(),
+                       model_id = character(), stringsAsFactors = FALSE)
+        },
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
+        },
+        request_openai = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "fallback")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, "local")
+            fake_resp(model = payload$model %||% "local")
+        })
+    expect_error(
+        gpt("hi", provider = "auto", openai_api_key = "sk", allow_backend_autoswitch = FALSE, print_raw = FALSE),
+        "No local backends available",
+        fixed = TRUE
+    )
+    expect_identical(called, character())
 })
 
 test_that("auto with empty caches uses default local base URL", {
