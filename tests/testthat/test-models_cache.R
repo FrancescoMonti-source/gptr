@@ -39,14 +39,12 @@ test_that("cache put / get / del", {
 
 test_that("refresh with no models returns empty data", {
   fake_cache <- make_fake_cache()
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_del = function(...) invisible(TRUE),
     .fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
-    .api_root = function(x) x,
-    .env = asNamespace("gptr")
-  )
+    .api_root = function(x) x)
   out <- list_models(provider = "lmstudio", refresh = TRUE)
   expect_equal(nrow(out), 0)
 })
@@ -123,12 +121,10 @@ test_that("refresh_models handles openai provider", {
   fake_cache <- make_fake_cache()
   payload <- openai_models_payload()
   mock_http_openai(status = 200L, json = payload)
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .cache_get = function(p, u) fake_cache$get(p, u),
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    .cache_del = function(...) invisible(TRUE),
-    .env = asNamespace("gptr")
-  )
+    .cache_del = function(...) invisible(TRUE))
   out <- refresh_models(provider = "openai", openai_api_key = "sk-test")
   expect_true(all(out$provider == "openai"))
   expect_equal(nrow(out), 2L)
@@ -142,13 +138,11 @@ test_that("refresh_models skips cache when unreachable", {
   live_mock <- function(provider, base_url) {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_del = function(...) invisible(TRUE),
-    .env = asNamespace("gptr")
-  )
+    .cache_del = function(...) invisible(TRUE))
   out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
   expect_identical(nrow(out), 1L)
   expect_identical(out$status, "unreachable")
@@ -167,13 +161,11 @@ test_that("refresh_models retries after unreachable and caches", {
       list(df = data.frame(id = "m1", created = 1), status = "ok")
     }
   }
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .fetch_models_live = live_mock,
     .cache_put = function(p, u, m) fake_cache$put(p, u, m),
     .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_del = function(...) invisible(TRUE),
-    .env = asNamespace("gptr")
-  )
+    .cache_del = function(...) invisible(TRUE))
   out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
   expect_identical(nrow(out), 1L)
   expect_identical(out$status, "ok")
@@ -188,12 +180,10 @@ test_that(".fetch_models_cached skips cache when unreachable", {
     list(df = data.frame(id = character(), created = numeric()), status = "unreachable")
   }
   f <- getFromNamespace(".fetch_models_cached", "gptr")
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    .env = asNamespace("gptr")
-  )
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m))
   out <- f("lmstudio", "http://127.0.0.1:1234")
   expect_identical(out$status, "unreachable")
   expect_identical(nrow(out$df), 0L)
@@ -212,12 +202,10 @@ test_that(".fetch_models_cached retries after unreachable and caches", {
     }
   }
   f <- getFromNamespace(".fetch_models_cached", "gptr")
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .fetch_models_live = live_mock,
     .cache_get = function(p, u) fake_cache$get(p, u),
-    .cache_put = function(p, u, m) fake_cache$put(p, u, m),
-    .env = asNamespace("gptr")
-  )
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m))
   out <- f("lmstudio", "http://127.0.0.1:1234")
   expect_identical(out$status, "ok")
   cached <- fake_cache$get("lmstudio", "http://127.0.0.1:1234")
@@ -337,14 +325,12 @@ test_that("delete_models_cache removes by provider", {
   cache$set(key_fun("lmstudio", "http://127.0.0.1:1234"),
             list(provider = "lmstudio", base_url = "http://127.0.0.1:1234", models = list(), ts = 1))
   calls <- list()
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .cache_del = function(p, u) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
       invisible(TRUE)
-    },
-    .env = asNamespace("gptr")
-  )
+    })
   inv(provider = "openai")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
   expect_false(is.null(cache$get(key_fun("lmstudio", "http://127.0.0.1:1234"), missing = NULL)))
@@ -361,14 +347,12 @@ test_that("delete_models_cache removes by base_url", {
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   calls <- list()
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .cache_del = function(p, u) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
       invisible(TRUE)
-    },
-    .env = asNamespace("gptr")
-  )
+    })
   inv(base_url = "https://api.openai.com")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
   expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
@@ -385,14 +369,12 @@ test_that("delete_models_cache removes by provider and base_url", {
   cache$set(key_fun("openai", "https://alt.openai.com"),
             list(provider = "openai", base_url = "https://alt.openai.com", models = list(), ts = 1))
   calls <- list()
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .cache_del = function(p, u) {
       calls <<- append(calls, list(c(p, u)))
       cache$remove(key_fun(p, u))
       invisible(TRUE)
-    },
-    .env = asNamespace("gptr")
-  )
+    })
   inv(provider = "openai", base_url = "https://api.openai.com")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
   expect_false(is.null(cache$get(key_fun("openai", "https://alt.openai.com"), missing = NULL)))
