@@ -8,27 +8,24 @@ fake_local_resp <- function(model = "dummy") {
     )
 }
 
-backends <- list(
-    lmstudio = "gptr.lmstudio_base_url",
-    ollama  = "gptr.ollama_base_url",
-    localai = "gptr.localai_base_url"
-)
+aliases <- c("lmstudio", "ollama", "localai")
 
-for (bk in names(backends)) {
-    opt <- backends[[bk]]
-    testthat::test_that(paste0(opt, " is used when provider is ", bk), {
-        sentinel <- paste0("http://sentinel-", bk, ".test")
+for (alias in aliases) {
+    opt <- paste0("gptr.", alias, "_base_url")
+    testthat::test_that(paste0(opt, " is used when provider is ", alias), {
+        sentinel <- paste0("http://sentinel-", alias, ".test")
         withr::local_options(structure(list(sentinel), names = opt))
         called <- NULL
         local_gptr_mock(
             .fetch_models_cached = function(provider = NULL, base_url = NULL, openai_api_key = "", ...) {
-                list(df = data.frame(id = "test-model", stringsAsFactors = FALSE), status = "ok")
+                list(df = data.frame(id = "alias-model", stringsAsFactors = FALSE), status = "ok")
             },
             request_local = function(payload, base_url, ...) {
                 called <<- base_url
-                fake_local_resp(model = payload$model %||% "test-model")
+                fake_local_resp(model = payload$model %||% "alias-model")
             })
-        gpt("hi", provider = bk, print_raw = FALSE)
+        res <- gpt("hi", provider = alias, model = "alias-model", print_raw = FALSE)
         testthat::expect_identical(called, sentinel)
+        testthat::expect_identical(attr(res, "backend"), alias)
     })
 }
