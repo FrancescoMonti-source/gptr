@@ -255,22 +255,73 @@ test_that("explicit local base_url is honored", {
 })
 
 test_that("strict_model errors when model not installed (local)", {
+    called <- FALSE
     local_gptr_mock(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
             list(df = data.frame(id = "mistral", stringsAsFactors = FALSE), status = "ok")
         },
         request_local = function(payload, base_url, timeout = 30) {
+            called <<- TRUE
             fake_resp(model = payload$model %||% "mistral")
         })
     expect_error(
         gpt("hi",
             provider = "local",
+            base_url = "http://127.0.0.1:1234",
             model = "llama3:latest",
             strict_model = TRUE,
             print_raw = FALSE),
-        "Model 'llama3:latest' not found"
+        "Model 'llama3:latest' not found",
     )
+    expect_false(called)
+})
+
+test_that("strict_model skipped when model listing status is 'error'", {
+    called <- FALSE
+    local_gptr_mock(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            list(df = data.frame(id = character(), stringsAsFactors = FALSE),
+                 status = "error")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- TRUE
+            fake_resp(model = payload$model %||% "fallback")
+        })
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            base_url = "http://127.0.0.1:1234",
+            model = "llama3:latest",
+            strict_model = TRUE,
+            print_raw = FALSE),
+        NA
+    )
+    expect_true(called)
+})
+
+test_that("strict_model skipped when model listing df is NULL", {
+    called <- FALSE
+    local_gptr_mock(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            list(df = NULL, status = "ok")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- TRUE
+            fake_resp(model = payload$model %||% "fallback")
+        })
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            base_url = "http://127.0.0.1:1234",
+            model = "llama3:latest",
+            strict_model = TRUE,
+            print_raw = FALSE),
+        NA
+    )
+    expect_true(called)
 })
 
 test_that("strict_model ignored when model listing unavailable", {
