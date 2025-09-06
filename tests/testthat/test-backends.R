@@ -234,11 +234,32 @@ for (alias in aliases) {
                 called <<- c(called, base_url)
                 fake_resp(model = payload$model %||% "local-model")
             })
-        res <- gpt("hi", provider = alias, print_raw = FALSE)
+        res <- gpt("hi", model = "local-model", provider = alias, print_raw = FALSE)
         expect_identical(called, defaults[[alias]])
         expect_identical(attr(res, "backend"), alias)
     })
 }
+
+test_that("backend argument selects explicit local backend", {
+    called <- NULL
+    local_gptr_mock(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            if (identical(provider, "ollama")) {
+                list(df = data.frame(id = "local-model", stringsAsFactors = FALSE), status = "ok")
+            } else {
+                list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
+            }
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, base_url)
+            fake_resp(model = payload$model %||% "local-model")
+        }
+    )
+    res <- gpt("hi", model = "local-model", provider = "local", backend = "ollama", print_raw = FALSE)
+    expect_identical(called, "http://127.0.0.1:11434")
+    expect_identical(attr(res, "backend"), "ollama")
+})
 
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
