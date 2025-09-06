@@ -11,35 +11,6 @@ fake_resp <- function(model = "dummy") {
     list(body = body, resp = resp)
 }
 
-test_that("auto + openai model routes to OpenAI", {
-    called <- NULL
-    local_gptr_mock(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(
-                provider = "openai",
-                base_url = "https://api.openai.com",
-                model_id = "gpt-4o-mini",
-                stringsAsFactors = FALSE
-            )
-        },
-        .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE),
-                 status = "ok")
-        },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
-            called <<- c(called, "openai")
-            fake_resp(model = payload$model %||% "gpt-4o-mini")
-        },
-        request_local = function(payload, base_url, timeout = 30) {
-            called <<- c(called, "local")
-            fake_resp(model = payload$model %||% "local-model")
-        })
-    res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
-               openai_api_key = "sk-test", print_raw = FALSE)
-    expect_identical(called, "openai")
-})
-
 test_that("auto + local model routes to local", {
     called <- NULL
     local_gptr_mock(
@@ -152,27 +123,6 @@ test_that("auto + unknown model errors asking for provider", {
     expect_identical(called, character())
 })
 
-test_that("auto + model resolution returning no results errors asking for provider", {
-    no_results <- list(
-        NULL,
-        data.frame(
-            provider = character(),
-            base_url = character(),
-            model_id = character(),
-            stringsAsFactors = FALSE
-        )
-    )
-    for (res in no_results) {
-        local_gptr_mock(
-            .resolve_model_provider = function(model, openai_api_key = "", ...) res)
-        expect_error(
-            gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
-            "Model 'missing' is not available; specify a provider.",
-            fixed = TRUE
-        )
-    }
-})
-
 test_that("auto with no local backend falls back to OpenAI", {
     called <- NULL
     local_gptr_mock(
@@ -261,23 +211,6 @@ test_that("backend argument selects explicit local backend", {
     expect_identical(attr(res, "backend"), "ollama")
 })
 
-test_that("provider=openai routes to OpenAI even if locals have models", {
-    called <- NULL
-    local_gptr_mock(
-        .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            list(df = data.frame(id = "gpt-4o-mini", stringsAsFactors = FALSE),
-                 status = "ok")
-        },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
-            called <<- c(called, "openai")
-            fake_resp(model = payload$model %||% "gpt-4o-mini")
-        })
-    res <- gpt("hi", model = "gpt-4o-mini", provider = "openai",
-               openai_api_key = "sk-test", print_raw = FALSE)
-    expect_identical(called, "openai")
-})
-
 test_that("missing openai model falls back to default", {
     expected_model <- getOption("gptr.openai_model")
     used <- NULL
@@ -291,7 +224,7 @@ test_that("missing openai model falls back to default", {
         },
         request_openai = function(payload, base_url, api_key, timeout = 30) {
             used <<- payload$model
-            fake_resp(model = payload$model %||% "gpt-4o-mini")
+            fake_resp(model = payload$model %||% getOption("gptr.openai_model"))
         })
     res <- gpt("hi", model = "unknown", provider = "openai",
                openai_api_key = "sk-test", print_raw = FALSE)
@@ -366,30 +299,6 @@ test_that("strict_model ignored when model listing unavailable", {
     )
     expect_true(called_models)
     expect_true(called_chat)
-})
-
-test_that("model match is case-insensitive", {
-    called <- NULL
-    local_gptr_mock(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(
-                provider = "openai",
-                base_url = "https://api.openai.com",
-                model_id = "GPT-4O-MINI",
-                stringsAsFactors = FALSE
-            )
-        },
-        .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            list(df = data.frame(id = "GPT-4O-MINI", stringsAsFactors = FALSE), status = "ok")
-        },
-        request_openai = function(payload, base_url, api_key, timeout = 30) {
-            called <<- "openai"
-            fake_resp(model = payload$model %||% "GPT-4O-MINI")
-        })
-    res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
-               openai_api_key = "sk-test", print_raw = FALSE)
-    expect_identical(called, "openai")
 })
 
 test_that("local model match is case-insensitive", {

@@ -12,7 +12,7 @@
 .resolve_openai_defaults <- function(base_url = NULL, model = NULL, api_key = NULL) {
   list(
     base_url = base_url %||% getOption("gptr.openai_base_url", "https://api.openai.com/v1/chat/completions"),
-    model    = model %||% getOption("gptr.openai_model", "gpt-4o-mini"),
+    model    = model %||% getOption("gptr.openai_model"),
     api_key  = api_key %||% Sys.getenv("OPENAI_API_KEY", unset = "")
   )
 }
