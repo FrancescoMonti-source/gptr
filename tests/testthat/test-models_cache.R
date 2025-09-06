@@ -212,6 +212,24 @@ test_that(".fetch_models_cached retries after unreachable and caches", {
   expect_identical(cached$models$id, "m1")
 })
 
+test_that(".fetch_models_cached caches repeated calls", {
+  fake_cache <- make_fake_cache()
+  calls <- 0
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  local_gptr_mock(
+    .fetch_models_live = function(provider, base_url) {
+      calls <<- calls + 1
+      list(df = data.frame(id = "m1", created = 1), status = "ok")
+    },
+    .cache_get = function(p, u) fake_cache$get(p, u),
+    .cache_put = function(p, u, m) fake_cache$put(p, u, m)
+  )
+  out1 <- f("lmstudio", "http://127.0.0.1:1234")
+  out2 <- f("lmstudio", "http://127.0.0.1:1234")
+  expect_identical(calls, 1L)
+  expect_identical(out2$df$id, "m1")
+})
+
 
 
 # list models

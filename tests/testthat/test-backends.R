@@ -439,7 +439,51 @@ test_that("gpt surfaces parse errors from request_local", {
     )
 })
 
-test_that("no backend mocks or options persist across tests", {
+test_that("mocked request_local HTTP 200 invalid JSON surfaces parse error", {
+    local_gptr_mock(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistral-7b", stringsAsFactors = FALSE),
+                 status = "ok")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            stop("Local backend HTTP 200 at http://127.0.0.1:1234\nBody: {", call. = FALSE)
+        }
+    )
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            model = "mistral-7b",
+            base_url = "http://127.0.0.1:1234",
+            print_raw = FALSE),
+        "Local backend HTTP 200",
+        fixed = FALSE
+    )
+})
+
+test_that("mocked request_local HTTP 500 propagates error message", {
+    local_gptr_mock(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            list(df = data.frame(id = "mistral-7b", stringsAsFactors = FALSE),
+                 status = "ok")
+        },
+        request_local = function(payload, base_url, timeout = 30) {
+            stop("Local backend error: boom (http://127.0.0.1:1234)", call. = FALSE)
+        }
+    )
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            model = "mistral-7b",
+            base_url = "http://127.0.0.1:1234",
+            print_raw = FALSE),
+        "Local backend error: boom",
+        fixed = TRUE
+    )
+})
+
+test_that("no backend mocks persist across tests", {
     expect_identical(gptr:::.resolve_model_provider, .orig_resolve_model_provider)
     expect_identical(gptr:::.fetch_models_cached, .orig_fetch_models_cached)
     current_opts <- options()[grepl("^gptr\\.", names(options()))]
