@@ -439,8 +439,10 @@ test_that("gpt surfaces parse errors from request_local", {
     )
 })
 
-test_that("no backend mocks persist across tests", {
+test_that("no backend mocks or options persist across tests", {
     expect_identical(gptr:::.resolve_model_provider, .orig_resolve_model_provider)
     expect_identical(gptr:::.fetch_models_cached, .orig_fetch_models_cached)
+    current_opts <- options()[grepl("^gptr\\.", names(options()))]
+    expect_identical(current_opts, .gptr_default_options)
 })
 
