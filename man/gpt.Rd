@@ -17,6 +17,7 @@ gpt(
   response_format = NULL,
   backend = NULL,
   strict_model = getOption("gptr.strict_model", TRUE),
+  allow_backend_autoswitch = getOption("gptr.allow_backend_autoswitch", TRUE),
   print_raw = FALSE,
   ...
 )
@@ -43,6 +44,10 @@ gpt(
 \item{response_format}{NULL, "json_object", or a full list (OpenAI API shape).}
 
 \item{backend}{“Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').”}
+
+\item{strict_model}{Logical. If TRUE (default), error if the server uses a different model than requested.}
+
+\item{allow_backend_autoswitch}{Logical. If FALSE, disables automatic fallback between providers/backends. Defaults to TRUE.}
 
 \item{print_raw}{Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.}
 
