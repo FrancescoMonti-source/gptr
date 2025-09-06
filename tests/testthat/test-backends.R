@@ -129,14 +129,15 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
 
 test_that("auto + unknown model errors asking for provider", {
     called <- character()
-    testthat::local_mocked_bindings(
-        req_perform = function(req, ...) {
-            url <- httr2::req_url(req)
-            called <<- c(called, url)
-            fake_resp()
-        },
-        .env = asNamespace("httr2")
+httr2::local_mock(function(req, ...) {
+    url <- httr2::req_url(req)
+    called <<- c(called, url)
+    httr2::response(
+        status = 200L,
+        body = charToRaw("{}"),
+        headers = list("content-type" = "application/json")
     )
+})
     local_gptr_mock(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", ...) {
@@ -343,14 +344,14 @@ test_that("strict_model errors when model not installed (local)", {
 test_that("strict_model ignored when model listing unavailable", {
     called_models <- FALSE
     called_chat <- FALSE
-    testthat::local_mocked_bindings(
-        req_perform = function(req, ...) {
-            called_models <<- TRUE
-            fake_resp()
-        },
-        resp_status = function(resp, ...) 404L,
-        .env = asNamespace("httr2")
-    )
+    httr2::local_mock(function(req, ...) {
+        called_models <<- TRUE
+        httr2::response(
+            status = 404L,
+            body = charToRaw("{}"),
+            headers = list("content-type" = "application/json")
+        )
+    })
     local_gptr_mock(
         request_local = function(payload, base_url, timeout = 30) {
             called_chat <<- TRUE
@@ -418,16 +419,13 @@ test_that("gpt surfaces parse errors from request_local", {
             list(df = data.frame(id = "mistral-7b", stringsAsFactors = FALSE),
                  status = "ok")
         })
-    testthat::local_mocked_bindings(
-        req_perform = function(req, ...) {
-            httr2::response(
-                status = 200L,
-                body = charToRaw("{"),
-                headers = list("content-type" = "application/json")
-            )
-        },
-        .env = asNamespace("httr2")
-    )
+    httr2::local_mock(function(req, ...) {
+        httr2::response(
+            status = 200L,
+            body = charToRaw("{"),
+            headers = list("content-type" = "application/json")
+        )
+    })
     expect_error(
         gpt("hi",
             provider = "local",

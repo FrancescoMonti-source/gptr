@@ -39,7 +39,7 @@ mock_http_openai <- function(status = 200L,
     function(req) resp
   }
 
-  httr2::local_mock(handler, .local_envir = parent.frame())
+  httr2::local_mock(handler)
   invisible(TRUE)
 }
 
