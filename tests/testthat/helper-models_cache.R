@@ -45,7 +45,7 @@ mock_http_openai <- function(status = 200L,
 
 local_cache_store <- function(parent = parent.frame()) {
   store <- cachem::cache_mem()
-  testthat::local_mocked_bindings(
+  local_gptr_mock(
     .cache_get = function(...) {
       a <- list(...)
       key_fun <- getFromNamespace('.cache_key', 'gptr')
@@ -80,8 +80,7 @@ local_cache_store <- function(parent = parent.frame()) {
       store$remove(key)
       invisible(TRUE)
     },
-    .env = asNamespace("gptr"),
-    .local_envir = parent
+    .envir = parent
   )
   store
 }
