@@ -191,23 +191,26 @@ for (alias in aliases) {
 }
 
 test_that("backend argument selects explicit local backend", {
-    called <- NULL
+    fetch_called <- NULL
+    request_called <- NULL
     local_gptr_mock(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", ...) {
+            fetch_called <<- c(fetch_called, base_url)
             if (identical(provider, "ollama")) {
-                list(df = data.frame(id = "local-model", stringsAsFactors = FALSE), status = "ok")
+                list(df = data.frame(id = "id", stringsAsFactors = FALSE), status = "ok")
             } else {
                 list(df = data.frame(id = character(), stringsAsFactors = FALSE), status = "ok")
             }
         },
         request_local = function(payload, base_url, timeout = 30) {
-            called <<- c(called, base_url)
-            fake_resp(model = payload$model %||% "local-model")
+            request_called <<- c(request_called, base_url)
+            fake_resp(model = payload$model %||% "id")
         }
     )
-    res <- gpt("hi", model = "local-model", provider = "local", backend = "ollama", print_raw = FALSE)
-    expect_identical(called, "http://127.0.0.1:11434")
+    res <- gpt("hi", provider = "local", backend = "ollama", model = "id", print_raw = FALSE)
+    expect_identical(fetch_called, "http://127.0.0.1:11434")
+    expect_identical(request_called, "http://127.0.0.1:11434")
     expect_identical(attr(res, "backend"), "ollama")
 })
 
