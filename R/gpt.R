@@ -120,6 +120,7 @@ gpt <- function(prompt,
 
     # --- helpers ---
     .compact <- function(lst) lst[!vapply(lst, is.null, logical(1L))]
+
     .to_skeleton <- function(body) {
         x <- if (is.character(body)) jsonlite::fromJSON(body, simplifyVector = FALSE) else body
         usage <- x$usage %||% list()
@@ -153,18 +154,18 @@ gpt <- function(prompt,
             choices = choices_skel
         ))
     }
+
     .handle_return <- function(res, backend_name, model_name) {
         if (isTRUE(print_raw)) {
-            sk <- .to_skeleton(res$body)
-            cat(jsonlite::toJSON(sk, auto_unbox = TRUE, pretty = TRUE), "\n")
-            return(sk)
+            return(res)
         }
         parsed <- openai_parse_text(res$body)
         out <- parsed$text
-        attr(out, "usage") <- parsed$usage
+        attr(out, "usage")  <- parsed$usage
         attr(out, "backend") <- backend_name
-        attr(out, "model") <- model_name
-        out
+        attr(out, "model")   <- model_name
+        cat(out, "\n")
+        invisible(out)
     }
 
     image_paths <- if (is.null(image_path)) NULL else as.character(image_path)
@@ -199,6 +200,7 @@ gpt <- function(prompt,
             extra           = list(...)
         )
         res <- request_openai(payload, base_url = defs$base_url, api_key = defs$api_key)
+
         return(.handle_return(res, backend_name = "openai", model_name = defs$model))
     }
 
@@ -254,7 +256,7 @@ gpt <- function(prompt,
             }
         }
 
-        return(.handle_return(res, backend_name = backend %||% "custom-local", model_name = requested_model))
+            return(.handle_return(res, backend_name = backend %||% "custom-local", model_name = requested_model))
     }
 
     stop("Unsupported provider mode after normalization. This is a bug.", call. = FALSE)
