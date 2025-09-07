@@ -37,7 +37,9 @@ for (bk in names(backend_opts)) {
                 fake_local_resp(model = payload$model %||% "test-model")
             }
         )
-        gpt("hi", provider = bk, base_url = arg_url, print_raw = FALSE)
+        res <- gpt("hi", provider = bk, base_url = arg_url, print_raw = FALSE)
+        out <- capture.output(print(res))
+        testthat::expect_identical(out, "ok")
         testthat::expect_identical(called, arg_url)
     })
 
@@ -54,7 +56,9 @@ for (bk in names(backend_opts)) {
                 fake_local_resp(model = payload$model %||% "test-model")
             }
         )
-        gpt("hi", provider = bk, print_raw = FALSE)
+        res <- gpt("hi", provider = bk, print_raw = FALSE)
+        out <- capture.output(print(res))
+        testthat::expect_identical(out, "ok")
         testthat::expect_identical(called, opt_url)
     })
 
@@ -70,7 +74,9 @@ for (bk in names(backend_opts)) {
                 fake_local_resp(model = payload$model %||% "test-model")
             }
         )
-        gpt("hi", provider = bk, print_raw = FALSE)
+        res <- gpt("hi", provider = bk, print_raw = FALSE)
+        out <- capture.output(print(res))
+        testthat::expect_identical(out, "ok")
         testthat::expect_identical(called, defaults[[bk]])
     })
 }

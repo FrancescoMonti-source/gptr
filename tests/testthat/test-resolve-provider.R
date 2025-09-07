@@ -37,7 +37,9 @@ test_that("duplicate model favors local backend per gptr.local_prefer", {
             fake_resp(model = payload$model %||% "o1-mini")
         }
     )
-    gpt("hi", model = "o1-mini", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    res <- gpt("hi", model = "o1-mini", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    out <- capture.output(print(res))
+    expect_identical(out, "ok")
     expect_identical(called, "local@http://127.0.0.1:1234")
 })
 
@@ -66,7 +68,9 @@ test_that("openai-only model routes to OpenAI", {
             fake_resp(model = payload$model %||% "local")
         }
     )
-    gpt("hi", model = "gpt-4o-mini", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    res <- gpt("hi", model = "gpt-4o-mini", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    out <- capture.output(print(res))
+    expect_identical(out, "ok")
     expect_identical(called, "openai")
 })
 
@@ -95,7 +99,9 @@ test_that("local-only model routes to local backend", {
             fake_resp(model = payload$model %||% "gpt")
         }
     )
-    gpt("hi", model = "mistral", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    res <- gpt("hi", model = "mistral", provider = "auto", openai_api_key = "sk-test", print_raw = FALSE)
+    out <- capture.output(print(res))
+    expect_identical(out, "ok")
     expect_identical(called, "local@http://127.0.0.1:11434")
 })
 

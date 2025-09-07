@@ -1,7 +1,7 @@
 #' Chat once with the selected provider
 #'
 #' Minimal front-door that delegates to provider-specific helpers.
-#' Returns plain text (character scalar). Usage is attached as an attribute.
+#' Returns a character scalar of class `gpt_output`. Usage is attached as an attribute.
 #'
 #' @param prompt Character scalar user message. Ignored if `messages` is supplied upstream.
 #' @param model Optional model id. If NULL, resolved per provider defaults.
@@ -19,7 +19,7 @@
 #' @param print_raw Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.
 #' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
-#' @return Character scalar (assistant message). `attr(value, "usage")` may contain token usage.
+#' @return Object of class `gpt_output` (character scalar). `attr(value, "usage")` may contain token usage.
 #' @export
 #'
 gpt <- function(prompt,
@@ -164,8 +164,8 @@ gpt <- function(prompt,
         attr(out, "usage")  <- parsed$usage
         attr(out, "backend") <- backend_name
         attr(out, "model")   <- model_name
-        cat(out, "\n")
-        invisible(out)
+        class(out) <- c("gpt_output", class(out))
+        out
     }
 
     image_paths <- if (is.null(image_path)) NULL else as.character(image_path)
