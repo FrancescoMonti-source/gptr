@@ -219,50 +219,6 @@ gpt_column <- function(data,
   # If there are zero rows, bail early to avoid 0-step progressors
   if (n == 0L) return(data)
 
-  if (use_progressr) {
-      raw_outputs <- NULL  # will be assigned inside
-      progressr::with_progress({
-          # One bar for the entire job: model calls + parse/validate (if schema)
-          total_steps <- if (is.null(keys)) n else 2L * n
-          p  <- progressr::progressor(steps = total_steps)
-          t0 <- Sys.time()
-
-          # --- MODEL CALLS (tick n times) -----------------------------------------
-          raw_outputs <- vapply(seq_len(n), function(i) {
-              out <- call_one(i)
-              elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
-              p(message = sprintf("LLM %d/%d • elapsed %ds", i, n, round(elapsed)))
-              out
-          }, FUN.VALUE = character(1), USE.NAMES = FALSE)
-
-          # --- PARSE / VALIDATE (tick n times only when schema path) --------------
-          if (!is.null(keys)) {
-              for (i in seq_len(n)) {
-                  out <- raw_outputs[[i]]
-
-                  # >>> your existing parse/align/coerce body for row i (unchanged) <<<
-                  # (from: if (is.na(out) || !nzchar(out)) { ... next } up to:
-                  #   parsed_results[[i]] <- x
-                  #   invalid_flags[i]    <- invalid
-                  #   invalid_detail[[i]] <- meta_df)
-
-                  # tick after finishing row i parsing:
-                  p(message = sprintf("Parse %d/%d", i, n))
-              }
-          }
-      })
-  } else {
-      # progress disabled or progressr not installed: silent execution
-      if (isTRUE(progress) && !requireNamespace("progressr", quietly = TRUE)) {
-          message("Tip: install.packages('progressr') to see a live progress bar.")
-      }
-      raw_outputs <- vapply(seq_len(n), call_one, FUN.VALUE = character(1), USE.NAMES = FALSE)
-      # keep your existing parse loop here (schema branch continues below)
-  }
-
-
-
-
   parsed_results <- vector("list", n) # list of named lists (schema) or scalars/lists (no schema)
   invalid_flags <- logical(n) # TRUE when row invalid (parse/validate failures)
   invalid_detail <- vector("list", n) # per-row meta (data.frame or NULL)
@@ -270,143 +226,175 @@ gpt_column <- function(data,
   # For schema + keep_unexpected_keys = TRUE we collect extras here
   extras_list <- if (!is.null(expected_keys) && isTRUE(keep_unexpected_keys)) vector("list", n) else NULL
 
-  for (i in seq_len(n)) {
-    out <- raw_outputs[[i]]
+  parse_loop <- function(raw_outputs, p = NULL) {
+    for (i in seq_len(n)) {
+      out <- raw_outputs[[i]]
 
-    # Missing model output
-    if (is.na(out) || !nzchar(out)) {
-      invalid_flags[i] <- TRUE
-      invalid_detail[[i]] <- data.frame(stage = "model", note = "empty_output", stringsAsFactors = FALSE)
-      parsed_results[[i]] <- if (!is.null(expected_keys)) setNames(rep(NA, length(expected_keys)), expected_keys) else NA_character_
-      next
-    }
-
-
-    # --- SHIM: unwrap quoted JSON early (even if parser/.tidy_json miss) ---
-    if (is.character(out) && length(out) == 1L) {
-      val0 <- try(jsonlite::fromJSON(out, simplifyVector = FALSE), silent = TRUE)
-      if (!inherits(val0, "try-error") && is.character(val0) && length(val0) == 1L) {
-        out <- val0 # now bare JSON: {"impulsivite":1,...}
-      } else if (grepl('^\\s*"(\\{|\\[)', out) && grepl('(\\}|\\])"\\s*$', out) && grepl('\\\\\"', out)) {
-        # hard fallback: looks like a quoted blob with escaped quotes <U+2192> strip outer quotes, unescape
-        inner <- sub('^\\s*"(.*)"\\s*$', "\\1", out, perl = TRUE)
-        out <- gsub('\\\\\\"', '"', inner, perl = TRUE)
+      # Missing model output
+      if (is.na(out) || !nzchar(out)) {
+        invalid_flags[i] <- TRUE
+        invalid_detail[[i]] <- data.frame(stage = "model", note = "empty_output", stringsAsFactors = FALSE)
+        parsed_results[[i]] <- if (!is.null(expected_keys)) setNames(rep(NA, length(expected_keys)), expected_keys) else NA_character_
+        if (!is.null(p)) p(message = sprintf("Parse %d/%d", i, n))
+        next
       }
-    }
 
-    # Parse/repair JSON; no coercion here (column pass handles that)
-    rp <- tryCatch(
-      json_fix_parse_validate(
-        out,
-        key_specs    = key_specs,
-        na_values    = na_values,
-        verbose      = verbose,
-        i            = i,
-        .coerce_types = FALSE,
-        coerce_when  = NULL
-      ),
-      error = function(e) {
-        if (verbose) message("Row ", i, ": parse error --> ", conditionMessage(e))
-        list(ok = FALSE, value = NULL, meta = NULL)
+      # --- SHIM: unwrap quoted JSON early (even if parser/.tidy_json miss) ---
+      if (is.character(out) && length(out) == 1L) {
+        val0 <- try(jsonlite::fromJSON(out, simplifyVector = FALSE), silent = TRUE)
+        if (!inherits(val0, "try-error") && is.character(val0) && length(val0) == 1L) {
+          out <- val0 # now bare JSON: {"impulsivite":1,...}
+        } else if (grepl('^\\s*"(\\{|\\[)', out) && grepl('(\\}|\\])"\\s*$', out) && grepl('\\\\\"', out)) {
+          # hard fallback: looks like a quoted blob with escaped quotes → strip outer quotes, unescape
+          inner <- sub('^\\s*"(.*)"\\s*$', "\\1", out, perl = TRUE)
+          out <- gsub('\\\\\\"', '"', inner, perl = TRUE)
+        }
       }
-    )
 
-    invalid <- !isTRUE(rp$ok)
-    meta_df <- if (is.data.frame(rp$meta)) rp$meta else NULL
-    if (is.data.frame(meta_df)) {
-      bad <- meta_df[(meta_df$type_ok %in% FALSE) | (meta_df$allowed %in% FALSE), , drop = FALSE]
-      if (nrow(bad)) invalid <- TRUE
-    }
-
-    if (!isTRUE(rp$ok)) {
-      parsed_results[[i]] <- if (relaxed && is.null(expected_keys)) out else if (!is.null(expected_keys)) setNames(rep(NA, length(expected_keys)), expected_keys) else out
-      invalid_flags[i] <- TRUE
-      invalid_detail[[i]] <- meta_df
-      next
-    }
-
-    x <- rp$value # named list (usually)
-
-    # Align keys when schema exists -------------------------------------------
-    if (!is.null(expected_keys) && !setequal(names(x), expected_keys)) {
-      orig_names <- names(x)
-      x <- json_keys_align(
-        x,
-        expected_keys   = expected_keys,
-        auto_correct    = auto_correct_keys,
-        keep_unexpected = keep_unexpected_keys,
-        fuzzy_model     = fuzzy_model,
-        fuzzy_threshold = fuzzy_threshold
+      # Parse/repair JSON; no coercion here (column pass handles that)
+      rp <- tryCatch(
+        json_fix_parse_validate(
+          out,
+          key_specs    = key_specs,
+          na_values    = na_values,
+          verbose      = verbose,
+          i            = i,
+          .coerce_types = FALSE,
+          coerce_when  = NULL
+        ),
+        error = function(e) {
+          if (verbose) message("Row ", i, ": parse error --> ", conditionMessage(e))
+          list(ok = FALSE, value = NULL, meta = NULL)
+        }
       )
 
-      # Audit unexpected keys
-      if (!isTRUE(keep_unexpected_keys)) {
-        dropped <- setdiff(orig_names, names(x))
-        if (length(dropped)) {
-          meta_drop <- data.frame(
-            stage = "align_keys",
-            issue = "unexpected_key",
-            key = dropped,
-            value = vapply(dropped, function(k) .val_to_str(rp$value[[k]]), character(1)),
-            action = "dropped",
-            stringsAsFactors = FALSE
-          )
-          meta_df <- if (is.null(meta_df)) {
-            meta_drop
-          } else {
-            tryCatch(
-              dplyr::bind_rows(meta_df, meta_drop),
-              error = function(e) rbind(meta_df, meta_drop)
+      invalid <- !isTRUE(rp$ok)
+      meta_df <- if (is.data.frame(rp$meta)) rp$meta else NULL
+      if (is.data.frame(meta_df)) {
+        bad <- meta_df[(meta_df$type_ok %in% FALSE) | (meta_df$allowed %in% FALSE), , drop = FALSE]
+        if (nrow(bad)) invalid <- TRUE
+      }
+
+      if (!isTRUE(rp$ok)) {
+        parsed_results[[i]] <- if (relaxed && is.null(expected_keys)) out else if (!is.null(expected_keys)) setNames(rep(NA, length(expected_keys)), expected_keys) else out
+        invalid_flags[i] <- TRUE
+        invalid_detail[[i]] <- meta_df
+        if (!is.null(p)) p(message = sprintf("Parse %d/%d", i, n))
+        next
+      }
+
+      x <- rp$value # named list (usually)
+
+      # Align keys when schema exists -------------------------------------------
+      if (!is.null(expected_keys) && !setequal(names(x), expected_keys)) {
+        orig_names <- names(x)
+        x <- json_keys_align(
+          x,
+          expected_keys   = expected_keys,
+          auto_correct    = auto_correct_keys,
+          keep_unexpected = keep_unexpected_keys,
+          fuzzy_model     = fuzzy_model,
+          fuzzy_threshold = fuzzy_threshold
+        )
+
+        # Audit unexpected keys
+        if (!isTRUE(keep_unexpected_keys)) {
+          dropped <- setdiff(orig_names, names(x))
+          if (length(dropped)) {
+            meta_drop <- data.frame(
+              stage = "align_keys",
+              issue = "unexpected_key",
+              key = dropped,
+              value = vapply(dropped, function(k) .val_to_str(rp$value[[k]]), character(1)),
+              action = "dropped",
+              stringsAsFactors = FALSE
             )
+            meta_df <- if (is.null(meta_df)) {
+              meta_drop
+            } else {
+              tryCatch(
+                dplyr::bind_rows(meta_df, meta_drop),
+                error = function(e) rbind(meta_df, meta_drop)
+              )
+            }
+          }
+        } else {
+          # keep_unexpected_keys = TRUE → collect extras (no extra columns)
+          extra_names <- setdiff(names(x), expected_keys)
+          if (length(extra_names)) {
+            if (!is.null(extras_list)) extras_list[[i]] <- x[extra_names]
+            # (optional) log as kept extras
+            meta_keep <- data.frame(
+              stage = "align_keys",
+              issue = "unexpected_key",
+              key = extra_names,
+              value = vapply(extra_names, function(k) .val_to_str(x[[k]]), character(1)),
+              action = "kept_in_extras",
+              stringsAsFactors = FALSE
+            )
+            meta_df <- if (is.null(meta_df)) {
+              meta_keep
+            } else {
+              tryCatch(
+                dplyr::bind_rows(meta_df, meta_keep),
+                error = function(e) rbind(meta_df, meta_keep)
+              )
+            }
+            # keep only schema keys in x for the main columns
+            x <- x[intersect(names(x), expected_keys)]
           }
         }
-      } else {
-        # keep_unexpected_keys = TRUE <U+2192> collect extras (no extra columns)
-        extra_names <- setdiff(names(x), expected_keys)
-        if (length(extra_names)) {
-          if (!is.null(extras_list)) extras_list[[i]] <- x[extra_names]
-          # (optional) log as kept extras
-          meta_keep <- data.frame(
-            stage = "align_keys",
-            issue = "unexpected_key",
-            key = extra_names,
-            value = vapply(extra_names, function(k) .val_to_str(x[[k]]), character(1)),
-            action = "kept_in_extras",
-            stringsAsFactors = FALSE
-          )
-          meta_df <- if (is.null(meta_df)) {
-            meta_keep
-          } else {
-            tryCatch(
-              dplyr::bind_rows(meta_df, meta_keep),
-              error = function(e) rbind(meta_df, meta_keep)
-            )
-          }
-          # keep only schema keys in x for the main columns
-          x <- x[intersect(names(x), expected_keys)]
+      }
+
+      # Ensure shape now
+      x <- .force_schema_shape(x, expected_keys)
+
+      # Row-level coercion for schema (or explicit coerce_when)
+      if (isTRUE(.coerce_types) && !is.null(key_specs)) {
+        for (k in intersect(names(x), names(key_specs))) {
+          tt <- key_specs[[k]]$type
+          if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
+        }
+      } else if (!is.null(coerce_when) && isTRUE(.coerce_types)) {
+        for (k in intersect(names(x), names(coerce_when))) {
+          tt <- coerce_when[[k]]
+          if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
         }
       }
+
+      parsed_results[[i]] <- x
+      invalid_flags[i] <- invalid
+      invalid_detail[[i]] <- meta_df
+      if (!is.null(p)) p(message = sprintf("Parse %d/%d", i, n))
     }
+  }
 
-    # Ensure shape now
-    x <- .force_schema_shape(x, expected_keys)
+  if (use_progressr) {
+      raw_outputs <- NULL
+      progressr::with_progress({
+          # One bar for the entire job: model calls + parse/validate (if schema)
+          total_steps <- if (is.null(keys)) n else 2L * n
+          p  <- progressr::progressor(steps = total_steps)
+          t0 <- Sys.time()
 
-    # Row-level coercion for schema (or explicit coerce_when)
-    if (isTRUE(.coerce_types) && !is.null(key_specs)) {
-      for (k in intersect(names(x), names(key_specs))) {
-        tt <- key_specs[[k]]$type
-        if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
+          # --- MODEL CALLS (tick n times) -----------------------------------------
+          raw_outputs <<- vapply(seq_len(n), function(i) {
+              out <- call_one(i)
+              elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+              p(message = sprintf("LLM %d/%d • elapsed %ds", i, n, round(elapsed)))
+              out
+          }, FUN.VALUE = character(1), USE.NAMES = FALSE)
+
+          # --- PARSE / VALIDATE (tick n times) --------------
+          parse_loop(raw_outputs, p)
+      })
+  } else {
+      # progress disabled or progressr not installed: silent execution
+      if (isTRUE(progress) && !requireNamespace("progressr", quietly = TRUE)) {
+          message("Tip: install.packages('progressr') to see a live progress bar.")
       }
-    } else if (!is.null(coerce_when) && isTRUE(.coerce_types)) {
-      for (k in intersect(names(x), names(coerce_when))) {
-        tt <- coerce_when[[k]]
-        if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
-      }
-    }
-
-    parsed_results[[i]] <- x
-    invalid_flags[i] <- invalid
-    invalid_detail[[i]] <- meta_df
+      raw_outputs <- vapply(seq_len(n), call_one, FUN.VALUE = character(1), USE.NAMES = FALSE)
+      parse_loop(raw_outputs)
   }
 
   # ---------- 3b) Short-circuit for NO-SCHEMA cases ---------------------------
