@@ -29,9 +29,12 @@
   x
 }
 
-#' @keywords internal
+#' Models URL
+#' @description
+#' Construct the `/v1/models` endpoint URL for a given base URL root.
 #' @param root Base URL root for a provider.
-#' @returns Canonical `/v1/models` endpoint URL.
+#' @returns Full URL to the `/v1/models` endpoint.
+#' @keywords internal
 .build_models_url <- function(root) {paste0(.api_root(root),
                                             "/v1/models")}
 
