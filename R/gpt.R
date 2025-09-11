@@ -48,6 +48,7 @@ gpt <- function(prompt,
             rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
         }
         hits <- lm
+        found <- nrow(hits) > 0
         prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
         rank_fn <- function(p) {
             m <- match(p, c(prefer_locals, "openai"))
