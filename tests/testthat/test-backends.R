@@ -11,6 +11,27 @@ fake_resp <- function(model = "dummy") {
     list(body = body, resp = resp)
 }
 
+test_that("backend-specific model options override local_model", {
+    withr::local_options(list(gptr.local_model = "modelA", gptr.ollama_model = "modelB"))
+
+    called <- NULL
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            data.frame(model_id = c("modelA", "modelB"), stringsAsFactors = FALSE)
+        },
+        .request_local = function(payload, base_url, timeout = 30) {
+            called <<- payload$model %||% ""
+            fake_resp(model = payload$model %||% "")
+        },
+        .env = asNamespace("gptr")
+    )
+
+    gpt("hi", provider = "ollama", print_raw = FALSE)
+
+    expect_identical(called, "modelB")
+})
+
 test_that("auto + openai model routes to OpenAI", {
     called <- NULL
     testthat::local_mocked_bindings(

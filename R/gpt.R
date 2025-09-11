@@ -217,7 +217,10 @@ gpt <- function(prompt,
 
         if (isTRUE(strict_model) && !length(ids)) strict_model <- FALSE
 
-        default_model <- getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
+        default_model <- getOption(
+            paste0("gptr.", backend, "_model"),
+            getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
+        )
         requested_model <- model %||% default_model
 
         if (nzchar(requested_model) && length(ids) &&
