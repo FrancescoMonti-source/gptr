@@ -53,7 +53,7 @@ gpt <- function(prompt,
             rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
         }
         hits <- lm
-        found <- nrow(hits) > 0
+        # found <- nrow(hits) > 0
         prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
         rank_fn <- function(p) {
             m <- match(p, c(prefer_locals, "openai"))
@@ -70,12 +70,12 @@ gpt <- function(prompt,
             base_root <- .api_root(as.character(hit$base_url[1L]))
 
         }
-        if (!found && (is.null(base_url) || !nzchar(base_url)) && (is.null(backend) || !nzchar(backend))) {
-            rlang::abort(
-                sprintf("Model '%s' is not available in any backend.\nTo list: list_models()", model),
-                call = NULL
-            )
-        }
+        # if (!found && (is.null(base_url) || !nzchar(base_url)) && (is.null(backend) || !nzchar(backend))) {
+        #     rlang::abort(
+        #         sprintf("Model '%s' is not available in any backend.\nTo list: list_models()", model),
+        #         call = NULL
+        #     )
+        # }
     }
 
     # --- Normalize local provider aliases ---
