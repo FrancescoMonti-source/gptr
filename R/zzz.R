@@ -8,7 +8,7 @@
     gptr.local_model = "mistralai/mistral-7b-instruct-v0.3",
     # backend-specific overrides (optional)
     gptr.lmstudio_model = "mistralai/mistral-7b-instruct-v0.3",
-    gptr.ollama_model  = "mistralai/mistral-7b-instruct-v0.3",
+    gptr.ollama_model  = "mistral:latest",
     gptr.localai_model = "mistralai/mistral-7b-instruct-v0.3",
     gptr.lmstudio_base_url = "http://127.0.0.1:1234",
     gptr.ollama_base_url   = "http://127.0.0.1:11434",

@@ -32,7 +32,8 @@
 #' @keywords internal
 #' @param root Base URL root for a provider.
 #' @returns Canonical `/v1/models` endpoint URL.
-.build_models_url <- function(root) paste0(.api_root(root), "/v1/models")
+.build_models_url <- function(root) {paste0(.api_root(root),
+                                            "/v1/models")}
 
 
 
@@ -207,11 +208,7 @@
 
 
 #' Remove a cache entry for provider+base_url from the cache.
-<<<<<<< Updated upstream
 #' @param base_url_normalized Logical; set TRUE when `base_url` is already normalized.
-=======
-#'
->>>>>>> Stashed changes
 #' @keywords internal
 .cache_del <- function(provider, base_url, base_url_normalized = FALSE) {
   .gptr_cache$remove(
