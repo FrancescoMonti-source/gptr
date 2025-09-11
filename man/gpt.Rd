@@ -45,6 +45,13 @@ gpt(
 
 \item{backend}{"Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai')."}
 
+\item{strict_model}{Logical. If TRUE (default), error if the requested model is
+unavailable on the chosen backend.}
+
+\item{allow_backend_autoswitch}{Logical (default TRUE). When FALSE, do not
+probe or switch to alternative local backends if the requested one is
+unavailable.}
+
 \item{print_raw}{Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.}
 
 \item{...}{Extra fields passed through to the provider payload (e.g. \code{max_tokens}, \code{stop}).}
