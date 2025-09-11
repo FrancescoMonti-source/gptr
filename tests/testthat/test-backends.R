@@ -206,6 +206,30 @@ test_that("auto with no local backend falls back to OpenAI", {
     expect_identical(called, "openai")
 })
 
+test_that("disable backend autoswitch avoids probing and fallback", {
+    withr::local_options(list(gptr.local_prefer = c("ollama","lmstudio","localai")))
+
+    called <- NULL
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            stop("should not probe")
+        },
+        .request_local = function(payload, base_url, timeout = 30) {
+            called <<- c(called, paste0("local@", base_url))
+            fake_resp(model = payload$model %||% "fallback")
+        },
+        openai_send_request = function(payload, base_url, api_key, timeout = 30) {
+            called <<- c(called, "openai")
+            fake_resp(model = payload$model %||% "fallback")
+        },
+        .env = asNamespace("gptr")
+    )
+    gpt("hi", provider = "auto", allow_backend_autoswitch = FALSE,
+        openai_api_key = "sk", strict_model = FALSE, print_raw = FALSE)
+    expect_identical(called, "local@http://127.0.0.1:11434")
+})
+
 test_that("provider=openai routes to OpenAI even if locals have models", {
     called <- NULL
     testthat::local_mocked_bindings(

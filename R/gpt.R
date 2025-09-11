@@ -14,6 +14,11 @@
 #' @param system Optional system prompt.
 #' @param seed Optional integer for determinism (when supported).
 #' @param response_format NULL, "json_object", or a full list (OpenAI API shape).
+#' @param strict_model Logical. If TRUE (default), error if the requested model is
+#'   unavailable on the chosen backend.
+#' @param allow_backend_autoswitch Logical (default TRUE). When FALSE, do not
+#'   probe or switch to alternative local backends if the requested one is
+#'   unavailable.
 #' @param print_raw Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.
 #' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
@@ -94,11 +99,17 @@ gpt <- function(prompt,
         } else if (!is.null(backend) && nzchar(backend) && backend %in% names(roots)) {
             base_root <- .api_root(roots[[backend]])
             provider  <- "local"
-        } else {
+        } else if (isTRUE(allow_backend_autoswitch)) {
             picked <- FALSE
             for (bk in prefer) {
-                lm <- try(.fetch_models_cached(provider = bk, base_url = roots[[bk]],
-                                                   openai_api_key = openai_api_key), silent = TRUE)
+                lm <- try(
+                    .fetch_models_cached(
+                        provider = bk,
+                        base_url = roots[[bk]],
+                        openai_api_key = openai_api_key
+                    ),
+                    silent = TRUE
+                )
                 if (!inherits(lm, "try-error") && is.data.frame(lm) && NROW(lm)) {
                     base_root <- .api_root(roots[[bk]])
                     backend   <- bk
@@ -119,6 +130,10 @@ gpt <- function(prompt,
             } else {
                 provider <- "local"
             }
+        } else {
+            backend   <- prefer[[1L]]
+            base_root <- .api_root(roots[[backend]])
+            provider  <- "local"
         }
     }
 
