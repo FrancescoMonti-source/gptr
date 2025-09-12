@@ -40,7 +40,13 @@ gpt_column(
 
 \item{keys}{Optional named list defining expected JSON keys and their type or allowed set.}
 
+\item{provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".}
+
+\item{backend}{Optional backend to use when \code{provider = "local"}.}
+
 \item{base_url}{(now accepted by gpt_column() too): “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”}
+
+\item{model}{Model identifier to request from the provider/backend.}
 
 \item{temperature}{Sampling temperature for the model.}
 
@@ -69,9 +75,7 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{progress}{Logical. Progress Bar, defaults to TRUE.}
 
-\item{...}{Extra args passed to \code{gpt()} (e.g., \code{model}, \code{provider},\code{response_format}).}
-
-\item{Provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".}
+\item{...}{Extra args passed to \code{gpt()} (e.g., \code{response_format}).}
 }
 \description{
 Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,
