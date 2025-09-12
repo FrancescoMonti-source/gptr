@@ -140,11 +140,11 @@ gpt_column <- function(data,
   # ---------- 2) Prepare schema & prompt builder -------------------------------
   # Policies implemented:
   #  - With schema (keys provided):
-  #      * keep_unexpected_keys = FALSE <U+2192> drop extras; log them in .invalid_detail
-  #      * keep_unexpected_keys = TRUE  <U+2192> collect extras in a single .extras_json column (no extra cols)
+  #      * keep_unexpected_keys = FALSE --> drop extras; log them in .invalid_detail
+  #      * keep_unexpected_keys = TRUE  --> collect extras in a single .extras_json column (no extra cols)
   #  - Without schema (keys = NULL):
-  #      * keep_unexpected_keys = FALSE <U+2192> debug-only (df + .raw_output + .invalid_rows + .invalid_detail)
-  #      * keep_unexpected_keys = TRUE  <U+2192> same + .parsed_json (minified JSON of the whole parsed row)
+  #      * keep_unexpected_keys = FALSE --> debug-only (df + .raw_output + .invalid_rows + .invalid_detail)
+  #      * keep_unexpected_keys = TRUE  --> same + .parsed_json (minified JSON of the whole parsed row)
 
   # WHAT THE USER PROVIDES (example):
   # keys <- list(
@@ -288,7 +288,7 @@ gpt_column <- function(data,
       if (!inherits(val0, "try-error") && is.character(val0) && length(val0) == 1L) {
         out <- val0 # now bare JSON: {"impulsivite":1,...}
       } else if (grepl('^\\s*"(\\{|\\[)', out) && grepl('(\\}|\\])"\\s*$', out) && grepl('\\\\\"', out)) {
-        # hard fallback: looks like a quoted blob with escaped quotes <U+2192> strip outer quotes, unescape
+        # hard fallback: looks like a quoted blob with escaped quotes --> strip outer quotes, unescape
         inner <- sub('^\\s*"(.*)"\\s*$', "\\1", out, perl = TRUE)
         out <- gsub('\\\\\\"', '"', inner, perl = TRUE)
       }
@@ -361,7 +361,7 @@ gpt_column <- function(data,
           }
         }
       } else {
-        # keep_unexpected_keys = TRUE <U+2192> collect extras (no extra columns)
+        # keep_unexpected_keys = TRUE --> collect extras (no extra columns)
         extra_names <- setdiff(names(x), expected_keys)
         if (length(extra_names)) {
           if (!is.null(extras_list)) extras_list[[i]] <- x[extra_names]
@@ -430,8 +430,8 @@ gpt_column <- function(data,
     }
 
     # keep_unexpected_keys guides compact payload:
-    #  FALSE <U+2192> debug-only
-    #  TRUE  <U+2192> add .parsed_json (minified JSON of whole parsed object)
+    #  FALSE --> debug-only
+    #  TRUE  --> add .parsed_json (minified JSON of whole parsed object)
     if (isTRUE(keep_unexpected_keys)) {
       parsed_json <- vapply(
         parsed_results,
@@ -480,7 +480,7 @@ gpt_column <- function(data,
   }
 
 
-  # ---------- 4) Bind rows <U+2192> tibble of schema columns -------------------------
+  # ---------- 4) Bind rows --> tibble of schema columns -------------------------
   parsed_df <- purrr::map_dfr(
     parsed_results,
     row_to_tibble,
@@ -510,7 +510,7 @@ gpt_column <- function(data,
   invalid_flags <- as.logical(rep_len(invalid_flags, n_out))
   if (length(invalid_detail) != n_out) length(invalid_detail) <- n_out
 
-  # Schema + keep_unexpected_keys = TRUE <U+2192> add single .extras_json column
+  # Schema + keep_unexpected_keys = TRUE --> add single .extras_json column
   if (!is.null(extras_list) && isTRUE(keep_unexpected_keys)) {
     extras_json <- vapply(
       extras_list,

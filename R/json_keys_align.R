@@ -38,7 +38,7 @@ json_keys_align <- function(x,
     }
 
     # If the supplied key is a proper prefix of multiple expected keys,
-    # do not auto-correct: it’s ambiguous (e.g. “smok” <U+2192> c("smoker","smoker_status"))
+    # do not auto-correct: it’s ambiguous (e.g. “smok” --> c("smoker","smoker_status"))
     if (sum(startsWith(choices_norm, key_norm)) > 1L) {
       return(NA_character_)
     }

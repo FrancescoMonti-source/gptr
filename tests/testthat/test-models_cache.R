@@ -44,7 +44,7 @@ test_that(".api_root - normalizes urls", {
 
 # .cache_key()
 # same inputs --> same key
-# different base_url or provider <U+2192> different key
+# different base_url or provider --> different key
 test_that(".cache_key", {
   ck <- getFromNamespace(".cache_key", "gptr")
   a1 <- ck("openai", "https://api.openai.com")

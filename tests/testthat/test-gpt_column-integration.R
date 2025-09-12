@@ -58,3 +58,4 @@ test_that("gpt_column E2E on real data (schema)", {
   expect_type(out$jeu_pathologique, "integer")
   expect_false(any(out$.invalid_rows %in% TRUE)) # rows should parse cleanly
 })
+

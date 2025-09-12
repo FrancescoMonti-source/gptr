@@ -62,7 +62,7 @@
 
   # helper 3
   infer_type <- function(x) {
-    # Prefer logical <U+2192> integer <U+2192> numeric <U+2192> character
+    # Prefer logical --> integer --> numeric --> character
     if (is.character(x)) {
       v <- tolower(trimws(x))
       # logical from strings (EXCLUDE "1"/"0" so they become integers)
