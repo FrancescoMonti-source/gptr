@@ -45,15 +45,23 @@ gpt <- function(prompt,
     provider_input <- provider
     base_root <- NULL
 
-    # --- Early auto+model resolution (use cache, no heuristics) ---
-    if (identical(provider, "auto") && is.character(model) && nzchar(model)) {
-
+    # --- provider = "auto" + model = "x" ---
+    # hits is the data frame of potential providers. It is sorted with a ranking
+    # function that prefers any locally running backends listed in getOption("gptr.local_prefer",
+    # "lmstudio","ollama","localai")) and, as a last resort, OpenAI. Any provider not in that
+    # list is given a large rank so it sorts last
+    # The top row (hit) becomes the chosen provider. Its name is normalized (hit_provider) and used
+    # to set the function’s provider and backend variables:
+    # - If the provider is “openai”, provider becomes "openai" (cloud backend).
+    # - Otherwise provider becomes "local", backend records the specific local engine (e.g. "ollama"), and base_root is populated with a normalized base URL (.api_root(hit$base_url)).
+    # - In short, when provider = "auto" the code attempts to identify which backend hosts the requested model, ranks the matches by user preference, and sets up internal provider, backend, and base_root variables accordingly. If no provider can be resolved, the function aborts rather than silently guessing
+    if (provider == "auto" && is.character(model) && model != "") {
+        # probe all providers for the model
         lm <- try(.resolve_model_provider(model, openai_api_key = openai_api_key), silent = TRUE)
         if (inherits(lm, "try-error") || !is.data.frame(lm) || nrow(lm) < 1) {
             rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
         }
         hits <- lm
-        # found <- nrow(hits) > 0
         prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
         rank_fn <- function(p) {
             m <- match(p, c(prefer_locals, "openai"))

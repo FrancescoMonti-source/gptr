@@ -269,7 +269,6 @@
 
 
 #' @noRd
-#' @keywords internal
 #' Resolve a model's provider from cache (minimal lookup)
 #' @keywords internal
   .resolve_model_provider <- function(model,
@@ -281,6 +280,7 @@
                             model_id = character(), stringsAsFactors = FALSE))
       }
       for (p in providers) {
+          # skips openai if no api key available
           if (p == "openai" && !nzchar(openai_api_key)) next
           bu <- switch(p,
               lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
