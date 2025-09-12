@@ -70,12 +70,6 @@ gpt <- function(prompt,
             base_root <- .api_root(as.character(hit$base_url[1L]))
 
         }
-        # if (!found && (is.null(base_url) || !nzchar(base_url)) && (is.null(backend) || !nzchar(backend))) {
-        #     rlang::abort(
-        #         sprintf("Model '%s' is not available in any backend.\nTo list: list_models()", model),
-        #         call = NULL
-        #     )
-        # }
     }
 
     # --- Normalize local provider aliases ---
