@@ -55,7 +55,7 @@ unavailable.}
 
 \item{print_raw}{Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.}
 
-\item{ssl_cert}{Optional path to a certificate authority (CA) bundle passed to provider HTTP clients as \code{cainfo}.}
+\item{ssl_cert}{Optional path to a certificate authority (CA) bundle passed to provider HTTP clients and model probes as \code{cainfo}.}
 
 \item{...}{Extra fields passed through to the provider payload (e.g. \code{max_tokens}, \code{stop}).}
 }

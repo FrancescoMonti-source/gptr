@@ -110,18 +110,25 @@
 #'   flag to signal a cache bypass.
 #' @param openai_api_key OpenAI API key used when `provider = "openai"`.
 #' @param timeout Request timeout in seconds.
+#' @param ssl_cert Optional path to a certificate authority (CA) bundle passed to
+#'   [httr2::req_options()] as `cainfo` for HTTPS verification.
 #' @keywords internal
 .fetch_models_live <- function(provider,
                                base_url,
                                refresh = FALSE,
                                openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-                               timeout = getOption("gptr.request_timeout", 5)) {
+                               timeout = getOption("gptr.request_timeout", 5),
+                               ssl_cert = NULL) {
   if (!requireNamespace("httr2", quietly = TRUE)) {
     return(list(df = .normalize_models_df(NULL), status = "httr2_missing"))
   }
   url <- .build_models_url(base_url)
   req <- httr2::request(url) %>%
     httr2::req_timeout(timeout)
+
+  if (!is.null(ssl_cert) && length(ssl_cert) && !is.na(ssl_cert[[1]]) && nzchar(ssl_cert[[1]])) {
+    req <- httr2::req_options(req, cainfo = ssl_cert[[1]])
+  }
 
   if (identical(provider, "openai")) {
     if (!nzchar(openai_api_key)) {
@@ -225,9 +232,11 @@
 #' Skips OpenAI when no API key is available.
 #' @keywords internal
 #' @param base_url_normalized Logical; set TRUE when `base_url` is already normalized.
+#' @param ssl_cert Optional CA bundle path forwarded to live probes.
 .get_cached_model_ids <- function(provider, base_url,
                                   openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-                                  base_url_normalized = FALSE) {
+                                  base_url_normalized = FALSE,
+                                  ssl_cert = NULL) {
   if (identical(provider, "openai") && !nzchar(openai_api_key)) {
     return(character())
   }
@@ -248,10 +257,10 @@
     }
   }
 
-  live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+  live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key, ssl_cert = ssl_cert)
   if (identical(live$status, "unreachable")) {
     Sys.sleep(0.2)
-    live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key)
+    live <- .fetch_models_live(provider, root, openai_api_key = openai_api_key, ssl_cert = ssl_cert)
   }
   if (!identical(live$status, "ok")) {
     return(character())
@@ -270,9 +279,11 @@
 
 #' @noRd
 #' Resolve a model's provider from cache (minimal lookup)
+#' @param ssl_cert Optional CA bundle path forwarded to live probes.
 #' @keywords internal
   .resolve_model_provider <- function(model,
-                                      openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+                                      openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+                                      ssl_cert = NULL) {
       providers <- c("lmstudio", "ollama", "localai", "openai")
       rows <- list()
       if (!nzchar(model)) {
@@ -291,7 +302,8 @@
           root <- .api_root(bu)
           ids <- try(
               .get_cached_model_ids(p, root, openai_api_key = openai_api_key,
-                                    base_url_normalized = TRUE),
+                                    base_url_normalized = TRUE,
+                                    ssl_cert = ssl_cert),
               silent = TRUE
           )
           ids <- if (inherits(ids, "try-error")) character() else as.character(ids)
@@ -317,11 +329,13 @@
 #' @param base_url Base URL to probe.
 #' @param refresh Logical; if TRUE, the cache is bypassed and no writes occur.
 #' @param openai_api_key Optional OpenAI API key used when `provider = "openai"`.
+#' @param ssl_cert Optional CA bundle path forwarded to live probes.
 #' @keywords internal
 .fetch_models_cached <- function(provider = NULL,
                                  base_url = NULL,
                                  openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-                                 refresh = FALSE) {
+                                 refresh = FALSE,
+                                 ssl_cert = NULL) {
     if (is.null(provider)) {
         keys <- .gptr_cache$keys()
         if (!length(keys)) {
@@ -354,7 +368,7 @@
     now <- as.numeric(Sys.time())
 
     if (isTRUE(refresh)) {
-        live <- .fetch_models_live(provider, root, refresh = TRUE, openai_api_key = openai_api_key)
+        live <- .fetch_models_live(provider, root, refresh = TRUE, openai_api_key = openai_api_key, ssl_cert = ssl_cert)
         return(.assemble_models_df(provider, root, live$df, availability, "live", now,
                                    status = live$status, base_url_normalized = TRUE))
     }
@@ -375,10 +389,10 @@
         }
     }
 
-    live <- .fetch_models_live(provider, root, refresh = FALSE, openai_api_key = openai_api_key)
+    live <- .fetch_models_live(provider, root, refresh = FALSE, openai_api_key = openai_api_key, ssl_cert = ssl_cert)
     if (identical(live$status, "unreachable")) {
         Sys.sleep(0.2)
-        live <- .fetch_models_live(provider, root, refresh = FALSE, openai_api_key = openai_api_key)
+        live <- .fetch_models_live(provider, root, refresh = FALSE, openai_api_key = openai_api_key, ssl_cert = ssl_cert)
     }
     mods <- live$df
     status <- live$status
@@ -424,6 +438,7 @@
 #' @param openai_api_key Optional OpenAI API key. If missing, falls back to
 #'   Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
 #'   an auth_missing status (no stop).
+#' @param ssl_cert Optional CA bundle path forwarded to model probes.
 #' @return data.frame with columns:
 #'   provider, base_url, model_id, availability, cached_when, source, and status.
 #'   Status diagnostics for each backend are also attached via
@@ -432,7 +447,8 @@
 list_models <- function(provider = NULL,
                         base_url = NULL,
                         refresh = FALSE,
-                        openai_api_key = Sys.getenv("OPENAI_API_KEY", "")) {
+                        openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+                        ssl_cert = getOption("gptr.ssl_cert", NULL)) {
   # ---- scope selection ---
   providers <- if (is.null(provider)) c("lmstudio", "ollama", "localai", "openai") else provider
   rows <- list()
@@ -446,7 +462,7 @@ list_models <- function(provider = NULL,
       openai   = "https://api.openai.com"
     )
     bu <- .api_root(base_url %||% bu_default)
-    df <- .fetch_models_cached(p, bu, refresh = refresh, openai_api_key = openai_api_key)
+    df <- .fetch_models_cached(p, bu, refresh = refresh, openai_api_key = openai_api_key, ssl_cert = ssl_cert)
     diagnostics[[length(diagnostics) + 1L]] <- attr(df, "diagnostic")
     rows[[length(rows) + 1L]] <- df
   }

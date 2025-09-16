@@ -89,6 +89,130 @@ test_that("gpt forwards ssl_cert to local backend", {
     expect_identical(called, cert)
 })
 
+test_that("gpt forwards ssl_cert to model discovery (openai path)", {
+    cert <- withr::local_tempfile(fileext = ".crt")
+    writeLines("dummy", cert)
+
+    recorded <- new.env(parent = emptyenv())
+    recorded$resolver <- NULL
+    recorded$fetch <- NULL
+
+    testthat::local_mocked_bindings(
+        .resolve_model_provider = function(model, openai_api_key = "", ssl_cert = NULL, ...) {
+            recorded$resolver <- ssl_cert
+            data.frame(
+                provider = "openai",
+                base_url = "https://api.openai.com",
+                model_id = model,
+                stringsAsFactors = FALSE
+            )
+        },
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", refresh = FALSE,
+                                        ssl_cert = NULL, ...) {
+            if (identical(provider, "openai")) {
+                recorded$fetch <- ssl_cert
+            }
+            data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
+        },
+        openai_send_request = function(payload, base_url, api_key,
+                                       timeout = 30, ssl_cert = NULL) {
+            fake_resp(model = payload$model %||% "gpt-4o-mini")
+        },
+        .request_local = function(payload, base_url, timeout = 30, ssl_cert = NULL) {
+            fake_resp(model = payload$model %||% "local-model")
+        },
+        .env = asNamespace("gptr")
+    )
+
+    gpt("hi",
+        model = "gpt-4o-mini",
+        provider = "auto",
+        openai_api_key = "sk-test",
+        ssl_cert = cert,
+        print_raw = FALSE)
+
+    expect_identical(recorded$resolver, cert)
+    expect_identical(recorded$fetch, cert)
+})
+
+test_that("gpt forwards ssl_cert to local model probes", {
+    cert <- withr::local_tempfile(fileext = ".crt")
+    writeLines("dummy", cert)
+
+    seen <- new.env(parent = emptyenv())
+    seen$local <- NULL
+
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", refresh = FALSE,
+                                        ssl_cert = NULL, ...) {
+            if (identical(provider, "ollama")) {
+                seen$local <- ssl_cert
+            }
+            data.frame(model_id = "mistral", stringsAsFactors = FALSE)
+        },
+        .request_local = function(payload, base_url, timeout_sec = 180,
+                                  max_tries = 2, user_agent = "ua",
+                                  debug_http = FALSE, ssl_cert = NULL) {
+            fake_resp(model = payload$model %||% "mistral")
+        },
+        openai_send_request = function(payload, base_url, api_key,
+                                       timeout = 30, ssl_cert = NULL) {
+            fake_resp(model = payload$model %||% "gpt")
+        },
+        .env = asNamespace("gptr")
+    )
+
+    withr::local_options(list(gptr.local_model = "mistral"))
+
+    gpt("hi",
+        provider = "ollama",
+        ssl_cert = cert,
+        strict_model = FALSE,
+        print_raw = FALSE)
+
+    expect_identical(seen$local, cert)
+})
+
+test_that("autoswitch probes include ssl_cert when scanning locals", {
+    cert <- withr::local_tempfile(fileext = ".crt")
+    writeLines("dummy", cert)
+
+    seen <- list()
+
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", refresh = FALSE,
+                                        ssl_cert = NULL, ...) {
+            if (!is.null(provider)) {
+                seen[[provider]] <<- ssl_cert
+            }
+            data.frame(model_id = "local-default", stringsAsFactors = FALSE)
+        },
+        .request_local = function(payload, base_url, timeout = 30, ssl_cert = NULL) {
+            fake_resp(model = payload$model %||% "local-default")
+        },
+        openai_send_request = function(payload, base_url, api_key,
+                                       timeout = 30, ssl_cert = NULL) {
+            fake_resp(model = payload$model %||% "openai")
+        },
+        .env = asNamespace("gptr")
+    )
+
+    withr::local_options(list(gptr.local_model = "local-default"))
+
+    gpt("hi",
+        provider = "auto",
+        strict_model = FALSE,
+        openai_api_key = "",
+        ssl_cert = cert,
+        print_raw = FALSE)
+
+    expect_true(length(seen) >= 1L)
+    expect_true(any(vapply(seen, identical, logical(1), cert)))
+})
+
 test_that("openai_send_request sets cainfo when ssl_cert supplied", {
     cert <- withr::local_tempfile(fileext = ".crt")
     writeLines("dummy", cert)
