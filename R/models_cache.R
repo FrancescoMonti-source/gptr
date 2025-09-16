@@ -25,6 +25,7 @@
 .api_root <- function(x) {
   x <- sub("(/v1/chat/completions)?$", "", x)
   x <- sub("(/v1/models)?$", "", x)
+  x <- sub("(/v1)/?$", "", x)
   x <- sub("/+$", "", x)
   x
 }

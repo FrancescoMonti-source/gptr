@@ -529,6 +529,32 @@ test_that("explicit local base_url is honored", {
     expect_identical(called, "local@http://192.168.1.50:1234")
 })
 
+test_that("local base_url path variants are normalized", {
+    urls <- c("http://custom:1234/v1", "http://custom:1234/v1/chat/completions")
+    testthat::local_mocked_bindings(
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                            openai_api_key = "", ...) {
+            data.frame(model_id = "custom-model", stringsAsFactors = FALSE)
+        },
+        .request_local = function(payload, base_url, timeout = 30) {
+            captured <<- c(captured, base_url)
+            fake_resp(model = payload$model %||% "custom-model")
+        },
+        .env = asNamespace("gptr")
+    )
+
+    for (url in urls) {
+        captured <- character()
+        gpt("hi",
+            provider = "local",
+            base_url = url,
+            model = "custom-model",
+            strict_model = TRUE,
+            print_raw = FALSE)
+        expect_identical(captured, "http://custom:1234")
+    }
+})
+
 test_that("strict_model errors when model not installed (local)", {
     testthat::local_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
