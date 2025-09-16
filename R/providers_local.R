@@ -6,6 +6,8 @@
 #' @param base_url Base URL of the server. Accepts ".../v1" or ".../v1/chat/completions"
 #' @param timeout_sec Numeric timeout in seconds
 #' @param max_tries Retries (total tries = max_tries)
+#' @param ssl_cert Optional path to a certificate authority (CA) bundle passed to
+#'   [httr2::req_options()] as `cainfo` for HTTPS verification.
 #' @return list(status = <int>, body = <parsed json list>)
 #' @importFrom httr2 request req_url_path_append req_headers req_body_json req_body_raw
 #' @importFrom httr2 req_user_agent req_timeout req_retry req_perform resp_status resp_body_json
@@ -14,7 +16,8 @@
                           timeout_sec = getOption("gptr.timeout_sec", 180),
                           max_tries = getOption("gptr.max_tries", 2),
                           user_agent = paste0("gptr/", as.character(utils::packageVersion("gptr"))),
-                          debug_http = getOption("gptr.debug_http", FALSE)) {
+                          debug_http = getOption("gptr.debug_http", FALSE),
+                          ssl_cert = NULL) {
   # Build a clean root: strip any /v1 or /chat/completions; we'll append explicitly
   root <- sub("/chat/completions/?$", "", base_url)
   root <- sub("/v1/?$", "", root)
@@ -40,6 +43,10 @@
     req <- httr2::req_body_raw(req, charToRaw(payload), type = "application/json")
   } else {
     stop("`payload` must be a named list or a single JSON string.", call. = FALSE)
+  }
+
+  if (!is.null(ssl_cert) && length(ssl_cert) && !is.na(ssl_cert[[1]]) && nzchar(ssl_cert[[1]])) {
+    req <- httr2::req_options(req, cainfo = ssl_cert[[1]])
   }
 
   if (isTRUE(debug_http)) httr2::req_dry_run(req)

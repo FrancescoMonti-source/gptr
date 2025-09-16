@@ -20,6 +20,8 @@
 #'   probe or switch to alternative local backends if the requested one is
 #'   unavailable.
 #' @param print_raw Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.
+#' @param ssl_cert Optional path to a certificate authority (CA) bundle passed to
+#'   provider HTTP clients and model probes as `cainfo`.
 #' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
 #' @return Character scalar (assistant message). `attr(value, "usage")` may contain token usage.
@@ -39,6 +41,7 @@ gpt <- function(prompt,
                 strict_model = getOption("gptr.strict_model", TRUE),
                 allow_backend_autoswitch = getOption("gptr.local_autoswitch", TRUE),
                 print_raw = FALSE,
+                ssl_cert = getOption("gptr.ssl_cert", NULL),
                 ...) {
 
     provider <- match.arg(provider)
@@ -57,7 +60,14 @@ gpt <- function(prompt,
     # - In short, when provider = "auto" the code attempts to identify which backend hosts the requested model, ranks the matches by user preference, and sets up internal provider, backend, and base_root variables accordingly. If no provider can be resolved, the function aborts rather than silently guessing
     if (provider == "auto" && is.character(model) && model != "") {
         # probe all providers for the model
-        lm <- try(.resolve_model_provider(model, openai_api_key = openai_api_key), silent = TRUE)
+        lm <- try(
+            .resolve_model_provider(
+                model,
+                openai_api_key = openai_api_key,
+                ssl_cert = ssl_cert
+            ),
+            silent = TRUE
+        )
         if (inherits(lm, "try-error") || !is.data.frame(lm) || nrow(lm) < 1) {
             rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
         }
@@ -116,8 +126,9 @@ gpt <- function(prompt,
                 lm <- try(
                     .fetch_models_cached(
                         provider = bk,
-                        base_url = root_candidate,
-                        openai_api_key = openai_api_key
+                        base_url = roots[[bk]],
+                        openai_api_key = openai_api_key,
+                        ssl_cert = ssl_cert
                     ),
                     silent = TRUE
                 )
@@ -237,12 +248,23 @@ gpt <- function(prompt,
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
         bu_root <- .api_root(defs$base_url)
         if (is.null(.cache_get("openai", bu_root, base_url_normalized = TRUE))) {
-            invisible(try(.fetch_models_cached(provider = "openai", base_url = bu_root,
-                                                  openai_api_key = defs$api_key), silent = TRUE))
+            invisible(try(
+                .fetch_models_cached(
+                    provider = "openai",
+                    base_url = bu_root,
+                    openai_api_key = defs$api_key,
+                    ssl_cert = ssl_cert
+                ),
+                silent = TRUE
+            ))
         }
         ids <- tryCatch(
-            .fetch_models_cached(provider = "openai", base_url = bu_root,
-                                     openai_api_key = defs$api_key)$model_id,
+            .fetch_models_cached(
+                provider = "openai",
+                base_url = bu_root,
+                openai_api_key = defs$api_key,
+                ssl_cert = ssl_cert
+            )$model_id,
             error = function(e) character(0)
         )
         if (length(ids) && !tolower(defs$model) %in% tolower(ids)) {
@@ -260,7 +282,12 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- openai_send_request(payload, base_url = defs$base_url, api_key = defs$api_key)
+        res <- openai_send_request(
+            payload,
+            base_url = defs$base_url,
+            api_key = defs$api_key,
+            ssl_cert = ssl_cert
+        )
         return(.handle_return(res, backend_name = "openai", model_name = defs$model))
     }
 
@@ -268,8 +295,15 @@ gpt <- function(prompt,
     if (provider == "local") {
         stopifnot(!is.null(base_root), nzchar(base_root))
 
-        ent <- try(.fetch_models_cached(provider = backend, base_url = base_root,
-                                           openai_api_key = openai_api_key), silent = TRUE)
+        ent <- try(
+            .fetch_models_cached(
+                provider = backend,
+                base_url = base_root,
+                openai_api_key = openai_api_key,
+                ssl_cert = ssl_cert
+            ),
+            silent = TRUE
+        )
         ids <- if (!inherits(ent, "try-error") && is.data.frame(ent)) {
             unique(na.omit(as.character(ent$model_id)))
         } else character(0)
@@ -306,7 +340,7 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- .request_local(payload, base_url = base_root)
+        res <- .request_local(payload, base_url = base_root, ssl_cert = ssl_cert)
 
         used_model <- tryCatch({
             b <- if (is.character(res$body)) jsonlite::fromJSON(res$body, simplifyVector = FALSE) else res$body
