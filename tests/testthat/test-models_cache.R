@@ -38,6 +38,7 @@ test_that(".api_root - normalizes urls", {
   f <- getFromNamespace(".api_root", "gptr")
   expect_equal(f("http://127.0.0.1:1234/v1/chat/completions"), "http://127.0.0.1:1234")
   expect_equal(f("http://127.0.0.1:1234////v1/chat/completions"), "http://127.0.0.1:1234")
+  expect_equal(f("http://127.0.0.1:1234/v1"), "http://127.0.0.1:1234")
   expect_equal(f("https://api.openai.com/v1/models"), "https://api.openai.com")
 })
 
