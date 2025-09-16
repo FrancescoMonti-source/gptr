@@ -19,12 +19,17 @@
 #' @param allow_backend_autoswitch Logical (default TRUE). When FALSE, do not
 #'   probe or switch to alternative local backends if the requested one is
 #'   unavailable.
-#' @param print_raw Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.
+#' @param print_raw Logical. If TRUE, pretty-print the compact response
+#'   skeleton as JSON in the console and return that skeleton list instead of
+#'   the assistant text (skipping any downstream post-processing). Default
+#'   FALSE.
 #' @param ssl_cert Optional path to a certificate authority (CA) bundle passed to
 #'   provider HTTP clients and model probes as `cainfo`.
 #' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
-#' @return Character scalar (assistant message). `attr(value, "usage")` may contain token usage.
+#' @return Character scalar (assistant message). `attr(value, "usage")` may
+#'   contain token usage. When `print_raw = TRUE`, prints a JSON skeleton to the
+#'   console and returns that skeleton list instead of the assistant text.
 #' @export
 #'
 gpt <- function(prompt,
