@@ -219,14 +219,14 @@ gpt <- function(prompt,
         if (isTRUE(print_raw)) {
             sk <- .to_skeleton(res$body)
             cat(jsonlite::toJSON(sk, auto_unbox = TRUE, pretty = TRUE), "\n")
-            return(sk)
+            return(invisible(sk))
         }
         parsed <- openai_parse_text(res$body)
         out <- parsed$text
         attr(out, "usage") <- parsed$usage
         attr(out, "backend") <- backend_name
         attr(out, "model") <- model_name
-        out
+        return(out)
     }
 
     image_paths <- if (is.null(image_path)) NULL else as.character(image_path)
