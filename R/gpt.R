@@ -8,7 +8,7 @@
 #' @param temperature Numeric scalar (default 0.2).
 #' @param provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
 #' @param base_url "Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions)."
-#' @param backend "Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai')."
+#' @param backend Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').
 #' @param openai_api_key Optional API key for OpenAI; defaults to env var.
 #' @param image_path Optional path or vector of paths to images to include.
 #' @param system Optional system prompt.

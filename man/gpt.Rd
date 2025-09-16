@@ -43,7 +43,7 @@ gpt(
 
 \item{response_format}{NULL, "json_object", or a full list (OpenAI API shape).}
 
-\item{backend}{"Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai')."}
+\item{backend}{Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').}
 
 \item{strict_model}{Logical. If TRUE (default), error if the requested model is
 unavailable on the chosen backend.}
