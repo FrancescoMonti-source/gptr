@@ -123,6 +123,42 @@ test_that("openai ok -> df parsed and status ok", {
   expect_setequal(o$df$id, c("gpt-4o", "gpt-4.1-mini"))
 })
 
+test_that(".fetch_models_live applies ssl_cert to request options", {
+  cert <- withr::local_tempfile(fileext = ".crt")
+  writeLines("dummy", cert)
+
+  captured <- NULL
+
+  testthat::local_mocked_bindings(
+    req_options = function(req, ...) {
+      captured <<- list(...)
+      req
+    },
+    req_perform = function(req) {
+      httr2::response(
+        status = 200L,
+        headers = list("content-type" = "application/json"),
+        body = charToRaw(jsonlite::toJSON(
+          list(data = list(list(id = "m", created = 1))),
+          auto_unbox = TRUE
+        ))
+      )
+    },
+    .env = asNamespace("httr2")
+  )
+
+  res <- getFromNamespace(".fetch_models_live", "gptr")(
+    provider = "openai",
+    base_url = "https://api.openai.com",
+    openai_api_key = "sk-test",
+    ssl_cert = cert
+  )
+
+  expect_identical(captured, list(cainfo = cert))
+  expect_equal(res$status, "ok")
+  expect_identical(res$df$id, "m")
+})
+
 test_that("openai empty model list -> empty_cache", {
   local_cache_store()
   payload <- list(data = list())
@@ -225,6 +261,36 @@ test_that("list_models refresh=TRUE bypasses cache for openai", {
   expect_identical(out$source, "live")
 })
 
+test_that("list_models forwards ssl_cert to cached probes", {
+  cert <- withr::local_tempfile(fileext = ".crt")
+  writeLines("dummy", cert)
+
+  captured <- list()
+  testthat::local_mocked_bindings(
+    .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                    openai_api_key = "", refresh = FALSE,
+                                    ssl_cert = NULL, ...) {
+      captured[[length(captured) + 1L]] <<- list(provider = provider, ssl_cert = ssl_cert)
+      data.frame(
+        provider = provider,
+        base_url = base_url,
+        model_id = "model",
+        availability = if (provider == "openai") "catalog" else "installed",
+        cached_when = Sys.time(),
+        source = "live",
+        status = "ok",
+        stringsAsFactors = FALSE
+      )
+    },
+    .env = asNamespace("gptr")
+  )
+
+  out <- list_models(refresh = FALSE, openai_api_key = "sk-test", ssl_cert = cert)
+
+  expect_true(nrow(out) >= 1L)
+  expect_true(all(vapply(captured, function(x) identical(x$ssl_cert, cert), logical(1))))
+})
+
 test_that(".fetch_models_cached refresh=TRUE bypasses cache", {
   live_called <- FALSE
   f <- getFromNamespace(".fetch_models_cached", "gptr")
@@ -240,6 +306,28 @@ test_that(".fetch_models_cached refresh=TRUE bypasses cache", {
   out <- f("lmstudio", "http://127.0.0.1:1234", refresh = TRUE)
   expect_true(live_called)
   expect_identical(out$source, "live")
+})
+
+test_that(".fetch_models_cached forwards ssl_cert to live probe", {
+  cert <- withr::local_tempfile(fileext = ".crt")
+  writeLines("dummy", cert)
+
+  received <- NULL
+  f <- getFromNamespace(".fetch_models_cached", "gptr")
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE,
+                                  openai_api_key = "", ssl_cert = NULL, ...) {
+      received <<- ssl_cert
+      list(df = data.frame(id = "m", created = 1), status = "ok")
+    },
+    .cache_get = function(...) NULL,
+    .cache_put = function(...) invisible(TRUE),
+    .env = asNamespace("gptr")
+  )
+
+  out <- f("openai", "https://api.openai.com", openai_api_key = "sk-test", ssl_cert = cert)
+  expect_identical(received, cert)
+  expect_true(nrow(out) >= 1L)
 })
 
 test_that(".fetch_models_cached skips cache when unreachable", {
@@ -570,6 +658,33 @@ test_that(".get_cached_model_ids respects base_url_normalized", {
   expect_identical(out, "m")
 })
 
+test_that(".get_cached_model_ids forwards ssl_cert to live fetch", {
+  cert <- withr::local_tempfile(fileext = ".crt")
+  writeLines("dummy", cert)
+
+  received <- NULL
+  testthat::local_mocked_bindings(
+    .fetch_models_live = function(provider, base_url, refresh = FALSE,
+                                  openai_api_key = "", ssl_cert = NULL, ...) {
+      received <<- ssl_cert
+      list(df = data.frame(id = "m", created = 1), status = "ok")
+    },
+    .cache_get = function(...) NULL,
+    .cache_put = function(...) invisible(TRUE),
+    .env = asNamespace("gptr")
+  )
+
+  out <- getFromNamespace(".get_cached_model_ids", "gptr")(
+    "openai",
+    "https://api.openai.com",
+    openai_api_key = "sk-test",
+    ssl_cert = cert
+  )
+
+  expect_identical(received, cert)
+  expect_identical(out, "m")
+})
+
 test_that(".resolve_model_provider normalizes each URL once", {
   count <- 0
   stub_fetch <- function(provider, base_url, ...) {
@@ -595,5 +710,30 @@ test_that(".resolve_model_provider normalizes each URL once", {
     "https://api.openai.com"
   )))
   expect_identical(count, 4L)
+})
+
+test_that(".resolve_model_provider forwards ssl_cert to cache helper", {
+  cert <- withr::local_tempfile(fileext = ".crt")
+  writeLines("dummy", cert)
+
+  seen <- list()
+  testthat::local_mocked_bindings(
+    .get_cached_model_ids = function(provider, base_url, openai_api_key = "",
+                                     base_url_normalized = FALSE, ssl_cert = NULL) {
+      seen[[provider]] <<- ssl_cert
+      character()
+    },
+    .env = asNamespace("gptr")
+  )
+
+  out <- getFromNamespace(".resolve_model_provider", "gptr")(
+    "demo-model",
+    openai_api_key = "sk-test",
+    ssl_cert = cert
+  )
+
+  expect_true(length(seen) >= 1L)
+  expect_true(all(vapply(seen, identical, logical(1), cert)))
+  expect_identical(nrow(out), 0L)
 })
 
