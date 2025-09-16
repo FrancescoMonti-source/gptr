@@ -8,8 +8,7 @@
   provider = NULL,
   base_url = NULL,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-  refresh = FALSE,
-  ssl_cert = NULL
+  refresh = FALSE
 )
 }
 \arguments{
@@ -20,8 +19,6 @@
 \item{openai_api_key}{Optional OpenAI API key used when \code{provider = "openai"}.}
 
 \item{refresh}{Logical; if TRUE, the cache is bypassed and no writes occur.}
-
-\item{ssl_cert}{Optional CA bundle path forwarded to live probes.}
 }
 \description{
 Retrieve models using a cache with optional refresh.

@@ -8,8 +8,7 @@ openai_send_request(
   payload,
   base_url = NULL,
   api_key = NULL,
-  timeout = getOption("gptr.timeout", 30),
-  ssl_cert = NULL
+  timeout = getOption("gptr.timeout", 30)
 )
 }
 \arguments{
@@ -20,9 +19,6 @@ openai_send_request(
 \item{api_key}{OpenAI API key (default: Sys.getenv("OPENAI_API_KEY"))}
 
 \item{timeout}{seconds (numeric)}
-
-\item{ssl_cert}{Optional path to a certificate authority (CA) bundle passed to
-\code{httr2::req_options} as \code{cainfo} for HTTPS verification.}
 }
 \value{
 list with \code{body}, \code{resp} (httr2 response). Use \code{openai_parse_text()} to get text.

@@ -8,8 +8,7 @@ list_models(
   provider = NULL,
   base_url = NULL,
   refresh = FALSE,
-  openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-  ssl_cert = getOption("gptr.ssl_cert", NULL)
+  openai_api_key = Sys.getenv("OPENAI_API_KEY", "")
 )
 }
 \arguments{
@@ -25,8 +24,6 @@ directly. Cached entries are left untouched.}
 \item{openai_api_key}{Optional OpenAI API key. If missing, falls back to
 Sys.getenv("OPENAI_API_KEY"). If still empty, OpenAI rows will indicate
 an auth_missing status (no stop).}
-
-\item{ssl_cert}{Optional CA bundle path forwarded to model probes.}
 }
 \value{
 data.frame with columns:
