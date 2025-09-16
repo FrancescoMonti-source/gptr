@@ -86,34 +86,43 @@ gpt <- function(prompt,
         provider <- "local"
     }
 
-    # --- Guarded local root resolution (only if still unset) ---
-    if ((provider %in% c("local","auto")) && is.null(base_root)) {
+    roots <- NULL
+    prefer <- character(0)
+    if (provider %in% c("local","auto")) {
         roots <- list(
             lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
             ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
             localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080")
         )
         prefer <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
+        valid_roots <- names(roots)[vapply(roots, function(x) !is.null(x) && nzchar(x), logical(1L))]
+        if (!length(valid_roots)) valid_roots <- names(roots)
+        prefer <- prefer[prefer %in% valid_roots]
+        if (!length(prefer)) prefer <- valid_roots
+    }
 
+    # --- Guarded local root resolution (only if still unset) ---
+    if ((provider %in% c("local","auto")) && is.null(base_root)) {
         if (!is.null(base_url) && nzchar(base_url)) {
             base_root <- .api_root(base_url)
-            provider  <- "local"
-        } else if (!is.null(backend) && nzchar(backend) && backend %in% names(roots)) {
+        }
+        if (is.null(base_root) && !is.null(backend) && nzchar(backend) && backend %in% names(roots)) {
             base_root <- .api_root(roots[[backend]])
-            provider  <- "local"
-        } else if (isTRUE(allow_backend_autoswitch)) {
+        } else if (is.null(base_root) && isTRUE(allow_backend_autoswitch)) {
             picked <- FALSE
             for (bk in prefer) {
+                root_candidate <- roots[[bk]]
+                if (is.null(root_candidate) || !nzchar(root_candidate)) next
                 lm <- try(
                     .fetch_models_cached(
                         provider = bk,
-                        base_url = roots[[bk]],
+                        base_url = root_candidate,
                         openai_api_key = openai_api_key
                     ),
                     silent = TRUE
                 )
                 if (!inherits(lm, "try-error") && is.data.frame(lm) && NROW(lm)) {
-                    base_root <- .api_root(roots[[bk]])
+                    base_root <- .api_root(root_candidate)
                     backend   <- bk
                     picked    <- TRUE
                     break
@@ -124,19 +133,51 @@ gpt <- function(prompt,
                     provider <- "openai"
                     backend <- NULL
                     base_root <- NULL
-                } else {
-                    backend   <- prefer[[1L]]
-                    base_root <- .api_root(roots[[backend]])
-                    provider  <- "local"
+                } else if (length(prefer)) {
+                    fallback_backend <- NULL
+                    for (bk in prefer) {
+                        root_candidate <- roots[[bk]]
+                        if (is.null(root_candidate) || !nzchar(root_candidate)) next
+                        fallback_backend <- bk
+                        base_root <- .api_root(root_candidate)
+                        break
+                    }
+                    if (!is.null(fallback_backend)) {
+                        backend <- fallback_backend
+                    }
                 }
-            } else {
-                provider <- "local"
             }
-        } else {
-            backend   <- prefer[[1L]]
-            base_root <- .api_root(roots[[backend]])
-            provider  <- "local"
+        } else if (is.null(base_root) && length(prefer)) {
+            fallback_backend <- NULL
+            for (bk in prefer) {
+                root_candidate <- roots[[bk]]
+                if (is.null(root_candidate) || !nzchar(root_candidate)) next
+                fallback_backend <- bk
+                base_root <- .api_root(root_candidate)
+                break
+            }
+            if (!is.null(fallback_backend)) {
+                backend <- fallback_backend
+            }
         }
+    }
+
+    if ((provider %in% c("local","auto")) && !is.null(base_root)) {
+        if (is.null(backend) || !nzchar(backend)) {
+            match_backend <- NULL
+            if (!is.null(roots) && length(roots)) {
+                normalized_roots <- vapply(roots, function(x) {
+                    if (is.null(x) || !nzchar(x)) return(NA_character_)
+                    .api_root(x)
+                }, character(1L))
+                hit <- names(roots)[normalized_roots == base_root]
+                if (length(hit)) {
+                    match_backend <- hit[[1L]]
+                }
+            }
+            backend <- match_backend %||% "custom-local"
+        }
+        provider <- "local"
     }
 
     # --- helpers ---
