@@ -20,6 +20,8 @@
 #'   probe or switch to alternative local backends if the requested one is
 #'   unavailable.
 #' @param print_raw Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.
+#' @param ssl_cert Optional path to a certificate authority (CA) bundle passed to
+#'   provider HTTP clients as `cainfo`.
 #' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
 #' @return Character scalar (assistant message). `attr(value, "usage")` may contain token usage.
@@ -39,6 +41,7 @@ gpt <- function(prompt,
                 strict_model = getOption("gptr.strict_model", TRUE),
                 allow_backend_autoswitch = getOption("gptr.local_autoswitch", TRUE),
                 print_raw = FALSE,
+                ssl_cert = getOption("gptr.ssl_cert", NULL),
                 ...) {
 
     provider <- match.arg(provider)
@@ -219,7 +222,12 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- openai_send_request(payload, base_url = defs$base_url, api_key = defs$api_key)
+        res <- openai_send_request(
+            payload,
+            base_url = defs$base_url,
+            api_key = defs$api_key,
+            ssl_cert = ssl_cert
+        )
         return(.handle_return(res, backend_name = "openai", model_name = defs$model))
     }
 
@@ -265,7 +273,7 @@ gpt <- function(prompt,
             response_format = response_format,
             extra           = list(...)
         )
-        res <- .request_local(payload, base_url = base_root)
+        res <- .request_local(payload, base_url = base_root, ssl_cert = ssl_cert)
 
         used_model <- tryCatch({
             b <- if (is.character(res$body)) jsonlite::fromJSON(res$body, simplifyVector = FALSE) else res$body

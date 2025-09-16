@@ -203,11 +203,14 @@ openai_build_payload <- function(messages,
 #' @param base_url chat completions endpoint (default resolved by options)
 #' @param api_key OpenAI API key (default: Sys.getenv("OPENAI_API_KEY"))
 #' @param timeout seconds (numeric)
+#' @param ssl_cert Optional path to a certificate authority (CA) bundle passed to
+#'   [httr2::req_options()] as `cainfo` for HTTPS verification.
 #' @return list with `body`, `resp` (httr2 response). Use `openai_parse_text()` to get text.
 openai_send_request <- function(payload,
                                 base_url = NULL,
                                 api_key = NULL,
-                                timeout = getOption("gptr.timeout", 30)) {
+                                timeout = getOption("gptr.timeout", 30),
+                                ssl_cert = NULL) {
     # --- Strict inputs (no internal defaulting/resolution) ---
     if (is.null(base_url) || !nzchar(base_url)) {
         stop("openai_send_request(): `base_url` is required and must be non-empty. Resolve it before calling (e.g., via .resolve_openai_defaults()).", call. = FALSE)
@@ -232,6 +235,10 @@ openai_send_request <- function(payload,
                 sc %in% c(408, 409, 429, 500, 502, 503, 504)
             }
         )
+
+    if (!is.null(ssl_cert) && length(ssl_cert) && !is.na(ssl_cert[[1]]) && nzchar(ssl_cert[[1]])) {
+        req <- httr2::req_options(req, cainfo = ssl_cert[[1]])
+    }
 
     resp <- httr2::req_perform(req)
     try(httr2::resp_check_status(resp), silent = TRUE)
