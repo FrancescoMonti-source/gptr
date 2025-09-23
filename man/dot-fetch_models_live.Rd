@@ -12,7 +12,8 @@ a generic flow for local backends.}
   base_url,
   refresh = FALSE,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-  timeout = getOption("gptr.request_timeout", 5)
+  timeout = getOption("gptr.request_timeout", 5),
+  ssl_cert = NULL
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ flag to signal a cache bypass.}
 \item{openai_api_key}{OpenAI API key used when \code{provider = "openai"}.}
 
 \item{timeout}{Request timeout in seconds.}
+
+\item{ssl_cert}{Optional path to a certificate authority (CA) bundle passed to
+\code{\link[httr2:req_options]{httr2::req_options()}} as \code{cainfo} for HTTPS verification.}
 }
 \description{
 Perform a live HTTP GET on /v1/models for a given provider and base_url.

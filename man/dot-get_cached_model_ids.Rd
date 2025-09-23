@@ -8,11 +8,14 @@
   provider,
   base_url,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-  base_url_normalized = FALSE
+  base_url_normalized = FALSE,
+  ssl_cert = NULL
 )
 }
 \arguments{
 \item{base_url_normalized}{Logical; set TRUE when \code{base_url} is already normalized.}
+
+\item{ssl_cert}{Optional CA bundle path forwarded to live probes.}
 }
 \description{
 Uses cached entries when valid and falls back to a live probe when needed.

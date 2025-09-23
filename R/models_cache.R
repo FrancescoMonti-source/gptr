@@ -278,8 +278,8 @@
 
 
 
+# Resolve a model's provider from cache (minimal lookup)
 #' @noRd
-#' Resolve a model's provider from cache (minimal lookup)
 #' @param ssl_cert Optional CA bundle path forwarded to live probes.
 #' @keywords internal
   .resolve_model_provider <- function(model,

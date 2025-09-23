@@ -19,6 +19,7 @@ gpt(
   strict_model = getOption("gptr.strict_model", TRUE),
   allow_backend_autoswitch = getOption("gptr.local_autoswitch", TRUE),
   print_raw = FALSE,
+  ssl_cert = getOption("gptr.ssl_cert", NULL),
   ...
 )
 }
@@ -52,12 +53,20 @@ unavailable on the chosen backend.}
 probe or switch to alternative local backends if the requested one is
 unavailable.}
 
-\item{print_raw}{Logical. If TRUE, pretty-print a compact response skeleton and return it immediately (skips any post-processing). Default FALSE.}
+\item{print_raw}{Logical. If TRUE, pretty-print the compact response
+skeleton as JSON in the console and return that skeleton list instead of
+the assistant text (skipping any downstream post-processing). Default
+FALSE.}
+
+\item{ssl_cert}{Optional path to a certificate authority (CA) bundle passed to
+provider HTTP clients and model probes as \code{cainfo}.}
 
 \item{...}{Extra fields passed through to the provider payload (e.g. \code{max_tokens}, \code{stop}).}
 }
 \value{
-Character scalar (assistant message). \code{attr(value, "usage")} may contain token usage.
+Character scalar (assistant message). \code{attr(value, "usage")} may
+contain token usage. When \code{print_raw = TRUE}, prints a JSON skeleton to the
+console and returns that skeleton list instead of the assistant text.
 }
 \description{
 Minimal front-door that delegates to provider-specific helpers.
