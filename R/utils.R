@@ -134,6 +134,17 @@ show_gptr_options <- function() {
     invisible(gpt_opts)
 }
 
+#' Play a gptr_audio
+#' @export
+play <- function(x) {
+  path <- if (inherits(x, "gptr_audio")) x$file else as.character(x)
+  stopifnot(file.exists(path))
+  # relies on OS defaults
+  utils::browseURL(path)
+  invisible(path)
+}
+
+
 #' Coalesce operator (re-export from rlang)
 #' See [rlang::%||%].
 #' @name %||%
