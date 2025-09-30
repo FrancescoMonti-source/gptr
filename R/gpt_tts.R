@@ -1,4 +1,4 @@
-#' Text-to-Speech with OpenAI (MP3/WAV/OGG)
+#' Text-to-Speech with OpenAI (Audio Formats)
 #'
 #' Synthesize spoken audio from plain text by calling the OpenAI Text-to-Speech
 #' endpoint. The helper wraps `openai_request_non_chat_services()` and stores the
@@ -8,7 +8,7 @@
 #' @param model OpenAI text-to-speech model identifier to use.
 #' @param voice Voice preset offered by the selected model.
 #' @param format Audio container to request from the API; one of `"mp3"`,
-#'   `"wav"`, or `"ogg"`.
+#'   `"wav"`, `"opus"`, `"aac"`, `"flac"`, or `"pcm"`.
 #' @param speed Optional playback speed multiplier accepted by the API.
 #' @param output_file Optional path to write the audio to. When `NULL`, a unique
 #'   temporary file is created using the requested format.
@@ -40,7 +40,7 @@ gpt_tts <- function(
   text,
   model = "gpt-4o-mini-tts",
   voice = "alloy",
-  format = c("mp3", "wav", "ogg"),
+  format = c("mp3", "wav", "opus", "aac", "flac", "pcm"),
   speed = NULL,
   output_file = NULL,
   base_url = getOption("gptr.base_url", "https://api.openai.com"),
