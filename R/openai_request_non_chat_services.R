@@ -48,15 +48,18 @@ openai_request_non_chat_services <- function(
   ...
 ) {
   task <- match.arg(task)
-  if (!nzchar(api_key)) stop("OPENAI_API_KEY is missing.", call. = FALSE)
+  if (!nzchar(api_key)) {
+    stop("OPENAI_API_KEY is missing.", call. = FALSE)
+  }
 
   # default paths by task (override with `path` if you want)
   if (is.null(path)) {
-    path <- switch(task,
-      images     = "/v1/images/generations",
+    path <- switch(
+      task,
+      images = "/v1/images/generations",
       embeddings = "/v1/embeddings",
-      tts        = "/v1/audio/speech",
-      stt        = "/v1/audio/transcriptions",
+      tts = "/v1/audio/speech",
+      stt = "/v1/audio/transcriptions",
       stop("Unknown task: ", task)
     )
   }
@@ -67,7 +70,7 @@ openai_request_non_chat_services <- function(
   req <- httr2::request(url) |>
     httr2::req_headers(
       "Authorization" = paste("Bearer", api_key),
-      "Content-Type"  = "application/json"
+      "Content-Type" = "application/json"
     ) |>
     httr2::req_body_json(body) |>
     httr2::req_timeout(timeout) |>
@@ -81,7 +84,10 @@ openai_request_non_chat_services <- function(
 
   status <- httr2::resp_status(resp)
   if (status >= 400) {
-    err <- try(httr2::resp_body_json(resp, simplifyVector = TRUE), silent = TRUE)
+    err <- try(
+      httr2::resp_body_json(resp, simplifyVector = TRUE),
+      silent = TRUE
+    )
     msg <- if (!inherits(err, "try-error") && !is.null(err$error$message)) {
       err$error$message
     } else {
@@ -92,12 +98,11 @@ openai_request_non_chat_services <- function(
 
   if (identical(expect, "binary")) {
     return(list(
-      raw      = httr2::resp_body_raw(resp),
-      ctype    = httr2::resp_header(resp, "content-type"),
+      raw = httr2::resp_body_raw(resp),
+      ctype = httr2::resp_header(resp, "content-type"),
       response = resp
     ))
   } else {
     return(httr2::resp_body_json(resp, simplifyVector = TRUE))
   }
 }
-

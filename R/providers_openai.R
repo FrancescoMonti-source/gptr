@@ -17,6 +17,31 @@
   )
 }
 
+#' Resolve the OpenAI project identifier (for project-scoped API keys).
+#' @keywords internal
+.resolve_openai_project_id <- function(api_key = NULL) {
+  explicit <- getOption("gptr.openai_project", Sys.getenv("OPENAI_PROJECT_ID",
+    unset = Sys.getenv("OPENAI_PROJECT", unset = "")
+  ))
+  if (nzchar(explicit)) return(explicit)
+
+  key <- api_key %||% ""
+  if (!is.character(key) || !nzchar(key)) return("")
+  if (!startsWith(key, "sk-proj-")) return("")
+
+  guess <- sub("^sk-proj-([^\\-]+).*", "\\1", key)
+  if (!nzchar(guess) || identical(guess, key)) {
+    rlang::warn(
+      "Project-scoped OpenAI API key detected but no project id is configured. Set options(gptr.openai_project = \"proj_...\") or OPENAI_PROJECT_ID.",
+      .frequency = "once",
+      .frequency_id = "gptr_openai_project_missing"
+    )
+    return("")
+  }
+
+  guess
+}
+
 # -- Message helpers --------------------------------------------------------
 
 #' Build a Chat Completions message list (text, images, files)
@@ -221,12 +246,17 @@ openai_send_request <- function(payload,
 
     ua <- sprintf("gptr/%s (+openai)", tryCatch(as.character(utils::packageVersion("gptr")), error = function(e) "0.0.0"))
 
-    req <- httr2::request(base_url) %>%
-        httr2::req_user_agent(ua) %>%
-        httr2::req_timeout(seconds = timeout) %>%
-        httr2::req_headers(Authorization = paste("Bearer", api_key)) %>%
-        httr2::req_body_json(payload, auto_unbox = TRUE) %>%
-        httr2::req_retry(
+    header_list <- list(Authorization = paste("Bearer", api_key))
+    project_id <- .resolve_openai_project_id(api_key)
+    if (nzchar(project_id)) header_list[["OpenAI-Project"]] <- project_id
+
+    req <- httr2::request(base_url)
+    req <- httr2::req_user_agent(req, ua)
+    req <- httr2::req_timeout(req, seconds = timeout)
+    req <- do.call(httr2::req_headers, c(list(req), header_list))
+    req <- httr2::req_body_json(req, payload, auto_unbox = TRUE)
+    req <- httr2::req_retry(
+        req,
             max_tries = 4,
             backoff = function(attempt) runif(1, 0.3, 1.2),
             is_transient = function(resp) {
