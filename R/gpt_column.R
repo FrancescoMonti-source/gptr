@@ -87,6 +87,16 @@ gpt_column <- function(data,
     # capture all user extras once
     dots <- rlang::list2(...) # <-- new
 
+    # basic prompt validation for clearer errors
+    if (missing(prompt) || is.null(prompt)) {
+        stop("`prompt` must be supplied as a template string or function.", call. = FALSE)
+    }
+    if (!is.function(prompt)) {
+        if (!is.character(prompt) || length(prompt) != 1L || is.na(prompt)) {
+            stop("`prompt` must be a single character string or a function(text, keys).", call. = FALSE)
+        }
+    }
+
     provider <- match.arg(provider)
     if (provider %in% c("lmstudio", "ollama", "localai")) {
         backend <- provider
