@@ -5,6 +5,7 @@
 #' binary response as an audio file on disk.
 #'
 #' @param text Single character string containing the text to synthesize.
+#' @param instructions Provide extra instructions to the model.
 #' @param model OpenAI text-to-speech model identifier to use.
 #' @param voice Voice preset offered by the selected model.
 #' @param format Audio container to request from the API; one of `"mp3"`,
@@ -38,6 +39,7 @@
 #' @export
 gpt_tts <- function(
   text,
+  instructions = "",
   model = "gpt-4o-mini-tts",
   voice = "alloy",
   format = c("mp3", "wav", "opus", "aac", "flac", "pcm"),
@@ -58,7 +60,8 @@ gpt_tts <- function(
     model = model,
     voice = voice,
     input = text,
-    format = format
+    instructions = instructions,
+    response_format = format
   )
   if (!is.null(speed)) body$speed <- speed
 
