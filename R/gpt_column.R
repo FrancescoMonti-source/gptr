@@ -101,6 +101,14 @@ gpt_column <- function(data,
         }
         if (is.null(names(x))) x <- list() # unnamed? start from empty
         x <- x[intersect(names(x), expected_keys)] # keep only schema keys
+        if (length(x)) {
+            x <- lapply(x, function(v) {
+                if (is.null(v) || length(v) == 0L) {
+                    return(NA)
+                }
+                v
+            })
+        }
         miss <- setdiff(expected_keys, names(x)) # fill missing as NA
         if (length(miss)) x[miss] <- NA
         x[expected_keys] # order

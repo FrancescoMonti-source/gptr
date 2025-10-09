@@ -25,6 +25,14 @@ row_to_tibble <- function(x, expected_keys = NULL) {
   # NO-SCHEMA path (unchanged):
   # named list -> one-row tibble
   if (is.list(x) && !is.data.frame(x) && !is.null(names(x))) {
+    if (length(x)) {
+      x <- lapply(x, function(v) {
+        if (is.null(v) || length(v) == 0L) {
+          return(NA)
+        }
+        v
+      })
+    }
     return(tibble::as_tibble(x, .name_repair = "minimal"))
   }
   # scalar character -> simple .parsed
