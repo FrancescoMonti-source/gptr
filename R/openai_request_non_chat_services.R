@@ -38,7 +38,7 @@ openai_request_non_chat_services <- function(
   task = c("images", "embeddings", "tts", "stt"),
   body,
   base_url = "https://api.openai.com",
-  path    = NULL,
+  path = NULL,
   api_key = Sys.getenv("OPENAI_API_KEY"),
   timeout = getOption("gptr.request_timeout", 30),
   retry_max = 3L,

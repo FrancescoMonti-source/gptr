@@ -257,14 +257,14 @@ openai_send_request <- function(payload,
     req <- httr2::req_body_json(req, payload, auto_unbox = TRUE)
     req <- httr2::req_retry(
         req,
-            max_tries = 4,
-            backoff = function(attempt) runif(1, 0.3, 1.2),
-            is_transient = function(resp) {
-                sc <- try(httr2::resp_status(resp), silent = TRUE)
-                if (inherits(sc, "try-error")) return(TRUE)
-                sc %in% c(408, 409, 429, 500, 502, 503, 504)
-            }
-        )
+        max_tries = 4,
+        backoff = function(attempt) runif(1, 0.3, 1.2),
+        is_transient = function(resp) {
+            sc <- try(httr2::resp_status(resp), silent = TRUE)
+            if (inherits(sc, "try-error")) return(TRUE)
+            sc %in% c(408, 409, 429, 500, 502, 503, 504)
+        }
+    )
 
     if (!is.null(ssl_cert) && length(ssl_cert) && !is.na(ssl_cert[[1]]) && nzchar(ssl_cert[[1]])) {
         req <- httr2::req_options(req, cainfo = ssl_cert[[1]])
