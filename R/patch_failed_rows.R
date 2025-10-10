@@ -141,7 +141,7 @@ patch_failed_rows <- function(data,
       if (nrow(remaining) == 0) break
 
       batch <- purrr::map(seq_len(nrow(remaining)), function(i) {
-        p(sprintf("Attempt %d | row %d/%d", attempt, i, nrow(remaining)))
+        p(sprintf("Attempt %d | row %d/%d", attempt, i, nrow(remaining)), amount = 1)
         run_one(remaining[i, , drop = FALSE])
       })
 

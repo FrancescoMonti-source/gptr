@@ -424,7 +424,7 @@ gpt_column <- function(data,
                 raw_outputs[[i]] <- call_gpt(i)
                 process_response(i)
                 elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
-                p(message = sprintf("row %d/%d elapsed %ds", i, n, round(elapsed)))
+                p(amount = 1, message = sprintf("row %d/%d elapsed %ds", i, n, round(elapsed)))
             }
         })
     } else {
