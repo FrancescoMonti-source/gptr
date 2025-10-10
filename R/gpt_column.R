@@ -411,31 +411,52 @@ gpt_column <- function(data,
         invalid_detail[[i]] <<- meta_df
     }
 
-    use_progressr <- isTRUE(progress) && requireNamespace("progressr", quietly = TRUE)
+    progress_backend <- getOption("gptr.progress.backend", "cli")
+    use_cli_progress <- isTRUE(progress) &&
+        identical(progress_backend, "cli") &&
+        requireNamespace("cli", quietly = TRUE)
+    use_progressr <- isTRUE(progress) &&
+        identical(progress_backend, "progressr") &&
+        requireNamespace("progressr", quietly = TRUE)
 
-    # If there are zero rows, bail early to avoid 0-step progressors
+    # If there are zero rows, bail early to avoid 0-step progress bars
     if (n == 0L) return(data)
 
-    if (use_progressr) {
-        progressr::with_progress({
-            p  <- progressr::progressor(steps = n)
-            t0 <- Sys.time()
-            for (i in seq_len(n)) {
-                raw_outputs[[i]] <- call_gpt(i)
-                process_response(i)
-                elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
-                p(amount = 1, message = sprintf("row %d/%d elapsed %ds", i, n, round(elapsed)))
-            }
-        })
-    } else {
-        # progress disabled or progressr not installed: silent execution
-        if (isTRUE(progress) && !requireNamespace("progressr", quietly = TRUE)) {
-            message("Tip: install.packages('progressr') to see a live progress bar.")
-        }
+    run_with_progress <- function(tick) {
+        t0 <- Sys.time()
         for (i in seq_len(n)) {
             raw_outputs[[i]] <- call_gpt(i)
             process_response(i)
+            if (!is.null(tick)) {
+                elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+                tick(i, elapsed)
+            }
         }
+    }
+
+    if (use_cli_progress) {
+        pb <- cli::cli_progress_bar(
+            format = "{cli::pb_spin} {cli::pb_bar} {cli::pb_percent} | row {cli::pb_current}/{cli::pb_total} | eta {cli::pb_eta}",
+            total = n,
+            clear = TRUE
+        )
+        on.exit(cli::cli_progress_done(), add = TRUE)
+        run_with_progress(function(i, elapsed) {
+            cli::cli_progress_update(id = pb, inc = 1)
+        })
+        cli::cli_progress_done()
+    } else if (use_progressr) {
+        progressr::with_progress({
+            p  <- progressr::progressor(steps = n)
+            run_with_progress(function(i, elapsed) {
+                p(message = sprintf("row %d/%d elapsed %ds", i, n, round(elapsed)))
+            })
+        })
+    } else {
+        if (isTRUE(progress) && !use_cli_progress && !use_progressr) {
+            message("Tip: set options(gptr.progress.backend = \"cli\") or install.packages('progressr') for live progress.")
+        }
+        run_with_progress(NULL)
     }
 
     # ---------- 3b) Short-circuit for NO-SCHEMA cases ---------------------------

@@ -133,26 +133,30 @@ patch_failed_rows <- function(data,
   all_results <- list()
   remaining <- rows_to_retry
 
-  progressr::handlers("progress")
-  progressr::with_progress({
-    p <- progressr::progressor(steps = n * max_attempts)
+  progress_backend <- getOption("gptr.progress.backend", "cli")
+  use_cli_progress <- identical(progress_backend, "cli") && requireNamespace("cli", quietly = TRUE)
+  use_progressr <- identical(progress_backend, "progressr") && requireNamespace("progressr", quietly = TRUE)
+  total_steps <- n * max_attempts
+  step_counter <- 0L
 
+  run_retry <- function(tick) {
     for (attempt in seq_len(max_attempts)) {
       if (nrow(remaining) == 0) break
 
       batch <- purrr::map(seq_len(nrow(remaining)), function(i) {
-        p(sprintf("Attempt %d | row %d/%d", attempt, i, nrow(remaining)), amount = 1)
+        step_counter <<- step_counter + 1L
+        if (!is.null(tick)) tick(step_counter, attempt, i, nrow(remaining))
         run_one(remaining[i, , drop = FALSE])
       })
 
       batch_df <- dplyr::bind_rows(batch)
-      all_results[[attempt]] <- batch_df
+      all_results[[attempt]] <<- batch_df
 
       # identify successes (expect .invalid_rows == 0)
       successes <- dplyr::filter(batch_df, .invalid_rows == 0L || .invalid_rows == FALSE)
       if (nrow(successes) > 0) {
         # Apply successful patches immediately
-        data <- dplyr::rows_update(data, successes, by = id_col_name)
+        data <<- dplyr::rows_update(data, successes, by = id_col_name)
       }
 
       # compute who is still failing
@@ -162,13 +166,38 @@ patch_failed_rows <- function(data,
         by = id_col_name
       )[[id_col_name]]
 
-      remaining <- if (length(failed_ids)) {
+      remaining <<- if (length(failed_ids)) {
         dplyr::semi_join(rows_to_retry, tibble::tibble(!!id_col_name := failed_ids), by = id_col_name)
       } else {
         remaining[0, , drop = FALSE]
       }
     }
-  })
+  }
+
+  if (use_cli_progress) {
+    pb <- cli::cli_progress_bar(
+      format = "{cli::pb_spin} {cli::pb_bar} {cli::pb_percent} | step {cli::pb_current}/{cli::pb_total} | eta {cli::pb_eta}",
+      total = total_steps,
+      clear = TRUE
+    )
+    on.exit(cli::cli_progress_done(), add = TRUE)
+    run_retry(function(step, attempt, row_idx, rows_left) {
+      cli::cli_progress_update(id = pb, inc = 1)
+    })
+    cli::cli_progress_done()
+  } else if (use_progressr) {
+    progressr::with_progress({
+      p <- progressr::progressor(steps = total_steps)
+      run_retry(function(step, attempt, row_idx, rows_left) {
+        p(message = sprintf("Attempt %d/%d | row %d/%d", attempt, max_attempts, row_idx, rows_left))
+      })
+    })
+  } else {
+    if (!identical(progress_backend, "none")) {
+      message("Tip: set options(gptr.progress.backend = \"cli\") or install.packages('progressr') for live progress.")
+    }
+    run_retry(NULL)
+  }
 
   retry_results <- dplyr::bind_rows(all_results)
   if (isTRUE(print_retry)) {
