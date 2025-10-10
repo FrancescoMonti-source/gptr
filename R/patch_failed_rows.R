@@ -153,7 +153,10 @@ patch_failed_rows <- function(data,
       all_results[[attempt]] <<- batch_df
 
       # identify successes (expect .invalid_rows == 0)
-      successes <- dplyr::filter(batch_df, .invalid_rows == 0L || .invalid_rows == FALSE)
+      successes <- dplyr::filter(
+        batch_df,
+        (.invalid_rows %in% c(0L, FALSE)) | is.na(.invalid_rows)
+      )
       if (nrow(successes) > 0) {
         # Apply successful patches immediately
         data <<- dplyr::rows_update(data, successes, by = id_col_name)

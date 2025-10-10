@@ -425,7 +425,8 @@ gpt_column <- function(data,
     run_with_progress <- function(tick) {
         t0 <- Sys.time()
         for (i in seq_len(n)) {
-            raw_outputs[[i]] <- call_gpt(i)
+            raw <- call_gpt(i)
+            raw_outputs[[i]] <<- raw
             process_response(i)
             if (!is.null(tick)) {
                 elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
