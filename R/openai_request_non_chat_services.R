@@ -67,13 +67,13 @@ openai_request_non_chat_services <- function(
 
   url <- paste0(sub("/+$", "", base_url), path)
 
-  req <- httr2::request(url) |>
+  req <- httr2::request(url) %>%
     httr2::req_headers(
       "Authorization" = paste("Bearer", api_key),
       "Content-Type" = "application/json"
-    ) |>
-    httr2::req_body_json(body) |>
-    httr2::req_timeout(timeout) |>
+    ) %>%
+    httr2::req_body_json(body) %>%
+    httr2::req_timeout(timeout) %>%
     httr2::req_retry(max_tries = retry_max, backoff = retry_backoff)
 
   if (!is.null(ca_bundle) && nzchar(ca_bundle)) {
