@@ -4,17 +4,26 @@
 \alias{row_to_tibble}
 \title{Convert a named list (or scalar) to a one-row tibble (no forced character)}
 \usage{
-row_to_tibble(x, expected_keys = NULL)
+row_to_tibble(
+  x,
+  expected_keys = NULL,
+  multi_value = c("first", "error", "list")
+)
 }
 \arguments{
 \item{x}{Named list ready to become a row; or a scalar (relaxed mode).}
 
 \item{expected_keys}{Character vector of expected keys (can be NULL).}
+
+\item{multi_value}{Strategy when a column name maps to multiple values.
+Defaults to \code{"first"} (keep the first element). Use \code{"error"} to abort or
+\code{"list"} to keep list-columns.}
 }
 \value{
 A one-row tibble.
 }
 \description{
-Keeps values as-is (first element if length > 1). If x is an unnamed scalar
-(relaxed mode), it becomes a column named \code{.parsed} by default.
+Keeps values as-is (first element if length > 1 by default). If x is an
+unnamed scalar (relaxed mode), it becomes a column named \code{.parsed} by
+default.
 }

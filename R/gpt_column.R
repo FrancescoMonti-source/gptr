@@ -28,37 +28,7 @@
 #' @param progress Logical. Progress Bar, defaults to TRUE.
 #' @param ... Extra args passed to `gpt()` (e.g., `response_format`).
 #' @export
-
-#' Extract Structured Data from Free Text via LLM Completion (Orchestrator)
-#'
-#' Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,
-#' validates and aligns it to a schema, then returns the structured columns bound to the input.
-#'
-#' @param data A data frame or tibble containing the text column.
-#' @param col Unquoted name of the text column to send to the LLM.
-#' @param prompt Character template with {text}/{json_format} or function(text, keys) -> string.
-#' @param keys Optional named list defining expected JSON keys and their type or allowed set.
-#' @param auto_correct_keys Logical; fuzzy-correct unexpected key names (unique match only).
-#'   Fuzzy key correction is handled by json_keys_align(); control with `fuzzy_model`
-#'   ("lev_ratio" or "lev") and `fuzzy_threshold`.
-#' @param keep_unexpected_keys Keep keys not listed in `keys`.
-#' @param provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
-#' @param backend Optional backend to use when `provider = "local"`.
-#' @param base_url (now accepted by gpt_column() too): “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”
-#' @param model Model identifier to request from the provider/backend.
-#' @param na_values Values treated as NA at multiple stages.
-#' @param file_path,image_path Optional file paths passed to the model call.
-#' @param temperature Sampling temperature for the model.
-#' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
-#' @param verbose Print repair/validation messages.
-#' @param return_debug If TRUE, add `.raw_output`, `.invalid_rows`, and `.invalid_detail`. Default TRUE.
-#' @param .coerce_types Row-level coercion toggle (default TRUE).
-#' @param coerce_when Optional named list of per-key target types used for row-level coercion.
-#' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
-#'   If a schema (`keys`) is provided, it is always used for final typing.
-#' @param progress Logical. Progress Bar, defaults to TRUE.
-#' @param ... Extra args passed to `gpt()` (e.g., `response_format`).
-#' @export
+#' 
 
 gpt_column <- function(data,
                        col,

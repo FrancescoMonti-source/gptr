@@ -2,13 +2,14 @@
 % Please edit documentation in R/gpt_tts.R
 \name{gpt_tts}
 \alias{gpt_tts}
-\title{Text-to-Speech with OpenAI (MP3/WAV/OGG)}
+\title{Text-to-Speech with OpenAI (Audio Formats)}
 \usage{
 gpt_tts(
   text,
+  instructions = "",
   model = "gpt-4o-mini-tts",
   voice = "alloy",
-  format = c("mp3", "wav", "ogg"),
+  format = c("mp3", "wav", "opus", "aac", "flac", "pcm"),
   speed = NULL,
   output_file = NULL,
   base_url = getOption("gptr.base_url", "https://api.openai.com"),
@@ -22,12 +23,14 @@ gpt_tts(
 \arguments{
 \item{text}{Single character string containing the text to synthesize.}
 
+\item{instructions}{Provide extra instructions to the model.}
+
 \item{model}{OpenAI text-to-speech model identifier to use.}
 
 \item{voice}{Voice preset offered by the selected model.}
 
 \item{format}{Audio container to request from the API; one of \code{"mp3"},
-\code{"wav"}, or \code{"ogg"}.}
+\code{"wav"}, \code{"opus"}, \code{"aac"}, \code{"flac"}, or \code{"pcm"}.}
 
 \item{speed}{Optional playback speed multiplier accepted by the API.}
 
