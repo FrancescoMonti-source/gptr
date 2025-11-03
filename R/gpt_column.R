@@ -28,7 +28,7 @@
 #' @param progress Logical. Progress Bar, defaults to TRUE.
 #' @param ... Extra args passed to `gpt()` (e.g., `response_format`).
 #' @export
-#' 
+#'
 
 gpt_column <- function(data,
                        col,
@@ -508,14 +508,14 @@ gpt_column <- function(data,
         # if x is NULL or scalar NA, produce a row of NAs for all expected keys
         if (is.null(x) || (is.character(x) && length(x) == 1L && is.na(x))) {
             return(row_to_tibble(setNames(rep(NA, length(expected_keys)), expected_keys),
-                                 expected_keys = expected_keys))
+                                 expected_keys = expected_keys,multi_value))
         }
         # if x has no names but a schema exists, also return all NAs
         if (is.null(names(x)) && !is.null(expected_keys)) {
             return(row_to_tibble(setNames(rep(NA, length(expected_keys)), expected_keys),
-                                 expected_keys = expected_keys))
+                                 expected_keys = expected_keys,multi_value))
         }
-        row_to_tibble(x, expected_keys = expected_keys)
+        row_to_tibble(x, expected_keys = expected_keys, multi_value)
     }
 
     parsed_df <- purrr::map_dfr(parsed_results, safe_tibble)
