@@ -1,0 +1,223 @@
+# gptr - Structured Data Extraction with R + LLMs
+
+`gptr` turns unstructured, domain-specific text into tidy, validated data frames using large language models (LLMs). It wraps prompt templating, provider orchestration, schema enforcement, and observability so you can rely on LLM-powered extraction inside reproducible R pipelines.
+
+## Why gptr
+
+-   Schema-aware parsing that repairs JSON, coerces column types, enforces allowed values, and optionally aligns fuzzy key names.
+-   Provider-agnostic orchestration: talk to OpenAI, LM Studio, Ollama, LocalAI, or any OpenAI-compatible endpoint with the same R call.
+-   Pipeline-friendly design: `gpt_column()` binds predictions back to the original tibble, honours tidy evaluation, and plays nicely with progress bars and parallel plans.
+-   Built-in diagnostics: capture raw outputs, invalid rows, retry helpers, and `keep_unexpected_keys` controls for messy payloads.
+-   Broader toolbox: one-off completions via `gpt()`, conversational state with `gpt_chat()`, text-to-speech using `gpt_tts()`, model discovery utilities, and cache helpers.
+
+## Installation
+
+``` r
+# Requires pak or remotes
+pak::pak("FrancescoMonti-source/gptr")
+
+# alternatively
+remotes::install_github("FrancescoMonti-source/gptr")
+```
+
+Set an API key (e.g., `OPENAI_API_KEY`) or run a local OpenAI-compatible server before calling a model. With `provider = "auto"`, `gptr` prefers a detected local backend and falls back to cloud APIs when credentials are available.
+
+## Quick start
+
+```{r, eval = FALSE}
+library(gptr)
+library(tibble)
+
+notes <- tibble(
+  id = 1:2,
+  text = c(
+    "Patient is 64 years old; dx: type 2 diabetes.",
+    "72 y/o male diagnosed with hypertension."
+  )
+)
+
+schema <- list(
+  age = "integer",
+  diagnosis = c("diabetes", "hypertension")
+)
+
+template <- "
+Extract the following fields as compact JSON on a single line:
+{json_format}
+
+Text:
+\"{text}\"
+
+Respond with JSON only."
+
+res <- gpt_column(
+  data     = notes,
+  col      = text,
+  keys     = schema,
+  prompt   = template,
+  provider = "auto",
+  model    = "gpt-4o-mini"
+)
+
+res
+#> # A tibble: 2 x 4
+#>      id text                                              age diagnosis
+#>   <int> <chr>                                           <int> <chr>
+#> 1     1 Patient is 64 years old; dx: type 2 diabetes.      64 diabetes
+#> 2     2 72 y/o male diagnosed with hypertension.           72 hypertension
+
+attr(res, "invalid_rows")
+#> integer(0)
+```
+
+`gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.raw_output` and `.invalid_detail` for auditing. The `"invalid_rows"` attribute flags rows that failed validation so that you can retry them selectively.
+
+## Workflow overview
+
+```         
+[gpt_column()] -- templated prompt --> [gpt()] -- tidy columns --> data + predictions
+      |                                     |
+      | text + schema                       | raw JSON
+      v                                     v
+ build_prompt()                       tidy_json() + validation
+ inject {text}/{json_format}          repair, coerce, align
+```
+
+For each row, `gpt_column()` trims the text, renders the prompt, calls the model, repairs the response, validates it against the schema, and binds the structured values back onto the original tibble. All intermediate artefacts (raw output, validation detail, invalid row indexes) stay attached for debugging.
+
+## Schema keys
+
+`keys` is a named list that documents the shape of the JSON you expect back. Each entry can be:
+
+-   A type string (`"integer"`, `"numeric"`, `"character"`, `"logical"`). Types drive column coercion and inform the `{json_format}` hint.
+-   A vector of allowed values (character, numeric, or logical). The parser accepts the listed values case-insensitively for strings.
+-   A mix of the two: you can use types for some fields and enumerations for others. Leave a name out if the field is optional; `gptr` will fill missing values with `NA`.
+
+The schema is the single source of truth used for prompting, parsing, and validation. You can inspect the generated prompt hint:
+
+```{r, eval = FALSE}
+build_prompt(template, text = notes$text[[1]], keys = schema)
+#> Extract the following fields as compact JSON on a single line:
+#> { "age": "0"|"1"|"NA", "diagnosis": "diabetes"|"hypertension" }
+#> ...
+```
+
+If you want to supply your own examples instead of the auto-generated hint, omit that key from `keys` and document it directly inside the prompt template.
+
+## Prompt building and schema injection
+
+`gpt_column()` renders a fresh prompt for every row. Under the hood it:
+
+1.  Trims the row text and passes it, together with `keys`, to `build_prompt()`.
+2.  Replaces `{text}` in your template with the row text.
+3.  Computes `{json_format}` from `keys` so the model sees a compact schema reminder.
+4.  Omits `{json_format}` entirely when `keys` is `NULL`.
+
+Placeholders are filled with [`glue`](https://glue.tidyverse.org/). Glue evaluates anything inside braces, so escape literal braces with `{{` and `}}` or wrap code in `glue::glue_safe()` if needed.
+
+```{r, eval = FALSE}
+build_prompt(
+  template,
+  text = "Patient is 64 years old; dx: type 2 diabetes.",
+  keys = schema
+)
+```
+
+For full control, pass a function to `prompt`. It receives `(text, keys)` and should return a string:
+
+```{r, eval = FALSE}
+dynamic_prompt <- function(text, keys) {
+  glue::glue("
+  You are triaging clinical notes. Focus on age and diagnosis.
+  {if (nchar(text) > 280) 'Summarise briefly before extracting.'}
+
+  Text:
+  \"{text}\"
+
+  Return JSON using this schema:
+  {jsonlite::toJSON(names(keys), auto_unbox = TRUE)}
+  ")
+}
+
+gpt_column(data = notes, col = text, keys = schema, prompt = dynamic_prompt)
+```
+
+## Response validation pipeline
+
+After the model replies, `gpt_column()` runs a deterministic pipeline:
+
+1.  **Repair and parse** with `tidy_json()` so even slightly malformed JSON is recovered.
+2.  **Align keys** using `json_keys_align()`, optional fuzzy matching (`auto_correct_keys`), and `keep_unexpected_keys`.
+3.  **Validate values** by coercing to declared types and checking membership in allowed sets.
+4.  **Shape the tibble** so every row has exactly the schema columns (missing values become `NA`).
+
+When `keys` is `NULL`, you can still collect structured output: set `keep_unexpected_keys = TRUE` to keep a minified `.parsed_json` column, or use `relaxed = TRUE` to accept non-JSON responses.
+
+## Debugging, retries, and auditing
+
+-   `return_debug = TRUE` (default behavior) appends `.raw_output` and `.invalid_detail` columns to inspect model responses and validation errors.
+-   `attr(result, "invalid_rows")` gives the row indexes that need attention.
+-   `keep_unexpected_keys = TRUE` stores extra keys in `.extras_json` when you work with a fixed schema.
+-   `patch_failed_rows()` retries only the invalid rows with the same or updated prompt.
+
+```{r, eval = FALSE}
+failed <- attr(res, "invalid_rows")
+
+if (length(failed)) {
+  res2 <- patch_failed_rows(
+    data   = res,
+    col    = text,
+    id_col = id,
+    prompt = template,
+    keys   = schema,
+    max_attempts = 2
+  )
+}
+```
+
+## Other helpers
+
+-   **Single call vs chat:** `gpt()` is stateless and perfect for small utilities; `gpt_chat()` maintains conversational history (reset with `gpt_chat(reset = TRUE)`).
+-   **Text-to-speech:** `gpt_tts("Hello from R!")` sends text to OpenAI TTS, saves an audio file, and returns a `gptr_audio` object (use `play(audio)` to open it).
+-   **Model discovery:** `list_models(provider = "auto")` probes the selected backend, caching results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
+-   **Options introspection:** `show_gptr_options()` prints every `gptr.*` option currently in effect so you can see provider defaults, timeouts, and cache behaviour.
+
+## Advanced tuning
+
+-   **Fuzzy key repair:** enable `auto_correct_keys = TRUE` (default) so `json_keys_align()` can fix typos when there is a unique close match. Control the algorithm with `fuzzy_model = "lev_ratio"` or `"lev"` and the tolerance via `fuzzy_threshold`.
+-   **Type coercion:** leave `.coerce_types = TRUE` for schema-driven casts, or pass `coerce_when = list(field = "integer")` to override individual columns. Provide `na_values` to recognise additional sentinel strings.
+-   **Relaxed parsing:** set `relaxed = TRUE` when `keys = NULL` and you want to accept scalar strings or partially structured replies. Combine with `keep_unexpected_keys = TRUE` to persist a `.parsed_json` column.
+-   **Type inference:** when you omit `keys`, `infer_types = TRUE` attempts to guess column types from the parsed JSON.
+-   **File/image inputs:** supply `file_path` or `image_path` and they are forwarded to `gpt()`; useful for multimodal providers that accept binary attachments.
+-   **Progress backends:** `progress = TRUE` uses CLI spinners by default. Set `options(gptr.progress.backend = "progressr")` and load `progressr` for rich progress bars inside parallel plans or long runs.
+
+All knobs and defaults can be inspected with `show_gptr_options()`, then overridden via `options(gptr.* = value)` in your session or `.Rprofile`.
+
+## Provider support
+
+`gptr` works with both hosted and local models via a consistent interface:
+
+-   `provider = "auto"`: prefer a running local backend (LM Studio, Ollama, LocalAI). If none is detected and `OPENAI_API_KEY` is set, fall back to OpenAI.
+-   `provider = "openai"`: call OpenAI's REST API directly. Set `model` (e.g., `"gpt-4o-mini"`).
+-   `provider = "local"`: use an OpenAI-compatible server you control. Pin a backend with `backend = "lmstudio"`, `"ollama"`, or `"localai"`, or supply a custom `base_url`.
+-   Shorthands `lmstudio`, `ollama`, and `localai` map to `provider = "local"` with the respective backend already set.
+
+```{r, eval = FALSE}
+gpt("ping", provider = "auto")
+gpt("ping", provider = "lmstudio", model = "mistralai/mistral-7b-instruct-v0.3")
+gpt("ping", provider = "openai", model = "gpt-4o-mini")
+```
+
+## Requirements
+
+-   R \>= 4.1
+-   Imports: `cli`, `httr`, `httr2`, `jsonlite`, `purrr`, `stringr`, `tibble`
+-   Suggested: `furrr`, `progressr`, `pdftools`, `officer`, `mime`
+
+## Contributing
+
+Issues and pull requests are welcome. Please open an issue to discuss substantial changes before submitting a PR.
+
+## License
+
+MIT License - see `LICENSE.txt`.
