@@ -38,36 +38,35 @@ notes <- tibble(
 
 schema <- list(
   age = "integer",
-  diagnosis = c("diabetes", "hypertension")
+  diagnosis = "character"
 )
 
-template <- "
-Extract the following fields as compact JSON on a single line:
+prompt <- "
+You are an assistant specialisez in treating electronical health records. I'm gonna provide you a medical text and you task is to
+extract the following fields as compact JSON on a single line:
 {json_format}
 
-Text:
+Here is the text:
 \"{text}\"
 
-Respond with JSON only."
+Respond with JSON only, nothing else."
 
 res <- gpt_column(
   data     = notes,
   col      = text,
   keys     = schema,
-  prompt   = template,
-  provider = "auto",
-  model    = "gpt-4o-mini"
+  prompt   = prompt,
+  provider = "ollama", # openai/local/ollama/lmstudio
+  model    = "gemma3-4b" # chose among models you have at your disposal. Check list_models() documentation.
 )
 
 res
 #> # A tibble: 2 x 4
-#>      id text                                              age diagnosis
-#>   <int> <chr>                                           <int> <chr>
-#> 1     1 Patient is 64 years old; dx: type 2 diabetes.      64 diabetes
-#> 2     2 72 y/o male diagnosed with hypertension.           72 hypertension
+#>      id text                                              age diagnosis    .invalid_rows
+#>   <int> <chr>                                           <int> <chr>        <log>
+#> 1     1 Patient is 64 years old; dx: type 2 diabetes.      64 diabetes     FALSE
+#> 2     2 72 y/o male diagnosed with hypertension.           72 hypertension FALSE
 
-attr(res, "invalid_rows")
-#> integer(0)
 ```
 
 `gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.raw_output` and `.invalid_detail` for auditing. The `"invalid_rows"` attribute flags rows that failed validation so that you can retry them selectively.
