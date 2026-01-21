@@ -69,20 +69,20 @@ res
 
 ```
 
-`gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.raw_output` and `.invalid_detail` for auditing. The `"invalid_rows"` attribute flags rows that failed validation so that you can retry them selectively.
+`gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.raw_output` and `.invalid_detail` for auditing. The `".invalid_rows"` flags rows that failed validation so that you can retry them selectively.
 
 ## Workflow overview
 
 ```         
 [gpt_column()] -- templated prompt --> [gpt()] -- tidy columns --> data + predictions
       |                                     |
-      | text + schema                       | raw JSON
+      | text + keys' schema                 | raw JSON
       v                                     v
  build_prompt()                       tidy_json() + validation
  inject {text}/{json_format}          repair, coerce, align
 ```
 
-For each row, `gpt_column()` trims the text, renders the prompt, calls the model, repairs the response, validates it against the schema, and binds the structured values back onto the original tibble. All intermediate artefacts (raw output, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` trims the text (if asked to do so), renders the prompt, calls the model, repairs the response, validates it against the schema, and binds the structured values back onto the original tibble. All intermediate artefacts (raw output, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys
 
