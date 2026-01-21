@@ -88,18 +88,11 @@ For each row, `gpt_column()` trims the text (if asked to do so), renders the pro
 
 `keys` is a named list that documents the shape of the JSON you expect back. Each entry can be:
 
--   A type string (`"integer"`, `"numeric"`, `"character"`, `"logical"`). Types drive column coercion and inform the `{json_format}` hint.
--   A vector of allowed values (character, numeric, or logical). The parser accepts the listed values case-insensitively for strings.
--   A mix of the two: you can use types for some fields and enumerations for others. Leave a name out if the field is optional; `gptr` will fill missing values with `NA`.
+-   A "type" string (`"integer"`, `"numeric"`, `"character"`, `"logical"`). Types declaration drive column coercion and inject type-based examples via glue() through `{json_format}`.
+-   A vector of allowed values (regardless of the "type"). The parser accepts the listed values case-insensitively for strings.
+-   A mix of the two: you can use types for some fields and enumerations for others. 
 
-The schema is the single source of truth used for prompting, parsing, and validation. You can inspect the generated prompt hint:
-
-```{r, eval = FALSE}
-build_prompt(template, text = notes$text[[1]], keys = schema)
-#> Extract the following fields as compact JSON on a single line:
-#> { "age": "0"|"1"|"NA", "diagnosis": "diabetes"|"hypertension" }
-#> ...
-```
+The schema is the single source of truth used for prompting, parsing, and validation. 
 
 If you want to supply your own examples instead of the auto-generated hint, omit that key from `keys` and document it directly inside the prompt template.
 
