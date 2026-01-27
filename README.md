@@ -46,11 +46,15 @@
 2.  **Configure a provider**:
     -   Cloud: set `OPENAI_API_KEY` in your `.Renviron` or session.
     -   Local: run LM Studio, Ollama, or LocalAI and pick a model name.
-3.  **Sanity check** your setup with a tiny call:
+3.  **Sanity check** your setup with a tiny call using the provider you configured:
 
 ```{r, eval = FALSE}
 library(gptr)
-gpt("ping", provider = "auto")
+# OpenAI (requires OPENAI_API_KEY)
+gpt("ping", provider = "openai", model = "gpt-4o-mini")
+
+# Local backend (replace with your provider + model)
+gpt("ping", provider = "ollama", model = "mistral:latest")
 ```
 
 If you see a response, you're ready for structured extraction with `gpt_column()`.
@@ -81,7 +85,7 @@ You can also set defaults for a session:
 ```{r, eval = FALSE}
 options(
   gptr.provider = "auto",
-  gptr.model = "gpt-4o-mini"
+  gptr.openai_model = "gpt-4o-mini"
 )
 ```
 
@@ -147,7 +151,7 @@ res
 
 ## Common first-run issues
 
--   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "auto")` to confirm.
+-   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "openai", model = "gpt-4o-mini")` or `gpt("ping", provider = "ollama", model = "mistral:latest")` (swap in your provider/model) to confirm.
 -   **"Model not found"**: run `list_models(provider = "auto")` to see what's available and pass a model name explicitly.
 -   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
 
@@ -280,7 +284,7 @@ Use these helpers to inspect configuration, explore models, and manage caches:
 
 ```{r, eval = FALSE}
 show_gptr_options()
-options(gptr.provider = "ollama", gptr.model = "gemma3-4b")
+options(gptr.provider = "ollama", gptr.ollama_model = "gemma3-4b")
 
 list_models(provider = "auto")
 refresh_models()
