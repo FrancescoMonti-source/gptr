@@ -268,7 +268,7 @@ gpt("Summarise this text in one sentence.")
 
 gpt_chat("Give me three bullet points.")
 gpt_chat("Now rewrite them as headlines.")
-gpt_chat(reset = TRUE)
+gpt_chat$reset()
 
 audio <- gpt_tts("Hello from gptr!")
 play(audio)
@@ -289,7 +289,7 @@ delete_models_cache()
 
 ## Other helpers
 
--   **Single call vs chat:** `gpt()` is stateless and perfect for small utilities; `gpt_chat()` maintains conversational history (reset with `gpt_chat(reset = TRUE)`).
+-   **Single call vs chat:** `gpt()` is stateless and perfect for small utilities; `gpt_chat()` maintains conversational history (reset with `gpt_chat$reset()`).
 -   **Text-to-speech:** `gpt_tts("Hello from R!")` sends text to OpenAI TTS, saves an audio file, and returns a `gptr_audio` object (use `play(audio)` to open it).
 -   **Model discovery:** `list_models(provider = "auto")` probes the selected backend, caching results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
 -   **Options introspection:** `show_gptr_options()` prints every `gptr.*` option currently in effect so you can see provider defaults, timeouts, and cache behaviour.
