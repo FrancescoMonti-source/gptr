@@ -2,6 +2,27 @@
 
 `gptr` turns unstructured, domain-specific text into tidy, validated data frames using large language models (LLMs). It wraps prompt templating, provider orchestration, schema enforcement, and observability so you can rely on LLM-powered extraction inside reproducible R pipelines.
 
+## Contents
+
+-   [Why gptr](#why-gptr)
+-   [New here? Start in 5 minutes](#new-here-start-in-5-minutes)
+-   [Installation](#installation)
+-   [Quick start](#quick-start)
+-   [Common first-run issues](#common-first-run-issues)
+-   [A practical extraction checklist](#a-practical-extraction-checklist)
+-   [Workflow overview](#workflow-overview)
+-   [Schema keys](#schema-keys)
+-   [Prompt building and schema injection](#prompt-building-and-schema-injection)
+-   [Response validation pipeline](#response-validation-pipeline)
+-   [Debugging, retries, and auditing](#debugging-retries-and-auditing)
+-   [Other helpers](#other-helpers)
+-   [Advanced tuning](#advanced-tuning)
+-   [Provider support](#provider-support)
+-   [FAQ](#faq)
+-   [Requirements](#requirements)
+-   [Contributing](#contributing)
+-   [License](#license)
+
 ## Why gptr
 
 -   Schema-aware parsing that repairs JSON, coerces column types, enforces allowed values, and optionally aligns fuzzy key names.
@@ -9,6 +30,27 @@
 -   Pipeline-friendly design: `gpt_column()` binds predictions back to the original tibble, honours tidy evaluation, and plays nicely with progress bars and parallel plans.
 -   Built-in diagnostics: capture raw outputs, invalid rows, retry helpers, and `keep_unexpected_keys` controls for messy payloads.
 -   Broader toolbox: one-off completions via `gpt()`, conversational state with `gpt_chat()`, text-to-speech using `gpt_tts()`, model discovery utilities, and cache helpers.
+
+### When to use gptr
+
+-   Extract structured fields (age, diagnosis, amounts, dates) from messy text.
+-   Turn meeting notes, tickets, or lab reports into tidy tables.
+-   Build repeatable extraction pipelines that need validation and retry paths.
+
+## New here? Start in 5 minutes
+
+1.  **Install the package** (see below).
+2.  **Configure a provider**:
+    -   Cloud: set `OPENAI_API_KEY` in your `.Renviron` or session.
+    -   Local: run LM Studio, Ollama, or LocalAI and pick a model name.
+3.  **Sanity check** your setup with a tiny call:
+
+```{r, eval = FALSE}
+library(gptr)
+gpt("ping", provider = "auto")
+```
+
+If you see a response, you're ready for structured extraction with `gpt_column()`.
 
 ## Installation
 
@@ -21,6 +63,35 @@ remotes::install_github("FrancescoMonti-source/gptr")
 ```
 
 Set an API key (e.g., `OPENAI_API_KEY`) or run a local OpenAI-compatible server before calling a model. With `provider = "auto"`, `gptr` prefers a detected local backend and falls back to cloud APIs when credentials are available.
+
+### Configure credentials and defaults
+
+Store credentials in `.Renviron` or your session so they do not get hard-coded:
+
+```{r, eval = FALSE}
+# ~/.Renviron (restart R after editing)
+OPENAI_API_KEY="your-key-here"
+```
+
+You can also set defaults for a session:
+
+```{r, eval = FALSE}
+options(
+  gptr.provider = "auto",
+  gptr.model = "gpt-4o-mini"
+)
+```
+
+### Choose your backend
+
+`gptr` can work with local or hosted providers. Pick the one that matches your setup:
+
+| Provider | Best for | Notes |
+| --- | --- | --- |
+| `auto` | First-time users | Prefers local if running, otherwise uses OpenAI when credentials exist. |
+| `openai` | Hosted models | Requires `OPENAI_API_KEY`. |
+| `lmstudio` / `ollama` / `localai` | Local models | Run the server and pass the model name available on that backend. |
+| `local` | Custom OpenAI-compatible server | Provide `base_url` or `backend` to pin. |
 
 ## Quick start
 
@@ -70,6 +141,20 @@ res
 ```
 
 `gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.raw_output` and `.invalid_detail` for auditing. The `".invalid_rows"` flags rows that failed validation so that you can retry them selectively.
+
+## Common first-run issues
+
+-   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "auto")` to confirm.
+-   **"Model not found"**: run `list_models(provider = "auto")` to see what's available and pass a model name explicitly.
+-   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
+
+## A practical extraction checklist
+
+1.  **Start with a minimal schema** (two or three fields) and a short prompt.
+2.  **Run 5–10 real samples** to see where the model drifts.
+3.  **Tighten the schema** (types or enumerations) and re-run.
+4.  **Inspect invalid rows** with `return_debug = TRUE` and `patch_failed_rows()`.
+5.  **Scale up** with progress backends or parallel plans once the prompt stabilizes.
 
 ## Workflow overview
 
@@ -199,6 +284,17 @@ gpt("ping", provider = "auto")
 gpt("ping", provider = "lmstudio", model = "mistralai/mistral-7b-instruct-v0.3")
 gpt("ping", provider = "openai", model = "gpt-4o-mini")
 ```
+
+## FAQ
+
+**Do I need to provide a schema?**  
+No. If `keys = NULL`, you can still collect structured output with `keep_unexpected_keys = TRUE` (or `relaxed = TRUE` when you want to accept non-JSON replies). The trade-off is weaker validation. 
+
+**How do I pick a model?**  
+Start with `list_models(provider = "auto")` to see what your backend exposes, then set `model` explicitly to make runs reproducible.
+
+**Where do I see the package defaults?**  
+Run `show_gptr_options()` to print the full list of `gptr.*` options active in your session.
 
 ## Requirements
 
