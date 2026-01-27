@@ -151,8 +151,8 @@ res
 
 ## Common first-run issues
 
--   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "openai", model = "gpt-4o-mini")` or `gpt("ping", provider = "ollama", model = "mistral:latest")` (swap in your provider/model) to confirm.
--   **"Model not found"**: run `list_models(provider = "auto")` to see what's available and pass a model name explicitly.
+-   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "auto")` to confirm.
+-   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available and pass a model name explicitly.
 -   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
 
 ## A practical extraction checklist
@@ -286,7 +286,7 @@ Use these helpers to inspect configuration, explore models, and manage caches:
 show_gptr_options()
 options(gptr.provider = "ollama", gptr.ollama_model = "gemma3-4b")
 
-list_models(provider = "auto")
+list_models()
 refresh_models()
 delete_models_cache()
 ```
@@ -295,7 +295,7 @@ delete_models_cache()
 
 -   **Single call vs chat:** `gpt()` is stateless and perfect for small utilities; `gpt_chat()` maintains conversational history (reset with `gpt_chat$reset()`).
 -   **Text-to-speech:** `gpt_tts("Hello from R!")` sends text to OpenAI TTS, saves an audio file, and returns a `gptr_audio` object (use `play(audio)` to open it).
--   **Model discovery:** `list_models(provider = "auto")` probes the selected backend, caching results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
+-   **Model discovery:** `list_models()` (or a specific provider like `list_models(provider = "ollama")`) probes backends and caches results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
 -   **Options introspection:** `show_gptr_options()` prints every `gptr.*` option currently in effect so you can see provider defaults, timeouts, and cache behaviour.
 
 ## Advanced tuning
@@ -330,7 +330,7 @@ gpt("ping", provider = "openai", model = "gpt-4o-mini")
 No. If `keys = NULL`, you can still collect structured output with `keep_unexpected_keys = TRUE` (or `relaxed = TRUE` when you want to accept non-JSON replies). The trade-off is weaker validation. 
 
 **How do I pick a model?**  
-Start with `list_models(provider = "auto")` to see what your backend exposes, then set `model` explicitly to make runs reproducible.
+Start with `list_models()` (or target a backend like `list_models(provider = "ollama")`) to see what your backend exposes, then set `model` explicitly to make runs reproducible.
 
 **Where do I see the package defaults?**  
 Run `show_gptr_options()` to print the full list of `gptr.*` options active in your session.
