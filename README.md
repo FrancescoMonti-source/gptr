@@ -15,6 +15,8 @@
 -   [Prompt building and schema injection](#prompt-building-and-schema-injection)
 -   [Response validation pipeline](#response-validation-pipeline)
 -   [Debugging, retries, and auditing](#debugging-retries-and-auditing)
+-   [Multiple ways to use gptr](#multiple-ways-to-use-gptr)
+-   [Quality-of-life helpers](#quality-of-life-helpers)
 -   [Other helpers](#other-helpers)
 -   [Advanced tuning](#advanced-tuning)
 -   [Provider support](#provider-support)
@@ -146,7 +148,7 @@ res
 ## Common first-run issues
 
 -   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "auto")` to confirm.
--   **"Model not found"**: run `list_models(provider = "auto")` to see what's available and pass a model name explicitly.
+-   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available and pass a model name explicitly.
 -   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
 
 ## A practical extraction checklist
@@ -253,11 +255,43 @@ if (length(failed)) {
 }
 ```
 
+## Multiple ways to use gptr
+
+`gptr` is not just `gpt_column()`. You can interact with models in a few different ways depending on your workflow:
+
+-   **`gpt()` for single calls**: quick prompts or helper utilities.
+-   **`gpt_chat()` for conversations**: keep and reset history between turns.
+-   **`gpt_tts()` for text-to-speech**: generate audio and play it locally.
+
+```{r, eval = FALSE}
+gpt("Summarise this text in one sentence.")
+
+gpt_chat("Give me three bullet points.")
+gpt_chat("Now rewrite them as headlines.")
+gpt_chat$reset()
+
+audio <- gpt_tts("Hello from gptr!")
+play(audio)
+```
+
+## Quality-of-life helpers
+
+Use these helpers to inspect configuration, explore models, and manage caches:
+
+```{r, eval = FALSE}
+show_gptr_options()
+options(gptr.provider = "ollama", gptr.model = "gemma3-4b")
+
+list_models()
+refresh_models()
+delete_models_cache()
+```
+
 ## Other helpers
 
--   **Single call vs chat:** `gpt()` is stateless and perfect for small utilities; `gpt_chat()` maintains conversational history (reset with `gpt_chat(reset = TRUE)`).
+-   **Single call vs chat:** `gpt()` is stateless and perfect for small utilities; `gpt_chat()` maintains conversational history (reset with `gpt_chat$reset()`).
 -   **Text-to-speech:** `gpt_tts("Hello from R!")` sends text to OpenAI TTS, saves an audio file, and returns a `gptr_audio` object (use `play(audio)` to open it).
--   **Model discovery:** `list_models(provider = "auto")` probes the selected backend, caching results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
+-   **Model discovery:** `list_models()` (or a specific provider like `list_models(provider = "ollama")`) probes backends and caches results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
 -   **Options introspection:** `show_gptr_options()` prints every `gptr.*` option currently in effect so you can see provider defaults, timeouts, and cache behaviour.
 
 ## Advanced tuning
@@ -292,7 +326,7 @@ gpt("ping", provider = "openai", model = "gpt-4o-mini")
 No. If `keys = NULL`, you can still collect structured output with `keep_unexpected_keys = TRUE` (or `relaxed = TRUE` when you want to accept non-JSON replies). The trade-off is weaker validation. 
 
 **How do I pick a model?**  
-Start with `list_models(provider = "auto")` to see what your backend exposes, then set `model` explicitly to make runs reproducible.
+Start with `list_models()` (or target a backend like `list_models(provider = "ollama")`) to see what your backend exposes, then set `model` explicitly to make runs reproducible.
 
 **Where do I see the package defaults?**  
 Run `show_gptr_options()` to print the full list of `gptr.*` options active in your session.
