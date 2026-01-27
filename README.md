@@ -45,12 +45,12 @@
 1.  **Install the package** (see below).
 2.  **Configure a provider**:
     -   Cloud: set `OPENAI_API_KEY` in your `.Renviron` or session.
-    -   Local: run LM Studio, Ollama, or LocalAI and pick a model name.
+    -   Local: run LM Studio, Ollama, or LocalAI and download a model if you dont have any already.
 3.  **Sanity check** your setup with a tiny call:
 
 ```{r, eval = FALSE}
 library(gptr)
-gpt("ping", provider = "auto")
+gpt("ping", provider = "insert your provider here", model = "the model you just downloaded")
 ```
 
 If you see a response, you're ready for structured extraction with `gpt_column()`.
@@ -76,14 +76,7 @@ Store credentials in `.Renviron` or your session so they do not get hard-coded:
 OPENAI_API_KEY="your-key-here"
 ```
 
-You can also set defaults for a session:
-
-```{r, eval = FALSE}
-options(
-  gptr.provider = "auto",
-  gptr.model = "gpt-4o-mini"
-)
-```
+You can also set defaults for a session. Use `gptr::show_gptr_options()` to see the default parameters and `options(x = "y")` to update them according to your needs.
 
 ### Choose your backend
 
@@ -94,7 +87,7 @@ options(
 | `auto` | First-time users | Prefers local if running, otherwise uses OpenAI when credentials exist. |
 | `openai` | Hosted models | Requires `OPENAI_API_KEY`. |
 | `lmstudio` / `ollama` / `localai` | Local models | Run the server and pass the model name available on that backend. |
-| `local` | Custom OpenAI-compatible server | Provide `base_url` or `backend` to pin. |
+| `local` | Other OpenAI-compatible server | Provide `base_url` or `backend` to pin. |
 
 ## Quick start
 
@@ -148,7 +141,7 @@ res
 ## Common first-run issues
 
 -   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "auto")` to confirm.
--   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available and pass a model name explicitly.
+-   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available. Set a default model for your provider (see `show_gptr_options()` or pass a model name explicitly whenever you make a call to the LLM.
 -   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
 
 ## A practical extraction checklist
