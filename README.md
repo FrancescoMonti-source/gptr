@@ -141,7 +141,7 @@ res
 ## Common first-run issues
 
 -   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "auto")` to confirm.
--   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available. Set a default model for your provider (see `show_gptr_options()` or pass a model name explicitly whenever you make a call to the LLM.
+-   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available. Set a default model for your provider (see `show_gptr_options()`) or pass a model name explicitly whenever you make a call to the LLM.
 -   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
 
 ## A practical extraction checklist
@@ -163,7 +163,7 @@ res
  inject {text}/{json_format}          repair, coerce, align
 ```
 
-For each row, `gpt_column()` trims the text (if asked to do so), renders the prompt, calls the model, repairs the response, validates it against the schema, and binds the structured values back onto the original tibble. All intermediate artefacts (raw output, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` renders the prompt, calls the model, repairs the response, validates it against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys
 
@@ -179,7 +179,7 @@ If you want to supply your own examples instead of the auto-generated hint, omit
 
 ## Prompt building and schema injection
 
-`gpt_column()` renders a fresh prompt for every row. Under the hood it:
+`gpt_column()` renders a fresh prompt for every row to avoid context overflow. Under the hood it:
 
 1.  Trims the row text and passes it, together with `keys`, to `build_prompt()`.
 2.  Replaces `{text}` in your template with the row text.
@@ -189,14 +189,22 @@ If you want to supply your own examples instead of the auto-generated hint, omit
 Placeholders are filled with [`glue`](https://glue.tidyverse.org/). Glue evaluates anything inside braces, so escape literal braces with `{{` and `}}` or wrap code in `glue::glue_safe()` if needed.
 
 ```{r, eval = FALSE}
-build_prompt(
-  template,
-  text = "Patient is 64 years old; dx: type 2 diabetes.",
-  keys = schema
+prompt = "You are triaging clinical notes. Focus on age and diagnosis.
+            {{json_format}}     # Here we inject, based on the keys provided and their declared class, examples of the attended output from the model inroute it
+            Here is the clinical text : {{text}}     # And here we inject the text
+        "
+
+gpt_column(data = "your df",
+            col = "your text column",
+            prompt = prompt,
+            keys = list(age = "numeric",
+                        diagnosis = "character"),
+            provider = "your provider",
+            model = "the model you wanna use"        # if no model is declared, the function looks up in the options to see if a default (for a given provider) has been declared
 )
 ```
 
-For full control, pass a function to `prompt`. It receives `(text, keys)` and should return a string:
+For full control you can pass a function to `prompt`. It receives `(text, keys)` and should return a string:
 
 ```{r, eval = FALSE}
 dynamic_prompt <- function(text, keys) {
