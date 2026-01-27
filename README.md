@@ -36,6 +36,7 @@
 ### When to use gptr
 
 -   Extract structured fields (age, diagnosis, amounts, dates) from messy text.
+-   Ask a model complex questions about a text (summaries/interpretation/etc..)
 -   Turn meeting notes, tickets, or lab reports into tidy tables.
 -   Build repeatable extraction pipelines that need validation and retry paths.
 
