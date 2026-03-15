@@ -26,6 +26,8 @@
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
 #'   If a schema (`keys`) is provided, it is always used for final typing.
 #' @param progress Logical. Progress Bar, defaults to TRUE.
+#' @param multi_value Strategy when a key maps to multiple values. Passed to
+#'   `row_to_tibble()`. Defaults to `"first"`.
 #' @param ... Extra args passed to `gpt()` (e.g., `response_format`).
 #' @export
 #'
@@ -53,6 +55,7 @@ gpt_column <- function(data,
                        return_debug = TRUE,
                        verbose = FALSE,
                        progress = TRUE,
+                       multi_value = c("first", "error", "list"),
                        ...) {
     # capture all user extras once
     dots <- rlang::list2(...) # <-- new
@@ -68,6 +71,7 @@ gpt_column <- function(data,
     }
 
     provider <- match.arg(provider)
+    multi_value <- match.arg(multi_value)
     if (provider %in% c("lmstudio", "ollama", "localai")) {
         backend <- provider
         provider <- "local"
