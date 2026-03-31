@@ -10,6 +10,7 @@
 #' @param base_url "Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions)."
 #' @param backend Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').
 #' @param openai_api_key Optional API key for OpenAI; defaults to env var.
+#' @param file_path Optional path or vector of paths to files to include.
 #' @param image_path Optional path or vector of paths to images to include.
 #' @param system Optional system prompt.
 #' @param seed Optional integer for determinism (when supported).
@@ -38,6 +39,7 @@ gpt <- function(prompt,
                 provider = c("auto", "lmstudio", "openai", "ollama", "local", "localai"),
                 base_url = NULL,
                 openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
+                file_path = NULL,
                 image_path = NULL,
                 system = NULL,
                 seed = NULL,
@@ -245,11 +247,29 @@ gpt <- function(prompt,
         return(out)
     }
 
+    is_url <- function(x) grepl("^(https?://|data:)", x, ignore.case = TRUE)
+    file_paths <- if (is.null(file_path)) NULL else as.character(file_path)
     image_paths <- if (is.null(image_path)) NULL else as.character(image_path)
+
+    if (length(file_paths)) {
+        local_files <- file_paths[!is_url(file_paths)]
+        missing_files <- local_files[!file.exists(local_files)]
+        if (length(missing_files)) {
+            stop(sprintf("File not found: %s", missing_files[[1L]]), call. = FALSE)
+        }
+        if (length(local_files) && !requireNamespace("base64enc", quietly = TRUE)) {
+            stop("Package 'base64enc' is required when `file_path` points to local files.", call. = FALSE)
+        }
+    }
 
     # ---------------- provider == "openai" ----------------
     if (provider == "openai") {
-        msgs <- openai_build_messages(system = system, user = prompt, image_paths = image_paths)
+        msgs <- openai_build_messages(
+            system = system,
+            user = prompt,
+            image_paths = image_paths,
+            file_paths = file_paths
+        )
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
         bu_root <- .api_root(defs$base_url)
         if (is.null(.cache_get("openai", bu_root, base_url_normalized = TRUE))) {
@@ -336,7 +356,12 @@ gpt <- function(prompt,
             }
         }
 
-        msgs <- openai_build_messages(system = system, user = prompt, image_paths = image_paths)
+        msgs <- openai_build_messages(
+            system = system,
+            user = prompt,
+            image_paths = image_paths,
+            file_paths = file_paths
+        )
         payload <- openai_build_payload(
             messages        = msgs,
             model           = requested_model,

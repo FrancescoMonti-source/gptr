@@ -50,7 +50,7 @@ gpt_column(
 
 \item{temperature}{Sampling temperature for the model.}
 
-\item{file_path, image_path}{Optional file paths passed to the model call.}
+\item{file_path, image_path}{Optional file or image paths attached to each model call.}
 
 \item{.coerce_types}{Row-level coercion toggle (default TRUE).}
 

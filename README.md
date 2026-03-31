@@ -266,6 +266,12 @@ if (length(failed)) {
 
 ```{r, eval = FALSE}
 gpt("Summarise this text in one sentence.")
+gpt(
+  "Summarise the attached transcript in three bullets.",
+  provider = "openai",
+  model = "gpt-4o-mini",
+  file_path = "notes.txt"
+)
 
 gpt_chat("Give me three bullet points.")
 gpt_chat("Now rewrite them as headlines.")
@@ -301,7 +307,7 @@ delete_models_cache()
 -   **Type coercion:** leave `.coerce_types = TRUE` for schema-driven casts, or pass `coerce_when = list(field = "integer")` to override individual columns. Provide `na_values` to recognise additional sentinel strings.
 -   **Relaxed parsing:** set `relaxed = TRUE` when `keys = NULL` and you want to accept scalar strings or partially structured replies. Combine with `keep_unexpected_keys = TRUE` to persist a `.parsed_json` column.
 -   **Type inference:** when you omit `keys`, `infer_types = TRUE` attempts to guess column types from the parsed JSON.
--   **File/image inputs:** supply `file_path` or `image_path` and they are forwarded to `gpt()`; useful for multimodal providers that accept binary attachments.
+-   **File/image inputs:** supply `file_path` or `image_path` and they are attached to the `gpt()` request; useful for multimodal providers that accept binary attachments. Local file attachments require `base64enc`.
 -   **Progress backends:** `progress = TRUE` uses CLI spinners by default. Set `options(gptr.progress.backend = "progressr")` and load `progressr` for rich progress bars inside parallel plans or long runs.
 
 All knobs and defaults can be inspected with `show_gptr_options()`, then overridden via `options(gptr.* = value)` in your session or `.Rprofile`.

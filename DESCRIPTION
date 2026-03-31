@@ -35,6 +35,7 @@ Imports:
     magrittr,
     digest
 Suggests:
+    base64enc,
     testthat (>= 3.0.0),
     progressr,
     pkgnet,

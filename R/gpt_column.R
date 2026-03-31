@@ -16,7 +16,7 @@
 #' @param base_url (now accepted by gpt_column() too): “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”
 #' @param model Model identifier to request from the provider/backend.
 #' @param na_values Values treated as NA at multiple stages.
-#' @param file_path,image_path Optional file paths passed to the model call.
+#' @param file_path,image_path Optional file or image paths attached to each model call.
 #' @param temperature Sampling temperature for the model.
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.

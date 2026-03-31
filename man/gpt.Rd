@@ -11,6 +11,7 @@ gpt(
   provider = c("auto", "lmstudio", "openai", "ollama", "local", "localai"),
   base_url = NULL,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
+  file_path = NULL,
   image_path = NULL,
   system = NULL,
   seed = NULL,
@@ -35,6 +36,8 @@ gpt(
 \item{base_url}{"Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions)."}
 
 \item{openai_api_key}{Optional API key for OpenAI; defaults to env var.}
+
+\item{file_path}{Optional path or vector of paths to files to include.}
 
 \item{image_path}{Optional path or vector of paths to images to include.}
 
