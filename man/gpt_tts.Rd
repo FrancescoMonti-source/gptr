@@ -2,7 +2,7 @@
 % Please edit documentation in R/gpt_tts.R
 \name{gpt_tts}
 \alias{gpt_tts}
-\title{Text-to-Speech with OpenAI (Audio Formats)}
+\title{Supporting utility: text-to-speech with OpenAI}
 \usage{
 gpt_tts(
   text,

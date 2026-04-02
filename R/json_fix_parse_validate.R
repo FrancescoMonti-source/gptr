@@ -221,6 +221,18 @@ json_fix_parse_validate <- function(text,
   parse_try <- function(z, simplify = FALSE) {
     try(jsonlite::fromJSON(z, simplifyVector = simplify), silent = TRUE)
   }
+  finish_parsed <- function(parsed_value) {
+    validated <- .validate_parsed_against_specs(
+      value = parsed_value,
+      key_specs = key_specs,
+      na_values = na_values,
+      .coerce_types = .coerce_types,
+      coerce_when = coerce_when,
+      i = i,
+      verbose = verbose
+    )
+    list(ok = TRUE, value = validated$value, meta = validated$meta)
+  }
 
   # A) Try RAW text first (pre-tidy): unwrap quoted JSON string literal
   # removed, baked into .tidy_json
@@ -236,7 +248,7 @@ json_fix_parse_validate <- function(text,
 
   val1 <- parse_try(s, simplify = FALSE)
   if (!inherits(val1, "try-error") && is.list(val1) && !is.null(names(val1))) {
-    return(list(ok = TRUE, value = val1, meta = NULL))
+    return(finish_parsed(val1))
   }
 
   # C) Pattern fix for {\\"key\\":...} created by blob extraction
@@ -245,7 +257,7 @@ json_fix_parse_validate <- function(text,
     val2 <- parse_try(s_fix, simplify = FALSE)
     if (!inherits(val2, "try-error") && is.list(val2) && !is.null(names(val2))) {
       if (isTRUE(verbose)) message("Row ", if (is.null(i)) "" else i, ": fixed over-escaped key quotes")
-      return(list(ok = TRUE, value = val2, meta = NULL))
+      return(finish_parsed(val2))
     }
   }
 
@@ -255,14 +267,14 @@ json_fix_parse_validate <- function(text,
     s2 <- substr(s, m[1], m[1] + attr(m, "match.length") - 1L)
     val3 <- parse_try(s2, simplify = FALSE)
     if (!inherits(val3, "try-error") && is.list(val3) && !is.null(names(val3))) {
-      return(list(ok = TRUE, value = val3, meta = NULL))
+      return(finish_parsed(val3))
     }
   }
 
   # E) last resord
   val4 <- try(.json_last_resort(s), silent = TRUE)
   if (!inherits(val4, "try-error") && is.list(val4)) {
-    return(list(ok = TRUE, value = val4, meta = NULL))
+    return(finish_parsed(val4))
   }
 
   meta <- data.frame(

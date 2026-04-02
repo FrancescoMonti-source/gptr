@@ -266,17 +266,15 @@ openai_send_request <- function(payload,
         }
     )
 
-    if (!is.null(ssl_cert) && length(ssl_cert) && !is.na(ssl_cert[[1]]) && nzchar(ssl_cert[[1]])) {
-        req <- httr2::req_options(req, cainfo = ssl_cert[[1]])
-    }
+    req <- .req_apply_ssl_cert(req, ssl_cert)
 
-    resp <- httr2::req_perform(req)
+    resp <- .httr_req_perform(req)
     try(httr2::resp_check_status(resp), silent = TRUE)
 
-    body_txt <- httr2::resp_body_string(resp)
+    body_txt <- .httr_resp_body_string(resp)
     body <- tryCatch(jsonlite::fromJSON(body_txt, simplifyVector = FALSE), error = function(e) NULL)
 
-    if (httr2::resp_status(resp) >= 400) {
+    if (.httr_resp_status(resp) >= 400) {
         msg <- "OpenAI request failed"
         if (is.list(body) && !is.null(body$error)) {
             em <- body$error$message

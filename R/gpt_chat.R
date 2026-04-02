@@ -1,9 +1,8 @@
-#' Stateful chat with OpenAI-compatible servers (LM Studio, OpenAI, etc.)
+#' Supporting utility: stateful chat with OpenAI-compatible servers
 #'
 #' `gpt_chat()` provides a persistent, multi-turn chat interface that keeps
-#' conversation history in memory and (optionally) on disk. It speaks the
-#' OpenAI Chat Completions API, so it works with local servers like **LM Studio**
-#' as well as hosted providers such as **OpenAI** (set `api_key`).
+#' conversation history in memory and (optionally) on disk. It is a supporting
+#' API alongside the package's primary structured-extraction workflow.
 #'
 #' @section What it does:
 #' - Maintains **conversation memory** across turns (system/user/assistant roles).

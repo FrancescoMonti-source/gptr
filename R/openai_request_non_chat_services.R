@@ -76,16 +76,14 @@ openai_request_non_chat_services <- function(
     httr2::req_timeout(timeout) %>%
     httr2::req_retry(max_tries = retry_max, backoff = retry_backoff)
 
-  if (!is.null(ca_bundle) && nzchar(ca_bundle)) {
-    req <- httr2::req_options(cainfo = ca_bundle)
-  }
+  req <- .req_apply_ssl_cert(req, ca_bundle)
 
-  resp <- httr2::req_perform(req)
+  resp <- .httr_req_perform(req)
 
-  status <- httr2::resp_status(resp)
+  status <- .httr_resp_status(resp)
   if (status >= 400) {
     err <- try(
-      httr2::resp_body_json(resp, simplifyVector = TRUE),
+      .httr_resp_body_json(resp, simplifyVector = TRUE),
       silent = TRUE
     )
     msg <- if (!inherits(err, "try-error") && !is.null(err$error$message)) {
@@ -98,11 +96,11 @@ openai_request_non_chat_services <- function(
 
   if (identical(expect, "binary")) {
     return(list(
-      raw = httr2::resp_body_raw(resp),
-      ctype = httr2::resp_header(resp, "content-type"),
+      raw = .httr_resp_body_raw(resp),
+      ctype = .httr_resp_header(resp, "content-type"),
       response = resp
     ))
   } else {
-    return(httr2::resp_body_json(resp, simplifyVector = TRUE))
+    return(.httr_resp_body_json(resp, simplifyVector = TRUE))
   }
 }

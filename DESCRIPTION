@@ -1,18 +1,14 @@
 Package: gptr
 Type: Package
-Title: High-Level R Interface to LLM APIs for Structured Text Extraction
+Title: Structured Extraction Pipelines from Text with LLMs
 Version: 0.4.5
 Author: Francesco Monti
 Maintainer: Francesco Monti <francesco.monti@outlook.it>
-Description: Provides a set of high-level helper functions to interact with 
-    local or remote Large Language Model (LLM) APIs using OpenAI-compatible 
-    endpoints. Includes tools for sending prompts, handling conversation 
-    history, extracting structured data from unstructured text, validating 
-    against a user-defined schema, retrying failed extractions, and working 
-    with both text and file/image inputs. Designed for reproducible, 
-    schema-based extraction workflows in data analysis pipelines.
-    Supports both local inference servers (e.g., LM Studio) and hosted 
-    providers (e.g., OpenAI) via unified syntax.
+Description: Centers schema-based extraction workflows for data frames via
+    'gpt_column()', with typed outputs, validation, retries, and audit-friendly
+    debug metadata. Supports local or remote Large Language Model (LLM) APIs
+    through OpenAI-compatible endpoints, with provider-aware helpers for model
+    selection, single prompts, chat, and text-to-speech as supporting utilities.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

@@ -45,19 +45,17 @@
     stop("`payload` must be a named list or a single JSON string.", call. = FALSE)
   }
 
-  if (!is.null(ssl_cert) && length(ssl_cert) && !is.na(ssl_cert[[1]]) && nzchar(ssl_cert[[1]])) {
-    req <- httr2::req_options(req, cainfo = ssl_cert[[1]])
-  }
+  req <- .req_apply_ssl_cert(req, ssl_cert)
 
   if (isTRUE(debug_http)) httr2::req_dry_run(req)
 
-  resp <- httr2::req_perform(req)
-  status <- httr2::resp_status(resp)
+  resp <- .httr_req_perform(req)
+  status <- .httr_resp_status(resp)
 
   # Try parsing JSON; if it fails, fall back to raw string
-  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+  j <- try(.httr_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
   if (inherits(j, "try-error")) {
-    body_txt <- try(httr2::resp_body_string(resp), silent = TRUE)
+    body_txt <- try(.httr_resp_body_string(resp), silent = TRUE)
     # safer url: fall back to base_url if req_url() fails
     url_str <- try(httr2::req_url(req), silent = TRUE)
     if (inherits(url_str, "try-error") || is.null(url_str)) url_str <- base_url
@@ -81,7 +79,7 @@
     if (is.null(txt)) txt <- j$choices[[1]]$text
   }
   if (is.null(txt) || !nzchar(as.character(txt))) {
-    body_txt <- try(httr2::resp_body_string(resp), silent = TRUE)
+    body_txt <- try(.httr_resp_body_string(resp), silent = TRUE)
     url_str <- try(httr2::req_url(req), silent = TRUE)
     if (inherits(url_str, "try-error") || is.null(url_str)) url_str <- base_url
     stop("Local backend returned empty content. Check `model` and backend response shape.\n",

@@ -5,6 +5,13 @@ test_that("build_prompt renders template with keys", {
   expect_equal(res, "hello -> { a: \"0\"|\"1\"|\"NA\", b: a number (ex: 3.14) }")
 })
 
+test_that("build_prompt renders enum schemas", {
+  template <- "{text} -> {json_format}"
+  keys <- list(severity = c("low", "medium"))
+  res <- build_prompt(template, text = "hello", keys = keys)
+  expect_equal(res, "hello -> { severity: \"low\"|\"medium\"|\"NA\" }")
+})
+
 test_that("build_prompt omits json_format when keys is NULL", {
   template <- "{text} -> {json_format}"
   res <- build_prompt(template, text = "hello", keys = NULL)

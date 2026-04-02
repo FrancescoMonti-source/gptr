@@ -79,14 +79,14 @@
 
 #' @keywords internal
 .flatten_model_ids <- function(obj) {
-  ids <- if (is.list(obj$data)) {
+  ids <- if (is.character(obj)) {
+    obj
+  } else if (is.list(obj) && is.list(obj$data)) {
     vapply(obj$data, function(m) m$id %||% "", "")
-  } else if (is.list(obj$models)) {
+  } else if (is.list(obj) && is.list(obj$models)) {
     vapply(obj$models, function(m) m$id %||% "", "")
   } else if (is.list(obj)) {
     vapply(obj, function(m) m$id %||% "", "")
-  } else if (is.character(obj)) {
-    obj
   } else {
     character(0)
   }
@@ -124,24 +124,22 @@
     return(list(df = .normalize_models_df(NULL), status = "httr2_missing"))
   }
   url <- .build_models_url(base_url)
-  req <- httr2::request(url) %>%
-    httr2::req_timeout(timeout)
+  req <- .httr_request(url) %>%
+    .httr_req_timeout(timeout)
 
-  if (!is.null(ssl_cert) && length(ssl_cert) && !is.na(ssl_cert[[1]]) && nzchar(ssl_cert[[1]])) {
-    req <- httr2::req_options(req, cainfo = ssl_cert[[1]])
-  }
+  req <- .req_apply_ssl_cert(req, ssl_cert)
 
   if (identical(provider, "openai")) {
     if (!nzchar(openai_api_key)) {
       return(list(df = .normalize_models_df(NULL), status = "auth_missing"))
     }
     req <- req %>%
-      httr2::req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
-      httr2::req_retry(
+      .httr_req_headers(Authorization = paste("Bearer", openai_api_key)) %>%
+      .httr_req_retry(
         max_tries = 3,
         backoff = function(i) 0.2 * i,
         is_transient = function(r) {
-          sc <- try(httr2::resp_status(r), silent = TRUE)
+          sc <- try(.httr_resp_status(r), silent = TRUE)
           if (inherits(sc, "try-error")) {
             return(TRUE)
           }
@@ -150,18 +148,18 @@
       )
   }
 
-  resp <- try(req %>% httr2::req_perform(), silent = TRUE)
+  resp <- try(req %>% .httr_req_perform(), silent = TRUE)
   if (inherits(resp, "try-error")) {
     return(list(df = .normalize_models_df(NULL), status = "unreachable"))
   }
-  sc <- httr2::resp_status(resp)
+  sc <- .httr_resp_status(resp)
   if (identical(provider, "openai") && sc == 401L) {
     return(list(df = .normalize_models_df(NULL), status = "auth_error"))
   }
   if (sc >= 400L) {
     return(list(df = .normalize_models_df(NULL), status = paste0("http_", sc)))
   }
-  j <- try(httr2::resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
+  j <- try(.httr_resp_body_json(resp, simplifyVector = FALSE), silent = TRUE)
   if (inherits(j, "try-error")) {
     return(list(df = .normalize_models_df(NULL), status = "non_json"))
   }
@@ -485,6 +483,12 @@ list_models <- function(provider = NULL,
 
   out <- do.call(rbind, rows)
   attr(out, "diagnostics") <- diagnostics
+  if (!nrow(out)) {
+    return(out)
+  }
+  if (!"created" %in% names(out)) {
+    out$created <- NA_real_
+  }
 
   # Add human-readable timestamp (UTC) where 'created' is present
   out$created <- suppressWarnings(as.numeric(out$created))

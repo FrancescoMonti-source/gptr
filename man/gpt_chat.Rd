@@ -3,7 +3,7 @@
 \name{gpt_chat}
 \alias{gpt_chat}
 \alias{$.gpt_chat_callable}
-\title{Stateful chat with OpenAI-compatible servers (LM Studio, OpenAI, etc.)}
+\title{Supporting utility: stateful chat with OpenAI-compatible servers}
 \usage{
 gpt_chat(
   prompt = NULL,
@@ -51,9 +51,8 @@ Invisibly returns the model reply (character scalar) for normal turns.
 }
 \description{
 \code{gpt_chat()} provides a persistent, multi-turn chat interface that keeps
-conversation history in memory and (optionally) on disk. It speaks the
-OpenAI Chat Completions API, so it works with local servers like \strong{LM Studio}
-as well as hosted providers such as \strong{OpenAI} (set \code{api_key}).
+conversation history in memory and (optionally) on disk. It is a supporting
+API alongside the package's primary structured-extraction workflow.
 }
 \details{
 \strong{Available methods} (call with \code{gpt_chat$method(...)}):

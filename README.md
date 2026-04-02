@@ -31,7 +31,7 @@
 -   Provider-agnostic orchestration: talk to OpenAI, LM Studio, Ollama, LocalAI, or any OpenAI-compatible endpoint with the same R call.
 -   Pipeline-friendly design: `gpt_column()` binds predictions back to the original tibble, honours tidy evaluation, and plays nicely with progress bars and parallel plans.
 -   Built-in diagnostics: capture raw outputs, invalid rows, retry helpers, and `keep_unexpected_keys` controls for messy payloads.
--   Broader toolbox: one-off completions via `gpt()`, conversational state with `gpt_chat()`, text-to-speech using `gpt_tts()`, model discovery utilities, and cache helpers.
+-   Supporting APIs for single prompts, chat, text-to-speech, and model discovery when you need them, without taking focus away from extraction workflows.
 
 ### When to use gptr
 
@@ -124,7 +124,8 @@ res <- gpt_column(
   keys     = schema,
   prompt   = prompt,
   provider = "ollama", # openai/local/ollama/lmstudio
-  model    = "gemma3-4b" # chose among models you have at your disposal. Check list_models() documentation.
+  model    = "gemma3-4b", # chose among models you have at your disposal. Check list_models() documentation.
+  structured = "auto"
 )
 
 res
@@ -163,7 +164,7 @@ res
  inject {text}/{json_format}          repair, coerce, align
 ```
 
-For each row, `gpt_column()` renders the prompt, calls the model, repairs the response, validates it against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` renders the prompt, prefers native structured outputs when available, falls back to JSON repair when needed, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys
 
@@ -256,9 +257,9 @@ if (length(failed)) {
 }
 ```
 
-## Multiple ways to use gptr
+## Supporting APIs
 
-`gptr` is not just `gpt_column()`. You can interact with models in a few different ways depending on your workflow:
+`gpt_column()` is the core workflow. The functions below are supporting utilities for adjacent tasks and are a lower priority surface than structured extraction:
 
 -   **`gpt()` for single calls**: quick prompts or helper utilities.
 -   **`gpt_chat()` for conversations**: keep and reset history between turns.
@@ -296,7 +297,7 @@ delete_models_cache()
 
 ## Other helpers
 
--   **Single call vs chat:** `gpt()` is stateless and perfect for small utilities; `gpt_chat()` maintains conversational history (reset with `gpt_chat$reset()`).
+-   **Single call vs chat:** `gpt()` is stateless and useful for small utilities or debugging prompts; `gpt_chat()` maintains conversational history (reset with `gpt_chat$reset()`).
 -   **Text-to-speech:** `gpt_tts("Hello from R!")` sends text to OpenAI TTS, saves an audio file, and returns a `gptr_audio` object (use `play(audio)` to open it).
 -   **Model discovery:** `list_models()` (or a specific provider like `list_models(provider = "ollama")`) probes backends and caches results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
 -   **Options introspection:** `show_gptr_options()` prints every `gptr.*` option currently in effect so you can see provider defaults, timeouts, and cache behaviour.

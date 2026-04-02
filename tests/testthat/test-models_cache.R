@@ -78,7 +78,7 @@ test_that("refresh with no models returns empty data", {
     .cache_del = function(...) invisible(TRUE),
     .fetch_models_live = function(...) list(df = data.frame(id = character(), created = numeric()), status = "ok"),
     .api_root = function(x) x,
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
   expect_equal(nrow(out), 0)
@@ -128,13 +128,18 @@ test_that(".fetch_models_live applies ssl_cert to request options", {
   writeLines("dummy", cert)
 
   captured <- NULL
-
-  testthat::local_mocked_bindings(
-    req_options = function(req, ...) {
-      captured <<- list(...)
+  res <- testthat::with_mocked_bindings(
+    getFromNamespace(".fetch_models_live", "gptr")(
+      provider = "openai",
+      base_url = "https://api.openai.com",
+      openai_api_key = "sk-test",
+      ssl_cert = cert
+    ),
+    .req_apply_ssl_cert = function(req, ssl_cert = NULL) {
+      captured <<- ssl_cert
       req
     },
-    req_perform = function(req) {
+    .httr_req_perform = function(req) {
       httr2::response(
         status = 200L,
         headers = list("content-type" = "application/json"),
@@ -144,17 +149,10 @@ test_that(".fetch_models_live applies ssl_cert to request options", {
         ))
       )
     },
-    .env = asNamespace("httr2")
+    .package = "gptr"
   )
 
-  res <- getFromNamespace(".fetch_models_live", "gptr")(
-    provider = "openai",
-    base_url = "https://api.openai.com",
-    openai_api_key = "sk-test",
-    ssl_cert = cert
-  )
-
-  expect_identical(captured, list(cainfo = cert))
+  expect_identical(captured, cert)
   expect_equal(res$status, "ok")
   expect_identical(res$df$id, "m")
 })
@@ -199,7 +197,7 @@ test_that("refresh_models hits live endpoint for openai", {
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- refresh_models(provider = "openai", openai_api_key = "sk-test")
   expect_true(live_called)
@@ -218,13 +216,12 @@ test_that("refresh_models bypasses cache when unreachable", {
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- refresh_models(provider = "lmstudio", base_url = "http://127.0.0.1:1234")
   expect_true(live_called)
-  expect_identical(nrow(out), 1L)
-  expect_identical(out$status, "unreachable")
-  expect_true(all(is.na(out$model_id)))
+  expect_identical(nrow(out), 0L)
+  expect_identical(attr(out, "diagnostics")[[1]]$status, "unreachable")
 })
 
 test_that("list_models refresh=TRUE bypasses cache for locals", {
@@ -237,7 +234,7 @@ test_that("list_models refresh=TRUE bypasses cache for locals", {
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- list_models(provider = "lmstudio", refresh = TRUE)
   expect_true(live_called)
@@ -254,7 +251,7 @@ test_that("list_models refresh=TRUE bypasses cache for openai", {
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
     .cache_del = function(...) stop("cache_del called"),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- list_models(provider = "openai", refresh = TRUE, openai_api_key = "sk-test")
   expect_true(live_called)
@@ -282,7 +279,7 @@ test_that("list_models forwards ssl_cert to cached probes", {
         stringsAsFactors = FALSE
       )
     },
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
 
   out <- list_models(refresh = FALSE, openai_api_key = "sk-test", ssl_cert = cert)
@@ -301,7 +298,7 @@ test_that(".fetch_models_cached refresh=TRUE bypasses cache", {
     },
     .cache_get = function(...) stop("cache_get called"),
     .cache_put = function(...) stop("cache_put called"),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- f("lmstudio", "http://127.0.0.1:1234", refresh = TRUE)
   expect_true(live_called)
@@ -322,7 +319,7 @@ test_that(".fetch_models_cached forwards ssl_cert to live probe", {
     },
     .cache_get = function(...) NULL,
     .cache_put = function(...) invisible(TRUE),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
 
   out <- f("openai", "https://api.openai.com", openai_api_key = "sk-test", ssl_cert = cert)
@@ -340,7 +337,7 @@ test_that(".fetch_models_cached skips cache when unreachable", {
     .fetch_models_live = live_mock,
     .cache_get = function(p, u, ...) fake_cache$get(p, u),
     .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
   expect_identical(attr(out, "diagnostic")$status, "unreachable")
@@ -364,7 +361,7 @@ test_that(".fetch_models_cached retries after unreachable and caches", {
     .fetch_models_live = live_mock,
     .cache_get = function(p, u, ...) fake_cache$get(p, u),
     .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- f("lmstudio", "http://127.0.0.1:1234")
   expect_identical(out$status, "ok")
@@ -479,7 +476,7 @@ test_that("delete_models_cache removes by provider", {
       cache$remove(key_fun(p, u))
       invisible(TRUE)
     },
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   inv(provider = "openai")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
@@ -503,7 +500,7 @@ test_that("delete_models_cache removes by base_url", {
       cache$remove(key_fun(p, u))
       invisible(TRUE)
     },
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   inv(base_url = "https://api.openai.com")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
@@ -527,7 +524,7 @@ test_that("delete_models_cache removes by provider and base_url", {
       cache$remove(key_fun(p, u))
       invisible(TRUE)
     },
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   inv(provider = "openai", base_url = "https://api.openai.com")
   expect_null(cache$get(key_fun("openai", "https://api.openai.com"), missing = NULL))
@@ -603,7 +600,7 @@ test_that(".fetch_models_cached handles local and openai", {
     },
     .cache_get = function(p, u, ...) fake_cache$get(p, u),
     .cache_put = function(p, u, m, ...) fake_cache$put(p, u, m),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
 
   out_local <- f("lmstudio", "http://127.0.0.1:1234")
@@ -636,7 +633,7 @@ test_that(".fetch_models_cached normalizes base_url once", {
       invisible(TRUE)
     },
     .api_root = function(x) { calls <<- calls + 1; gptr:::.api_root(x) },
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- f("lmstudio", "http://127.0.0.1:1234/v1/models/")
   expect_equal(out$base_url, "http://127.0.0.1:1234")
@@ -650,7 +647,7 @@ test_that(".get_cached_model_ids respects base_url_normalized", {
   testthat::local_mocked_bindings(
     .fetch_models_live = stub_fetch,
     .api_root = function(x) stop("should not be called"),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- getFromNamespace(".get_cached_model_ids", "gptr")(
     "lmstudio", "http://127.0.0.1:1234", base_url_normalized = TRUE
@@ -671,7 +668,7 @@ test_that(".get_cached_model_ids forwards ssl_cert to live fetch", {
     },
     .cache_get = function(...) NULL,
     .cache_put = function(...) invisible(TRUE),
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
 
   out <- getFromNamespace(".get_cached_model_ids", "gptr")(
@@ -699,7 +696,7 @@ test_that(".resolve_model_provider normalizes each URL once", {
   testthat::local_mocked_bindings(
     .fetch_models_live = stub_fetch,
     .api_root = function(x) { count <<- count + 1; gptr:::.api_root(x) },
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
   out <- getFromNamespace(".resolve_model_provider", "gptr")("m", openai_api_key = "sk-test")
   expect_setequal(out$provider, c("lmstudio", "ollama", "localai", "openai"))
@@ -723,7 +720,7 @@ test_that(".resolve_model_provider forwards ssl_cert to cache helper", {
       seen[[provider]] <<- ssl_cert
       character()
     },
-    .env = asNamespace("gptr")
+    .package = "gptr"
   )
 
   out <- getFromNamespace(".resolve_model_provider", "gptr")(
@@ -736,4 +733,5 @@ test_that(".resolve_model_provider forwards ssl_cert to cache helper", {
   expect_true(all(vapply(seen, identical, logical(1), cert)))
   expect_identical(nrow(out), 0L)
 })
+
 

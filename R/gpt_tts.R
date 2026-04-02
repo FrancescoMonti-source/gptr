@@ -1,4 +1,4 @@
-#' Text-to-Speech with OpenAI (Audio Formats)
+#' Supporting utility: text-to-speech with OpenAI
 #'
 #' Synthesize spoken audio from plain text by calling the OpenAI Text-to-Speech
 #' endpoint. The helper wraps `openai_request_non_chat_services()` and stores the

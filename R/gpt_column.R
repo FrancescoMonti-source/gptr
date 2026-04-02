@@ -18,9 +18,14 @@
 #' @param na_values Values treated as NA at multiple stages.
 #' @param file_path,image_path Optional file or image paths attached to each model call.
 #' @param temperature Sampling temperature for the model.
+#' @param structured Extraction strategy. `"auto"` (default) prefers native
+#'   structured outputs when supported and falls back to JSON repair. `"native"`
+#'   requires provider-native structured extraction. `"repair"` always uses the
+#'   prompt-plus-repair path.
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.
-#' @param return_debug If TRUE, add `.raw_output`, `.invalid_rows`, and `.invalid_detail`. Default TRUE.
+#' @param return_debug If TRUE, add `.raw_output`, `.structured_mode`,
+#'   `.invalid_rows`, and `.invalid_detail`. Default TRUE.
 #' @param .coerce_types Row-level coercion toggle (default TRUE).
 #' @param coerce_when Optional named list of per-key target types used for row-level coercion.
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
@@ -51,6 +56,7 @@ gpt_column <- function(data,
                        keep_unexpected_keys = getOption("gptr.keep_unexpected_keys", FALSE),
                        fuzzy_model = getOption("gptr.fuzzy_model", "lev_ratio"),
                        fuzzy_threshold = getOption("gptr.fuzzy_threshold", 0.25),
+                       structured = c("auto", "native", "repair"),
                        relaxed = FALSE,
                        return_debug = TRUE,
                        verbose = FALSE,
@@ -72,6 +78,7 @@ gpt_column <- function(data,
 
     provider <- match.arg(provider)
     multi_value <- match.arg(multi_value)
+    structured <- match.arg(structured)
     if (provider %in% c("lmstudio", "ollama", "localai")) {
         backend <- provider
         provider <- "local"
@@ -185,13 +192,11 @@ gpt_column <- function(data,
     #
     # WHY expected_keys: the ordered vector of column names, used to pad/order and
     # drive json_keys_align() / row_to_tibble() / .finalize_columns().
-    key_specs <- NULL # named list: key -> list(type=..., allowed=...)
-    expected_keys <- NULL # character vector of column names (order matters)
-    if (!is.null(keys)) {
-        stopifnot(is.list(keys), !is.null(names(keys)))
-        key_specs <- purrr::map(keys, .parse_key_spec)
-        expected_keys <- names(keys)
+    if (identical(structured, "native") && is.null(keys)) {
+        stop("`structured = \"native\"` requires a non-NULL `keys` schema.", call. = FALSE)
     }
+    key_specs <- .normalize_key_specs(keys)
+    expected_keys <- names(key_specs) %||% NULL
 
     # Build prompt from template or function
     make_prompt_for <- function(.x_text) {
@@ -215,31 +220,42 @@ gpt_column <- function(data,
             model    = model
         )
     )
+    request_ssl_cert <- dots$ssl_cert %||% getOption("gptr.ssl_cert", NULL)
+    request_openai_api_key <- dots$openai_api_key %||% Sys.getenv("OPENAI_API_KEY", "")
 
     # --- ------ 3) PER-ROW CALL ----
     call_gpt <- function(i) {
         txt <- texts[[i]]
         if (is.na(txt) || !nzchar(trimws(txt))) {
-            return(NA_character_)
+            return(list(raw = NA_character_, mode = "repair"))
         }
         input_prompt <- make_prompt_for(txt)
-
-        do.call(
-            gpt,
-            c(
-                list(
-                    prompt      = input_prompt,
-                    temperature = temperature,
-                    file_path   = file_path,
-                    image_path  = image_path
-                ),
-                forward_args,
-                dots
-            )
+        request <- .prepare_extraction_request(
+            prompt = input_prompt,
+            key_specs = key_specs,
+            structured = structured,
+            provider = provider,
+            backend = backend,
+            model = model,
+            base_url = base_url,
+            openai_api_key = request_openai_api_key,
+            ssl_cert = request_ssl_cert,
+            keep_unexpected_keys = keep_unexpected_keys,
+            base_args = list(
+                temperature = temperature,
+                file_path = file_path,
+                image_path = image_path
+            ),
+            dots = dots
+        )
+        list(
+            raw = do.call(gpt, request$args),
+            mode = request$mode
         )
     }
 
     raw_outputs <- character(n)
+    extraction_modes <- character(n)
     parsed_results <- vector("list", n) # list of named lists (schema) or scalars/lists (no schema)
     invalid_flags <- logical(n) # TRUE when row invalid (parse/validate failures)
     invalid_detail <- vector("list", n) # per-row meta (data.frame or NULL)
@@ -370,7 +386,7 @@ gpt_column <- function(data,
         # Row-level coercion for schema (or explicit coerce_when)
         if (isTRUE(.coerce_types) && !is.null(key_specs)) {
             for (k in intersect(names(x), names(key_specs))) {
-                tt <- key_specs[[k]]$type
+                tt <- .effective_key_type(key_specs[[k]])
                 if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
             }
         } else if (!is.null(coerce_when) && isTRUE(.coerce_types)) {
@@ -399,8 +415,9 @@ gpt_column <- function(data,
     run_with_progress <- function(tick) {
         t0 <- Sys.time()
         for (i in seq_len(n)) {
-            raw <- call_gpt(i)
-            raw_outputs[[i]] <<- raw
+            req <- call_gpt(i)
+            raw_outputs[[i]] <<- req$raw
+            extraction_modes[[i]] <<- req$mode
             process_response(i)
             if (!is.null(tick)) {
                 elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
@@ -441,6 +458,7 @@ gpt_column <- function(data,
 
         # Normalize debug vectors/lists
         raw_outputs <- as.character(rep_len(raw_outputs, n_out))
+        extraction_modes <- as.character(rep_len(extraction_modes, n_out))
         invalid_flags <- as.logical(rep_len(invalid_flags, n_out))
         if (length(invalid_detail) != n_out) length(invalid_detail) <- n_out
 
@@ -450,6 +468,7 @@ gpt_column <- function(data,
             } else {
                 result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
             }
+            result$.structured_mode <- extraction_modes
             result$.invalid_rows <- invalid_flags
             result$.invalid_detail <- invalid_detail
         }
@@ -480,7 +499,7 @@ gpt_column <- function(data,
 
         # Clean internal noise (preserve debug cols if present)
         if (isTRUE(return_debug)) {
-            keep_debug <- c(".raw_output", ".invalid_rows", ".invalid_detail", ".parsed_json")
+            keep_debug <- c(".raw_output", ".structured_mode", ".invalid_rows", ".invalid_detail", ".parsed_json")
             junk <- c("type", "allowed", "valid", ".valid", ".raw", ".error", "..raw_json", "..parse_error", ".path")
             to_drop <- setdiff(junk, keep_debug)
             result <- result[, setdiff(names(result), to_drop), drop = FALSE]
@@ -551,6 +570,7 @@ gpt_column <- function(data,
 
     # Normalize debug vectors/lists
     raw_outputs <- as.character(rep_len(raw_outputs, n_out))
+    extraction_modes <- as.character(rep_len(extraction_modes, n_out))
     invalid_flags <- as.logical(rep_len(invalid_flags, n_out))
     if (length(invalid_detail) != n_out) length(invalid_detail) <- n_out
 
@@ -575,12 +595,13 @@ gpt_column <- function(data,
         } else {
             result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
         }
+        result$.structured_mode <- extraction_modes
         result$.invalid_rows <- invalid_flags
         result$.invalid_detail <- invalid_detail
     }
 
     # Drop noisy internal meta while preserving debug/extras
-    keep_debug <- c(".raw_output", ".invalid_rows", ".invalid_detail", ".extras_json")
+    keep_debug <- c(".raw_output", ".structured_mode", ".invalid_rows", ".invalid_detail", ".extras_json")
     junk <- c("type", "allowed", "valid", ".valid", ".raw", ".error", "..raw_json", "..parse_error", ".path")
     to_drop <- setdiff(junk, keep_debug)
     result <- result[, setdiff(names(result), to_drop), drop = FALSE]

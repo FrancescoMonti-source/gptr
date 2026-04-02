@@ -31,7 +31,7 @@ test_that("gpt forwards file_path to OpenAI message builder", {
         openai_send_request = function(payload, base_url, api_key, timeout = 30, ssl_cert = NULL) {
             fake_resp(model = payload$model %||% "gpt-4o-mini")
         },
-        .env = asNamespace("gptr")
+        .package = "gptr"
     )
 
     res <- gpt(
@@ -67,7 +67,7 @@ test_that("gpt forwards file_path to local message builder", {
         .request_local = function(payload, base_url, timeout = 30, ssl_cert = NULL) {
             fake_resp(model = payload$model %||% "mistral")
         },
-        .env = asNamespace("gptr")
+        .package = "gptr"
     )
 
     res <- gpt(
@@ -106,7 +106,7 @@ test_that("gpt_column forwards file_path to gpt", {
             seen$file_path <- file_path
             '{"answer":"ok"}'
         },
-        .env = asNamespace("gptr")
+        .package = "gptr"
     )
 
     out <- gpt_column(
@@ -123,3 +123,4 @@ test_that("gpt_column forwards file_path to gpt", {
     expect_identical(seen$file_path, "https://example.com/file.txt")
     expect_identical(out$answer[[1]], "ok")
 })
+

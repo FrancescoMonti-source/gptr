@@ -143,8 +143,9 @@
       # Prefer explicit schema if provided…
       if (!is.null(key_specs) && k %in% names(key_specs)) {
         spec <- key_specs[[k]]
-        if (!is.null(spec$type)) {
-          df[[k]] <- cast_to(col, spec$type)
+        target_type <- spec$type %||% spec$allowed_type
+        if (!is.null(target_type)) {
+          df[[k]] <- cast_to(col, target_type)
           next
         }
       }

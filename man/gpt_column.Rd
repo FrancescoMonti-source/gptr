@@ -24,10 +24,12 @@ gpt_column(
   keep_unexpected_keys = getOption("gptr.keep_unexpected_keys", FALSE),
   fuzzy_model = getOption("gptr.fuzzy_model", "lev_ratio"),
   fuzzy_threshold = getOption("gptr.fuzzy_threshold", 0.25),
+  structured = c("auto", "native", "repair"),
   relaxed = FALSE,
   return_debug = TRUE,
   verbose = FALSE,
   progress = TRUE,
+  multi_value = c("first", "error", "list"),
   ...
 )
 }
@@ -67,13 +69,22 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
+\item{structured}{Extraction strategy. \code{"auto"} (default) prefers native
+structured outputs when supported and falls back to JSON repair. \code{"native"}
+requires provider-native structured extraction. \code{"repair"} always uses the
+prompt-plus-repair path.}
+
 \item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 
-\item{return_debug}{If TRUE, add \code{.raw_output}, \code{.invalid_rows}, and \code{.invalid_detail}. Default TRUE.}
+\item{return_debug}{If TRUE, add \code{.raw_output}, \code{.structured_mode},
+\code{.invalid_rows}, and \code{.invalid_detail}. Default TRUE.}
 
 \item{verbose}{Print repair/validation messages.}
 
 \item{progress}{Logical. Progress Bar, defaults to TRUE.}
+
+\item{multi_value}{Strategy when a key maps to multiple values. Passed to
+\code{row_to_tibble()}. Defaults to \code{"first"}.}
 
 \item{...}{Extra args passed to \code{gpt()} (e.g., \code{response_format}).}
 }

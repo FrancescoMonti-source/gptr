@@ -1,7 +1,8 @@
-#' Chat once with the selected provider
+#' Low-level single request to the selected provider
 #'
-#' Minimal front-door that delegates to provider-specific helpers.
-#' Returns plain text (character scalar). Usage is attached as an attribute.
+#' Low-level front-door used by `gpt_column()` and advanced users who want a
+#' single provider call. Returns plain text (character scalar). Usage is
+#' attached as an attribute.
 #'
 #' @param prompt Character scalar user message. Ignored if `messages` is supplied upstream.
 #' @param model Optional model id. If NULL, resolved per provider defaults.
@@ -53,6 +54,7 @@ gpt <- function(prompt,
 
     provider <- match.arg(provider)
     provider_input <- provider
+    model_supplied <- is.character(model) && length(model) == 1L && nzchar(model)
     base_root <- NULL
 
     # --- provider = "auto" + model = "x" ---
@@ -65,7 +67,7 @@ gpt <- function(prompt,
     # - If the provider is “openai”, provider becomes "openai" (cloud backend).
     # - Otherwise provider becomes "local", backend records the specific local engine (e.g. "ollama"), and base_root is populated with a normalized base URL (.api_root(hit$base_url)).
     # - In short, when provider = "auto" the code attempts to identify which backend hosts the requested model, ranks the matches by user preference, and sets up internal provider, backend, and base_root variables accordingly. If no provider can be resolved, the function aborts rather than silently guessing
-    if (provider == "auto" && is.character(model) && model != "") {
+    if (provider == "auto" && isTRUE(model_supplied)) {
         # probe all providers for the model
         lm <- try(
             .resolve_model_provider(
@@ -293,8 +295,11 @@ gpt <- function(prompt,
             error = function(e) character(0)
         )
         if (length(ids) && !tolower(defs$model) %in% tolower(ids)) {
-            if (identical(provider_input, "auto")) {
-                stop(sprintf("Model '%s' not found for OpenAI. Please specify a provider.", defs$model), call. = FALSE)
+            if ((identical(provider_input, "auto") && isTRUE(model_supplied)) || isTRUE(strict_model)) {
+                if (identical(provider_input, "auto") && isTRUE(model_supplied)) {
+                    stop(sprintf("Model '%s' not found for OpenAI. Please specify a provider.", defs$model), call. = FALSE)
+                }
+                stop(sprintf("Model '%s' not found for OpenAI.", defs$model), call. = FALSE)
             } else {
                 defs$model <- .resolve_openai_defaults(base_url = defs$base_url, api_key = defs$api_key)$model
             }
@@ -343,7 +348,7 @@ gpt <- function(prompt,
 
         if (nzchar(requested_model) && length(ids) &&
             !tolower(requested_model) %in% tolower(ids)) {
-            if (identical(provider_input, "auto")) {
+            if (identical(provider_input, "auto") && isTRUE(model_supplied)) {
                 stop(sprintf("Model '%s' not found. Please specify a provider.", requested_model), call. = FALSE)
             } else {
                 msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
@@ -351,7 +356,7 @@ gpt <- function(prompt,
                     stop(msg, call. = FALSE)
                 } else {
                     warning(msg, call. = FALSE)
-                    requested_model <- default_model
+                    requested_model <- if (length(ids)) ids[[1L]] else default_model
                 }
             }
         }

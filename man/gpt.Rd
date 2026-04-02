@@ -2,7 +2,7 @@
 % Please edit documentation in R/gpt.R
 \name{gpt}
 \alias{gpt}
-\title{Chat once with the selected provider}
+\title{Low-level single request to the selected provider}
 \usage{
 gpt(
   prompt,
@@ -72,6 +72,7 @@ contain token usage. When \code{print_raw = TRUE}, prints a JSON skeleton to the
 console and returns that skeleton list instead of the assistant text.
 }
 \description{
-Minimal front-door that delegates to provider-specific helpers.
-Returns plain text (character scalar). Usage is attached as an attribute.
+Low-level front-door used by \code{gpt_column()} and advanced users who want a
+single provider call. Returns plain text (character scalar). Usage is
+attached as an attribute.
 }

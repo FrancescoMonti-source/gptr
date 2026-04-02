@@ -4,10 +4,12 @@ delete_models_cache
 gpt
 gpt_chat
 gpt_column
+gpt_tts
 json_fix_parse_validate
 json_keys_align
 list_models
 openai_build_messages
 patch_failed_rows
+play
 refresh_models
 show_gptr_options

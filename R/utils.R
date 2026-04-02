@@ -12,9 +12,9 @@ browse_openai_documentation <- function(url = "https://platform.openai.com/docs/
 .parse_key_spec <- function(spec) {
   types <- c("integer", "numeric", "character", "logical")
   if (is.character(spec) && length(spec) == 1L && spec %in% types) {
-    list(type = spec, allowed = NULL)
+    list(type = spec, allowed = NULL, allowed_type = NULL)
   } else {
-    list(type = NULL, allowed = spec)
+    list(type = NULL, allowed = spec, allowed_type = .infer_allowed_type(spec))
   }
 }
 
