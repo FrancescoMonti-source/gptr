@@ -8,6 +8,10 @@
 #' @param model Optional model id. If NULL, resolved per provider defaults.
 #' @param temperature Numeric scalar (default 0.2).
 #' @param provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
+#'   With `provider = "auto"`, `gpt()` uses the configured local route
+#'   (`base_url`, `backend`, `gptr.local_base_url`, or `gptr.local_prefer`) and
+#'   only falls back to OpenAI when no local route is configured and remote
+#'   access is allowed.
 #' @param base_url "Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions)."
 #' @param backend Optional. When provider is local, choose a running backend ('lmstudio', 'ollama', 'localai').
 #' @param openai_api_key Optional API key for OpenAI; defaults to env var.
@@ -18,9 +22,8 @@
 #' @param response_format NULL, "json_object", or a full list (OpenAI API shape).
 #' @param strict_model Logical. If TRUE (default), error if the requested model is
 #'   unavailable on the chosen backend.
-#' @param allow_backend_autoswitch Logical (default TRUE). When FALSE, do not
-#'   probe or switch to alternative local backends if the requested one is
-#'   unavailable.
+#' @param allow_backend_autoswitch Retained for backward compatibility.
+#'   `gpt()` no longer probes alternative local backends while choosing a route.
 #' @param print_raw Logical. If TRUE, pretty-print the compact response
 #'   skeleton as JSON in the console and return that skeleton list instead of
 #'   the assistant text (skipping any downstream post-processing). Default
@@ -57,52 +60,8 @@ gpt <- function(prompt,
                 ...) {
 
     provider <- match.arg(provider)
-    provider_input <- provider
-    model_supplied <- is.character(model) && length(model) == 1L && nzchar(model)
     base_root <- NULL
     effective_openai_api_key <- if (isTRUE(allow_remote)) openai_api_key else ""
-
-    # --- provider = "auto" + model = "x" ---
-    # hits is the data frame of potential providers. It is sorted with a ranking
-    # function that prefers any locally running backends listed in getOption("gptr.local_prefer",
-    # "lmstudio","ollama","localai")) and, as a last resort, OpenAI. Any provider not in that
-    # list is given a large rank so it sorts last
-    # The top row (hit) becomes the chosen provider. Its name is normalized (hit_provider) and used
-    # to set the function’s provider and backend variables:
-    # - If the provider is “openai”, provider becomes "openai" (cloud backend).
-    # - Otherwise provider becomes "local", backend records the specific local engine (e.g. "ollama"), and base_root is populated with a normalized base URL (.api_root(hit$base_url)).
-    # - In short, when provider = "auto" the code attempts to identify which backend hosts the requested model, ranks the matches by user preference, and sets up internal provider, backend, and base_root variables accordingly. If no provider can be resolved, the function aborts rather than silently guessing
-    if (provider == "auto" && isTRUE(model_supplied)) {
-        # probe all providers for the model
-        lm <- try(
-            .resolve_model_provider(
-                model,
-                openai_api_key = effective_openai_api_key,
-                ssl_cert = ssl_cert
-            ),
-            silent = TRUE
-        )
-        if (inherits(lm, "try-error") || !is.data.frame(lm) || nrow(lm) < 1) {
-            rlang::abort(sprintf("Model '%s' is not available; specify a provider.", model))
-        }
-        hits <- lm
-        prefer_locals <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
-        rank_fn <- function(p) {
-            m <- match(p, c(prefer_locals, "openai"))
-            ifelse(is.na(m), 999L, m)
-        }
-        ord <- order(rank_fn(tolower(as.character(hits$provider))))
-        hit <- hits[ord[1L], , drop = FALSE]
-        hit_provider <- tolower(as.character(hit$provider))
-        if (identical(hit_provider, "openai")) {
-            provider <- "openai"
-        } else {
-            provider <- "local"
-            backend  <- hit_provider
-            base_root <- .api_root(as.character(hit$base_url[1L]))
-
-        }
-    }
 
     # --- Normalize local provider aliases ---
     if (provider %in% c("lmstudio","ollama","localai")) {
@@ -110,6 +69,7 @@ gpt <- function(prompt,
         provider <- "local"
     }
 
+    configured_local_root <- getOption("gptr.local_base_url", NULL)
     roots <- NULL
     prefer <- character(0)
     if (provider %in% c("local","auto")) {
@@ -120,70 +80,43 @@ gpt <- function(prompt,
         )
         prefer <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
         valid_roots <- names(roots)[vapply(roots, function(x) !is.null(x) && nzchar(x), logical(1L))]
-        if (!length(valid_roots)) valid_roots <- names(roots)
         prefer <- prefer[prefer %in% valid_roots]
         if (!length(prefer)) prefer <- valid_roots
     }
 
-    # --- Guarded local root resolution (only if still unset) ---
+    if ((provider %in% c("local","auto")) && !is.null(backend) && nzchar(backend)) {
+        backend <- tolower(as.character(backend))
+        if (!(backend %in% c(names(roots), "custom-local"))) {
+            rlang::abort(sprintf(
+                "Unknown local backend '%s'. Use one of: %s.",
+                backend,
+                paste(c(names(roots), "custom-local"), collapse = ", ")
+            ))
+        }
+    }
+
     if ((provider %in% c("local","auto")) && is.null(base_root)) {
         if (!is.null(base_url) && nzchar(base_url)) {
             base_root <- .api_root(base_url)
-        }
-        if (is.null(base_root) && !is.null(backend) && nzchar(backend) && backend %in% names(roots)) {
+        } else if (!is.null(backend) && nzchar(backend) && backend %in% names(roots)) {
             base_root <- .api_root(roots[[backend]])
-        } else if (is.null(base_root) && isTRUE(allow_backend_autoswitch)) {
-            picked <- FALSE
-            for (bk in prefer) {
-                root_candidate <- roots[[bk]]
-                if (is.null(root_candidate) || !nzchar(root_candidate)) next
-                lm <- try(
-                    .fetch_models_cached(
-                        provider = bk,
-                        base_url = roots[[bk]],
-                        openai_api_key = effective_openai_api_key,
-                        ssl_cert = ssl_cert
-                    ),
-                    silent = TRUE
-                )
-                if (!inherits(lm, "try-error") && is.data.frame(lm) && NROW(lm)) {
-                    base_root <- .api_root(root_candidate)
-                    backend   <- bk
-                    picked    <- TRUE
-                    break
-                }
-            }
-            if (!picked || is.null(base_root)) {
-                if (nzchar(effective_openai_api_key)) {
-                    provider <- "openai"
-                    backend <- NULL
-                    base_root <- NULL
-                } else if (length(prefer)) {
-                    fallback_backend <- NULL
-                    for (bk in prefer) {
-                        root_candidate <- roots[[bk]]
-                        if (is.null(root_candidate) || !nzchar(root_candidate)) next
-                        fallback_backend <- bk
-                        base_root <- .api_root(root_candidate)
-                        break
-                    }
-                    if (!is.null(fallback_backend)) {
-                        backend <- fallback_backend
-                    }
-                }
-            }
-        } else if (is.null(base_root) && length(prefer)) {
-            fallback_backend <- NULL
-            for (bk in prefer) {
-                root_candidate <- roots[[bk]]
-                if (is.null(root_candidate) || !nzchar(root_candidate)) next
-                fallback_backend <- bk
-                base_root <- .api_root(root_candidate)
-                break
-            }
-            if (!is.null(fallback_backend)) {
-                backend <- fallback_backend
-            }
+        } else if (!is.null(configured_local_root) && nzchar(configured_local_root)) {
+            base_root <- .api_root(configured_local_root)
+        } else if (length(prefer)) {
+            backend <- prefer[[1L]]
+            base_root <- .api_root(roots[[backend]])
+        }
+    }
+
+    if (provider == "auto") {
+        if (!is.null(base_root) && nzchar(base_root)) {
+            provider <- "local"
+        } else if (nzchar(effective_openai_api_key)) {
+            provider <- "openai"
+        } else {
+            rlang::abort(
+                "No route configured for `provider = \"auto\"`; set a local `backend`/`base_url` or use `provider = \"openai\"`."
+            )
         }
     }
 
@@ -283,35 +216,19 @@ gpt <- function(prompt,
             allow_remote = allow_remote,
             context = "This gpt() call"
         )
-        bu_root <- .api_root(defs$base_url)
-        if (is.null(.cache_get("openai", bu_root, base_url_normalized = TRUE))) {
-            invisible(try(
+        if (isTRUE(strict_model)) {
+            bu_root <- .api_root(defs$base_url)
+            ids <- tryCatch(
                 .fetch_models_cached(
                     provider = "openai",
                     base_url = bu_root,
                     openai_api_key = defs$api_key,
                     ssl_cert = ssl_cert
-                ),
-                silent = TRUE
-            ))
-        }
-        ids <- tryCatch(
-            .fetch_models_cached(
-                provider = "openai",
-                base_url = bu_root,
-                openai_api_key = defs$api_key,
-                ssl_cert = ssl_cert
-            )$model_id,
-            error = function(e) character(0)
-        )
-        if (length(ids) && !tolower(defs$model) %in% tolower(ids)) {
-            if ((identical(provider_input, "auto") && isTRUE(model_supplied)) || isTRUE(strict_model)) {
-                if (identical(provider_input, "auto") && isTRUE(model_supplied)) {
-                    stop(sprintf("Model '%s' not found for OpenAI. Please specify a provider.", defs$model), call. = FALSE)
-                }
+                )$model_id,
+                error = function(e) character(0)
+            )
+            if (length(ids) && !tolower(defs$model) %in% tolower(ids)) {
                 stop(sprintf("Model '%s' not found for OpenAI.", defs$model), call. = FALSE)
-            } else {
-                defs$model <- .resolve_openai_defaults(base_url = defs$base_url, api_key = defs$api_key)$model
             }
         }
         payload <- openai_build_payload(
@@ -340,39 +257,28 @@ gpt <- function(prompt,
             context = "This gpt() call"
         )
 
-        ent <- try(
-            .fetch_models_cached(
-                provider = backend,
-                base_url = base_root,
-                openai_api_key = effective_openai_api_key,
-                ssl_cert = ssl_cert
-            ),
-            silent = TRUE
-        )
-        ids <- if (!inherits(ent, "try-error") && is.data.frame(ent)) {
-            unique(na.omit(as.character(ent$model_id)))
-        } else character(0)
-
-        if (isTRUE(strict_model) && !length(ids)) strict_model <- FALSE
-
         default_model <- getOption(
             paste0("gptr.", backend, "_model"),
-            getOption("gptr.local_model", if (length(ids)) ids[[1]] else "mistralai/mistral-7b-instruct-v0.3")
+            getOption("gptr.local_model", "mistralai/mistral-7b-instruct-v0.3")
         )
         requested_model <- model %||% default_model
 
-        if (nzchar(requested_model) && length(ids) &&
-            !tolower(requested_model) %in% tolower(ids)) {
-            if (identical(provider_input, "auto") && isTRUE(model_supplied)) {
-                stop(sprintf("Model '%s' not found. Please specify a provider.", requested_model), call. = FALSE)
-            } else {
-                msg <- sprintf("Model '%s' not found on %s.", requested_model, base_root)
-                if (isTRUE(strict_model)) {
-                    stop(msg, call. = FALSE)
-                } else {
-                    warning(msg, call. = FALSE)
-                    requested_model <- if (length(ids)) ids[[1L]] else default_model
-                }
+        if (isTRUE(strict_model) && nzchar(requested_model)) {
+            ent <- try(
+                .fetch_models_cached(
+                    provider = backend,
+                    base_url = base_root,
+                    openai_api_key = effective_openai_api_key,
+                    ssl_cert = ssl_cert
+                ),
+                silent = TRUE
+            )
+            ids <- if (!inherits(ent, "try-error") && is.data.frame(ent)) {
+                unique(na.omit(as.character(ent$model_id)))
+            } else character(0)
+
+            if (length(ids) && !tolower(requested_model) %in% tolower(ids)) {
+                stop(sprintf("Model '%s' not found on %s.", requested_model, base_root), call. = FALSE)
             }
         }
 

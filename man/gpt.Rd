@@ -32,7 +32,11 @@ gpt(
 
 \item{temperature}{Numeric scalar (default 0.2).}
 
-\item{provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".}
+\item{provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
+With \code{provider = "auto"}, \code{gpt()} uses the configured local route
+(\code{base_url}, \code{backend}, \code{gptr.local_base_url}, or \code{gptr.local_prefer}) and
+only falls back to OpenAI when no local route is configured and remote
+access is allowed.}
 
 \item{base_url}{"Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions)."}
 
@@ -53,9 +57,8 @@ gpt(
 \item{strict_model}{Logical. If TRUE (default), error if the requested model is
 unavailable on the chosen backend.}
 
-\item{allow_backend_autoswitch}{Logical (default TRUE). When FALSE, do not
-probe or switch to alternative local backends if the requested one is
-unavailable.}
+\item{allow_backend_autoswitch}{Retained for backward compatibility.
+\code{gpt()} no longer probes alternative local backends while choosing a route.}
 
 \item{print_raw}{Logical. If TRUE, pretty-print the compact response
 skeleton as JSON in the console and return that skeleton list instead of

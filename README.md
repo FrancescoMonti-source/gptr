@@ -65,7 +65,7 @@ pak::pak("FrancescoMonti-source/gptr")
 remotes::install_github("FrancescoMonti-source/gptr")
 ```
 
-Set an API key (e.g., `OPENAI_API_KEY`) or run a local OpenAI-compatible server before calling a model. With `provider = "auto"`, `gptr` prefers a detected local backend and falls back to cloud APIs when credentials are available.
+Set an API key (e.g., `OPENAI_API_KEY`) or run a local OpenAI-compatible server before calling a model. With `provider = "auto"`, `gptr` uses your configured local route (`base_url`, `backend`, `gptr.local_base_url`, or `gptr.local_prefer`) and only falls back to OpenAI when no local route is configured. It does not scan providers to find which backend has a model.
 
 ### Configure credentials and defaults
 
@@ -141,7 +141,7 @@ res
 
 ## Common first-run issues
 
--   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "auto")` to confirm.
+-   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "lmstudio")`, `gpt("ping", provider = "ollama")`, or `gpt("ping", provider = "openai")` to confirm the route you want to use.
 -   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available. Set a default model for your provider (see `show_gptr_options()`) or pass a model name explicitly whenever you make a call to the LLM.
 -   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
 
@@ -317,10 +317,12 @@ All knobs and defaults can be inspected with `show_gptr_options()`, then overrid
 
 `gptr` works with both hosted and local models via a consistent interface:
 
--   `provider = "auto"`: prefer a running local backend (LM Studio, Ollama, LocalAI). If none is detected and `OPENAI_API_KEY` is set, fall back to OpenAI.
+-   `provider = "auto"`: use the configured local route first (`base_url`, `backend`, `gptr.local_base_url`, then `gptr.local_prefer`). Fall back to OpenAI only when no local route is configured and remote access is allowed.
 -   `provider = "openai"`: call OpenAI's REST API directly. Set `model` (e.g., `"gpt-4o-mini"`).
 -   `provider = "local"`: use an OpenAI-compatible server you control. Pin a backend with `backend = "lmstudio"`, `"ollama"`, or `"localai"`, or supply a custom `base_url`.
 -   Shorthands `lmstudio`, `ollama`, and `localai` map to `provider = "local"` with the respective backend already set.
+
+Use `list_models()` explicitly when you want to inspect what a backend exposes; `gpt()` no longer searches providers to find where a requested model lives.
 
 ```{r, eval = FALSE}
 gpt("ping", provider = "auto")

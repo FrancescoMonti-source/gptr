@@ -90,30 +90,17 @@ test_that("gpt forwards ssl_cert to local backend", {
     expect_identical(called, cert)
 })
 
-test_that("gpt forwards ssl_cert to model discovery (openai path)", {
+test_that("gpt forwards ssl_cert to strict OpenAI model validation", {
     cert <- withr::local_tempfile(fileext = ".crt")
     writeLines("dummy", cert)
 
-    recorded <- new.env(parent = emptyenv())
-    recorded$resolver <- NULL
-    recorded$fetch <- NULL
+    recorded <- NULL
 
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ssl_cert = NULL, ...) {
-            recorded$resolver <- ssl_cert
-            data.frame(
-                provider = "openai",
-                base_url = "https://api.openai.com",
-                model_id = model,
-                stringsAsFactors = FALSE
-            )
-        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", refresh = FALSE,
                                         ssl_cert = NULL, ...) {
-            if (identical(provider, "openai")) {
-                recorded$fetch <- ssl_cert
-            }
+            recorded <<- ssl_cert
             data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
         },
         openai_send_request = function(payload, base_url, api_key,
@@ -128,17 +115,16 @@ test_that("gpt forwards ssl_cert to model discovery (openai path)", {
 
     gpt("hi",
         model = "gpt-4o-mini",
-        provider = "auto",
+        provider = "openai",
         openai_api_key = "sk-test",
         ssl_cert = cert,
         allow_remote = TRUE,
         print_raw = FALSE)
 
-    expect_identical(recorded$resolver, cert)
-    expect_identical(recorded$fetch, cert)
+    expect_identical(recorded, cert)
 })
 
-test_that("gpt forwards ssl_cert to local model probes", {
+test_that("gpt forwards ssl_cert to strict local model validation", {
     cert <- withr::local_tempfile(fileext = ".crt")
     writeLines("dummy", cert)
 
@@ -166,53 +152,50 @@ test_that("gpt forwards ssl_cert to local model probes", {
         .package = "gptr"
     )
 
-    withr::local_options(list(gptr.local_model = "mistral"))
+    withr::local_options(list(gptr.local_model = "mistral", gptr.ollama_model = "mistral"))
 
     gpt("hi",
         provider = "ollama",
         ssl_cert = cert,
-        strict_model = FALSE,
+        strict_model = TRUE,
         print_raw = FALSE)
 
     expect_identical(seen$local, cert)
 })
 
-test_that("autoswitch probes include ssl_cert when scanning locals", {
-    cert <- withr::local_tempfile(fileext = ".crt")
-    writeLines("dummy", cert)
-
-    seen <- list()
-
+test_that("auto chooses the preferred local route without provider discovery", {
+    called <- NULL
     testthat::local_mocked_bindings(
+        .resolve_model_provider = function(...) {
+            stop("should not resolve providers")
+        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", refresh = FALSE,
                                         ssl_cert = NULL, ...) {
-            if (!is.null(provider)) {
-                seen[[provider]] <<- ssl_cert
-            }
-            data.frame(model_id = "local-default", stringsAsFactors = FALSE)
+            stop("should not probe model listings")
         },
         .request_local = function(payload, base_url, timeout = 30, ssl_cert = NULL) {
+            called <<- base_url
             fake_resp(model = payload$model %||% "local-default")
         },
         openai_send_request = function(payload, base_url, api_key,
                                        timeout = 30, ssl_cert = NULL) {
-            fake_resp(model = payload$model %||% "openai")
+            stop("should not call OpenAI")
         },
         .package = "gptr"
     )
 
-    withr::local_options(list(gptr.local_model = "local-default"))
+    withr::local_options(list(
+        gptr.local_prefer = c("ollama", "lmstudio", "localai"),
+        gptr.local_model = "local-default"
+    ))
 
     gpt("hi",
         provider = "auto",
         strict_model = FALSE,
-        openai_api_key = "",
-        ssl_cert = cert,
         print_raw = FALSE)
 
-    expect_true(length(seen) >= 1L)
-    expect_true(any(vapply(seen, identical, logical(1), cert)))
+    expect_identical(called, "http://127.0.0.1:11434")
 })
 
 test_that("openai_send_request sets cainfo when ssl_cert supplied", {
@@ -271,49 +254,37 @@ test_that(".request_local sets cainfo when ssl_cert supplied", {
     expect_equal(res$status, 200L)
 })
 
-test_that("auto + openai model routes to OpenAI", {
+test_that("auto keeps using the chosen local route even when a model looks remote", {
     called <- NULL
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(
-                provider = "openai",
-                base_url = "https://api.openai.com",
-                model_id = "gpt-4o-mini",
-                stringsAsFactors = FALSE
-            )
+        .resolve_model_provider = function(...) {
+            stop("should not resolve providers")
         },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
+                                        openai_api_key = "", ...) {
+            stop("should not probe model listings")
         },
         openai_send_request = function(payload, base_url, api_key, timeout = 30, ssl_cert = NULL) {
             called <<- c(called, "openai")
-            fake_resp(model = payload$model %||% "gpt-4o-mini")
+            fake_resp(model = payload$model %||% "gpt")
         },
         .request_local = function(payload, base_url, timeout = 30, ssl_cert = NULL) {
-            called <<- c(called, "local")
-            fake_resp(model = payload$model %||% "local-model")
+            called <<- c(called, paste0("local@", base_url), payload$model %||% "")
+            fake_resp(model = payload$model %||% "gpt-4o-mini")
         },
         .package = "gptr"
     )
     res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
-               openai_api_key = "sk-test", allow_remote = TRUE, print_raw = FALSE)
-    expect_identical(called, "openai")
+               openai_api_key = "sk-test", allow_remote = TRUE,
+               strict_model = FALSE, print_raw = FALSE)
+    expect_identical(called, c("local@http://127.0.0.1:1234", "gpt-4o-mini"))
 })
 
-test_that("auto + local model routes to local", {
+test_that("auto honors an explicit local backend", {
     called <- NULL
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(
-                provider = "lmstudio",
-                base_url = "http://127.0.0.1:1234",
-                model_id = model,
-                stringsAsFactors = FALSE
-            )
-        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
+                                        openai_api_key = "", ...) {
             data.frame(model_id = "mistralai/mistral-7b-instruct-v0.3",
                        stringsAsFactors = FALSE)
         },
@@ -328,40 +299,9 @@ test_that("auto + local model routes to local", {
         .package = "gptr"
     )
     res <- gpt("hi", model = "mistralai/mistral-7b-instruct-v0.3",
-               provider = "auto", print_raw = FALSE)
+               provider = "auto", backend = "ollama", print_raw = FALSE)
     expect_true(length(called) == 1L)
-    expect_match(called, "^local@http://127\\.0\\.0\\.1:1234$")
-})
-
-test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
-    withr::local_options(list(gptr.local_prefer = c("ollama","lmstudio","localai")))
-
-    called <- NULL
-    testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(
-                provider = c("openai", "ollama"),
-                base_url  = c("https://api.openai.com", "http://127.0.0.1:11434"),
-                model_id  = c("o1-mini", "o1-mini"),
-                stringsAsFactors = FALSE
-            )
-        },
-        .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            data.frame(model_id = "o1-mini", stringsAsFactors = FALSE)
-        },
-        .request_local = function(payload, base_url, timeout = 30, ssl_cert = NULL) {
-            called <<- c(called, paste0("local@", base_url))
-            fake_resp(model = payload$model %||% "o1-mini")
-        },
-        openai_send_request = function(payload, base_url, api_key, timeout = 30, ssl_cert = NULL) {
-            called <<- c(called, "openai")
-            fake_resp(model = payload$model %||% "o1-mini")
-        },
-        .package = "gptr"
-    )
-    res <- gpt("hi", model = "o1-mini", provider = "auto", print_raw = FALSE)
-    expect_identical(called, "local@http://127.0.0.1:11434")
+    expect_match(called, "^local@http://127\\.0\\.0\\.1:11434$")
 })
 
 test_that("provider=openai is blocked unless remote transmission is explicitly allowed", {
@@ -385,76 +325,44 @@ test_that("provider=openai is blocked unless remote transmission is explicitly a
     expect_false(called)
 })
 
-test_that("auto + unknown model errors asking for provider", {
-    called <- character()
+test_that("auto with strict_model validates only the chosen local route", {
     testthat::local_mocked_bindings(
-        req_perform = function(req, ...) {
-            url <- httr2::req_url(req)
-            called <<- c(called, url)
-            fake_resp()
+        .resolve_model_provider = function(...) {
+            stop("should not resolve providers")
         },
-        .package = "httr2"
+        .fetch_models_cached = function(provider = NULL, base_url = NULL,
+                                        openai_api_key = "", ...) {
+            expect_identical(provider, "lmstudio")
+            expect_identical(base_url, "http://127.0.0.1:1234")
+            data.frame(model_id = "mistral", stringsAsFactors = FALSE)
+        },
+        .package = "gptr"
     )
+    expect_error(
+        gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
+        "Model 'missing' not found on http://127.0.0.1:1234.",
+        fixed = TRUE
+    )
+})
+
+test_that("auto falls back to OpenAI only when no local route is configured", {
+    called <- NULL
+    withr::local_options(list(
+        gptr.local_base_url = NULL,
+        gptr.lmstudio_base_url = "",
+        gptr.ollama_base_url = "",
+        gptr.localai_base_url = "",
+        gptr.local_prefer = character()
+    ))
     testthat::local_mocked_bindings(
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", ...) {
-            data.frame(model_id = character(), stringsAsFactors = FALSE)
-        },
-        .package = "gptr"
-    )
-    testthat::local_mocked_bindings(
-        .resolve_model_provider = function(...) data.frame(),
-        .package = "gptr"
-    )
-    expect_error(
-        gpt("hi", model = "nonexistent-model", provider = "auto", print_raw = FALSE),
-        "Model 'nonexistent-model' is not available; specify a provider.",
-        fixed = TRUE
-    )
-    expect_identical(called, character())
-})
-
-test_that("auto + model resolution returning NULL errors asking for provider", {
-    testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) NULL,
-        .package = "gptr"
-    )
-    expect_error(
-        gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
-        "Model 'missing' is not available; specify a provider.",
-        fixed = TRUE
-    )
-})
-
-test_that("auto + model resolution returning empty data frame errors asking for provider", {
-    testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(provider = character(), base_url = character(),
-                       model_id = character(), stringsAsFactors = FALSE)
-        },
-        .package = "gptr"
-    )
-    expect_error(
-        gpt("hi", model = "missing", provider = "auto", print_raw = FALSE),
-        "Model 'missing' is not available; specify a provider.",
-        fixed = TRUE
-    )
-})
-
-test_that("auto with no local backend falls back to OpenAI", {
-    called <- NULL
-    testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(provider = character(), base_url = character(),
-                       model_id = character(), stringsAsFactors = FALSE)
-        },
-        .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            data.frame(model_id = character(), stringsAsFactors = FALSE)
+            expect_identical(provider, "openai")
+            data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
         },
         openai_send_request = function(payload, base_url, api_key, timeout = 30, ssl_cert = NULL) {
             called <<- c(called, "openai")
-            fake_resp(model = payload$model %||% "fallback")
+            fake_resp(model = payload$model %||% "gpt-4o-mini")
         },
         .request_local = function(payload, base_url, timeout = 30, ssl_cert = NULL) {
             called <<- c(called, "local")
@@ -466,11 +374,12 @@ test_that("auto with no local backend falls back to OpenAI", {
     expect_identical(called, "openai")
 })
 
-test_that("disable backend autoswitch avoids probing and fallback", {
-    withr::local_options(list(gptr.local_prefer = c("ollama","lmstudio","localai")))
-
+test_that("allow_backend_autoswitch is ignored for backward compatibility", {
     called <- NULL
     testthat::local_mocked_bindings(
+        .resolve_model_provider = function(...) {
+            stop("should not resolve providers")
+        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", ...) {
             stop("should not probe")
@@ -485,8 +394,9 @@ test_that("disable backend autoswitch avoids probing and fallback", {
         },
         .package = "gptr"
     )
+    withr::local_options(list(gptr.local_prefer = c("ollama","lmstudio","localai")))
     gpt("hi", provider = "auto", allow_backend_autoswitch = FALSE,
-        openai_api_key = "sk", strict_model = FALSE, print_raw = FALSE)
+        strict_model = FALSE, print_raw = FALSE)
     expect_identical(called, "local@http://127.0.0.1:11434")
 })
 
@@ -508,21 +418,18 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
     expect_identical(called, "openai")
 })
 
-test_that("missing openai model falls back to default when strict_model = FALSE", {
+test_that("strict_model = FALSE sends the requested OpenAI model unchanged", {
     used <- NULL
     testthat::local_mocked_bindings(
-        .fetch_models_cached = function(provider = NULL, base_url = NULL,
-                                            openai_api_key = "", ...) {
-            data.frame(model_id = "gpt-4o-mini", stringsAsFactors = FALSE)
-        },
         openai_send_request = function(payload, base_url, api_key, timeout = 30, ssl_cert = NULL) {
             used <<- payload$model
             fake_resp(model = payload$model %||% "gpt-4o-mini")
-        }
+        },
+        .package = "gptr"
     )
     res <- gpt("hi", model = "unknown", provider = "openai",
                openai_api_key = "sk-test", strict_model = FALSE, allow_remote = TRUE, print_raw = FALSE)
-    expect_identical(used, "gpt-4o-mini")
+    expect_identical(used, "unknown")
 })
 
 test_that("strict_model errors when OpenAI model is unavailable", {
@@ -632,7 +539,7 @@ test_that("strict_model errors when model not installed (local)", {
     )
 })
 
-test_that("strict_model ignored when model listing unavailable", {
+test_that("strict_model still errors if the server swaps models after listing failure", {
     called_models <- FALSE
     called_chat <- FALSE
     testthat::local_mocked_bindings(
@@ -656,23 +563,16 @@ test_that("strict_model ignored when model listing unavailable", {
             openai_api_key = "",
             strict_model = TRUE,
             print_raw = FALSE),
-        NA
+        "Server used model 'fallback' instead of requested 'llama3:latest'.",
+        fixed = TRUE
     )
     expect_true(called_models)
     expect_true(called_chat)
 })
 
-test_that("model match is case-insensitive", {
+test_that("OpenAI strict_model matching is case-insensitive", {
     called <- NULL
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(model, openai_api_key = "", ...) {
-            data.frame(
-                provider = "openai",
-                base_url = "https://api.openai.com",
-                model_id = "GPT-4O-MINI",
-                stringsAsFactors = FALSE
-            )
-        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                             openai_api_key = "", ...) {
             data.frame(model_id = "GPT-4O-MINI", stringsAsFactors = FALSE)
@@ -683,7 +583,7 @@ test_that("model match is case-insensitive", {
         },
         .package = "gptr"
     )
-    res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
+    res <- gpt("hi", model = "gpt-4o-mini", provider = "openai",
                openai_api_key = "sk-test", allow_remote = TRUE, print_raw = FALSE)
     expect_identical(called, "openai")
 })
