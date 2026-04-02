@@ -54,6 +54,7 @@ test_that("gpt forwards ssl_cert to OpenAI backend", {
         provider = "openai",
         openai_api_key = "sk-test",
         ssl_cert = cert,
+        allow_remote = TRUE,
         print_raw = FALSE)
 
     expect_identical(called, cert)
@@ -130,6 +131,7 @@ test_that("gpt forwards ssl_cert to model discovery (openai path)", {
         provider = "auto",
         openai_api_key = "sk-test",
         ssl_cert = cert,
+        allow_remote = TRUE,
         print_raw = FALSE)
 
     expect_identical(recorded$resolver, cert)
@@ -295,7 +297,7 @@ test_that("auto + openai model routes to OpenAI", {
         .package = "gptr"
     )
     res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
-               openai_api_key = "sk-test", print_raw = FALSE)
+               openai_api_key = "sk-test", allow_remote = TRUE, print_raw = FALSE)
     expect_identical(called, "openai")
 })
 
@@ -360,6 +362,27 @@ test_that("auto + duplicate model prefers locals via gptr.local_prefer", {
     )
     res <- gpt("hi", model = "o1-mini", provider = "auto", print_raw = FALSE)
     expect_identical(called, "local@http://127.0.0.1:11434")
+})
+
+test_that("provider=openai is blocked unless remote transmission is explicitly allowed", {
+    called <- FALSE
+    testthat::local_mocked_bindings(
+        openai_send_request = function(payload, base_url, api_key, timeout = 30, ssl_cert = NULL) {
+            called <<- TRUE
+            fake_resp(model = payload$model %||% "gpt-4o-mini")
+        },
+        .package = "gptr"
+    )
+
+    expect_error(
+        gpt("hi",
+            provider = "openai",
+            model = "gpt-4o-mini",
+            openai_api_key = "sk-test",
+            print_raw = FALSE),
+        "would send data to a non-local endpoint"
+    )
+    expect_false(called)
 })
 
 test_that("auto + unknown model errors asking for provider", {
@@ -439,7 +462,7 @@ test_that("auto with no local backend falls back to OpenAI", {
         },
         .package = "gptr"
     )
-    res <- gpt("hi", provider = "auto", openai_api_key = "sk", print_raw = FALSE)
+    res <- gpt("hi", provider = "auto", openai_api_key = "sk", allow_remote = TRUE, print_raw = FALSE)
     expect_identical(called, "openai")
 })
 
@@ -481,7 +504,7 @@ test_that("provider=openai routes to OpenAI even if locals have models", {
         .package = "gptr"
     )
     res <- gpt("hi", model = "gpt-4o-mini", provider = "openai",
-               openai_api_key = "sk-test", print_raw = FALSE)
+               openai_api_key = "sk-test", allow_remote = TRUE, print_raw = FALSE)
     expect_identical(called, "openai")
 })
 
@@ -498,7 +521,7 @@ test_that("missing openai model falls back to default when strict_model = FALSE"
         }
     )
     res <- gpt("hi", model = "unknown", provider = "openai",
-               openai_api_key = "sk-test", strict_model = FALSE, print_raw = FALSE)
+               openai_api_key = "sk-test", strict_model = FALSE, allow_remote = TRUE, print_raw = FALSE)
     expect_identical(used, "gpt-4o-mini")
 })
 
@@ -517,8 +540,21 @@ test_that("strict_model errors when OpenAI model is unavailable", {
             provider = "openai",
             openai_api_key = "sk-test",
             strict_model = TRUE,
+            allow_remote = TRUE,
             print_raw = FALSE),
         "Model 'unknown' not found for OpenAI."
+    )
+})
+
+test_that("explicit non-loopback local base_url is blocked unless remote transmission is allowed", {
+    expect_error(
+        gpt("hi",
+            provider = "local",
+            base_url = "http://192.168.1.50:1234",
+            model = "mistralai/mistral-7b-instruct-v0.3",
+            strict_model = FALSE,
+            print_raw = FALSE),
+        "would send data to a non-local endpoint"
     )
 })
 
@@ -543,6 +579,7 @@ test_that("explicit local base_url is honored", {
                base_url = "http://192.168.1.50:1234",
                model = "mistralai/mistral-7b-instruct-v0.3",
                strict_model = TRUE,
+               allow_remote = TRUE,
                print_raw = FALSE)
     expect_identical(called, "local@http://192.168.1.50:1234")
 })
@@ -568,6 +605,7 @@ test_that("local base_url path variants are normalized", {
             base_url = url,
             model = "custom-model",
             strict_model = TRUE,
+            allow_remote = TRUE,
             print_raw = FALSE)
         expect_identical(captured, "http://custom:1234")
     }
@@ -646,7 +684,7 @@ test_that("model match is case-insensitive", {
         .package = "gptr"
     )
     res <- gpt("hi", model = "gpt-4o-mini", provider = "auto",
-               openai_api_key = "sk-test", print_raw = FALSE)
+               openai_api_key = "sk-test", allow_remote = TRUE, print_raw = FALSE)
     expect_identical(called, "openai")
 })
 

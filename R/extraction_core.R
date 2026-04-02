@@ -312,7 +312,8 @@
                                         backend = NULL,
                                         model = NULL,
                                         openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-                                        ssl_cert = NULL) {
+                                        ssl_cert = NULL,
+                                        allow_remote = getOption("gptr.allow_remote", FALSE)) {
     provider <- match.arg(provider, c("auto", "local", "openai", "lmstudio", "ollama", "localai"))
     configured <- tolower(getOption("gptr.native_structured_backends", character()))
     normalized <- .normalize_structured_provider(provider, backend)
@@ -328,7 +329,7 @@
     hits <- try(
         .resolve_model_provider(
             model,
-            openai_api_key = openai_api_key,
+            openai_api_key = if (isTRUE(allow_remote)) openai_api_key else "",
             ssl_cert = ssl_cert
         ),
         silent = TRUE
@@ -360,6 +361,7 @@
                                         base_args = list(),
                                         dots = list()) {
     structured <- match.arg(structured)
+    allow_remote <- dots$allow_remote %||% getOption("gptr.allow_remote", FALSE)
     call_args <- c(base_args, list(prompt = prompt))
     call_args <- c(call_args, Filter(Negate(is.null), list(
         provider = provider,
@@ -383,7 +385,8 @@
             backend = backend,
             model = model,
             openai_api_key = openai_api_key,
-            ssl_cert = ssl_cert
+            ssl_cert = ssl_cert,
+            allow_remote = allow_remote
         )
 
         if (isTRUE(can_native)) {

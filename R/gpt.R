@@ -27,6 +27,9 @@
 #'   FALSE.
 #' @param ssl_cert Optional path to a certificate authority (CA) bundle passed to
 #'   provider HTTP clients and model probes as `cainfo`.
+#' @param allow_remote Logical. If FALSE (default), block transmission to
+#'   non-loopback endpoints, including OpenAI cloud and explicit non-local
+#'   OpenAI-compatible base URLs. Set to TRUE to opt in to remote transmission.
 #' @param ... Extra fields passed through to the provider payload (e.g. `max_tokens`, `stop`).
 #'
 #' @return Character scalar (assistant message). `attr(value, "usage")` may
@@ -50,12 +53,14 @@ gpt <- function(prompt,
                 allow_backend_autoswitch = getOption("gptr.local_autoswitch", TRUE),
                 print_raw = FALSE,
                 ssl_cert = getOption("gptr.ssl_cert", NULL),
+                allow_remote = getOption("gptr.allow_remote", FALSE),
                 ...) {
 
     provider <- match.arg(provider)
     provider_input <- provider
     model_supplied <- is.character(model) && length(model) == 1L && nzchar(model)
     base_root <- NULL
+    effective_openai_api_key <- if (isTRUE(allow_remote)) openai_api_key else ""
 
     # --- provider = "auto" + model = "x" ---
     # hits is the data frame of potential providers. It is sorted with a ranking
@@ -72,7 +77,7 @@ gpt <- function(prompt,
         lm <- try(
             .resolve_model_provider(
                 model,
-                openai_api_key = openai_api_key,
+                openai_api_key = effective_openai_api_key,
                 ssl_cert = ssl_cert
             ),
             silent = TRUE
@@ -136,7 +141,7 @@ gpt <- function(prompt,
                     .fetch_models_cached(
                         provider = bk,
                         base_url = roots[[bk]],
-                        openai_api_key = openai_api_key,
+                        openai_api_key = effective_openai_api_key,
                         ssl_cert = ssl_cert
                     ),
                     silent = TRUE
@@ -149,7 +154,7 @@ gpt <- function(prompt,
                 }
             }
             if (!picked || is.null(base_root)) {
-                if (nzchar(openai_api_key)) {
+                if (nzchar(effective_openai_api_key)) {
                     provider <- "openai"
                     backend <- NULL
                     base_root <- NULL
@@ -273,6 +278,11 @@ gpt <- function(prompt,
             file_paths = file_paths
         )
         defs <- .resolve_openai_defaults(model = model, base_url = base_url, api_key = openai_api_key)
+        .assert_remote_allowed(
+            defs$base_url,
+            allow_remote = allow_remote,
+            context = "This gpt() call"
+        )
         bu_root <- .api_root(defs$base_url)
         if (is.null(.cache_get("openai", bu_root, base_url_normalized = TRUE))) {
             invisible(try(
@@ -324,12 +334,17 @@ gpt <- function(prompt,
     # ---------------- provider == "local" ----------------
     if (provider == "local") {
         stopifnot(!is.null(base_root), nzchar(base_root))
+        .assert_remote_allowed(
+            base_root,
+            allow_remote = allow_remote,
+            context = "This gpt() call"
+        )
 
         ent <- try(
             .fetch_models_cached(
                 provider = backend,
                 base_url = base_root,
-                openai_api_key = openai_api_key,
+                openai_api_key = effective_openai_api_key,
                 ssl_cert = ssl_cert
             ),
             silent = TRUE

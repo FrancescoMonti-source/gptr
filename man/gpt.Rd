@@ -21,6 +21,7 @@ gpt(
   allow_backend_autoswitch = getOption("gptr.local_autoswitch", TRUE),
   print_raw = FALSE,
   ssl_cert = getOption("gptr.ssl_cert", NULL),
+  allow_remote = getOption("gptr.allow_remote", FALSE),
   ...
 )
 }
@@ -63,6 +64,10 @@ FALSE.}
 
 \item{ssl_cert}{Optional path to a certificate authority (CA) bundle passed to
 provider HTTP clients and model probes as \code{cainfo}.}
+
+\item{allow_remote}{Logical. If FALSE (default), block transmission to
+non-loopback endpoints, including OpenAI cloud and explicit non-local
+OpenAI-compatible base URLs. Set to TRUE to opt in to remote transmission.}
 
 \item{...}{Extra fields passed through to the provider payload (e.g. \code{max_tokens}, \code{stop}).}
 }

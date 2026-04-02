@@ -39,6 +39,7 @@ test_that("gpt forwards file_path to OpenAI message builder", {
         provider = "openai",
         model = "gpt-4o-mini",
         openai_api_key = "sk-test",
+        allow_remote = TRUE,
         file_path = tmp,
         print_raw = FALSE
     )

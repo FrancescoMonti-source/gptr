@@ -15,6 +15,7 @@
     gptr.localai_base_url  = "http://127.0.0.1:8080",
     # OpenAI
     gptr.openai_model = "gpt-4o-mini",
+    gptr.allow_remote = FALSE,
     # misc
     gptr.request_timeout = 30, # short timeout for snappy local probes
     gptr.max_tries = 2,

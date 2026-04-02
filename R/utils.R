@@ -109,6 +109,55 @@ browse_openai_documentation <- function(url = "https://platform.openai.com/docs/
   FALSE
 }
 
+.url_host <- function(x) {
+  if (is.null(x) || !length(x) || is.na(x[[1]]) || !nzchar(x[[1]])) {
+    return(NA_character_)
+  }
+
+  parsed <- tryCatch(httr2::url_parse(x[[1]]), error = function(e) NULL)
+  host <- parsed$hostname %||% NA_character_
+  if (!is.character(host) || !length(host) || is.na(host[[1]]) || !nzchar(host[[1]])) {
+    return(NA_character_)
+  }
+
+  tolower(trimws(host[[1]]))
+}
+
+.is_loopback_host <- function(host) {
+  if (!is.character(host) || !length(host) || is.na(host[[1]]) || !nzchar(host[[1]])) {
+    return(FALSE)
+  }
+
+  host <- tolower(trimws(host[[1]]))
+  host %in% c("localhost", "127.0.0.1", "::1", "[::1]")
+}
+
+.is_loopback_base_url <- function(x) {
+  .is_loopback_host(.url_host(x))
+}
+
+.assert_remote_allowed <- function(base_url,
+                                   allow_remote = getOption("gptr.allow_remote", FALSE),
+                                   context = "This gpt() call") {
+  if (isTRUE(allow_remote) || .is_loopback_base_url(base_url)) {
+    return(invisible(TRUE))
+  }
+
+  target <- .url_host(base_url)
+  if (is.na(target)) {
+    target <- as.character(base_url[[1]] %||% "<unknown>")
+  }
+
+  stop(
+    sprintf(
+      "%s would send data to a non-local endpoint (%s). Set `allow_remote = TRUE` or `options(gptr.allow_remote = TRUE)` to permit remote transmission.",
+      context,
+      target
+    ),
+    call. = FALSE
+  )
+}
+
 #' Show current gptr package options
 #'
 #' Prints all options that start with "gptr." along with their current values.
