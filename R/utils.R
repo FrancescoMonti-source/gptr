@@ -158,6 +158,109 @@ browse_openai_documentation <- function(url = "https://platform.openai.com/docs/
   )
 }
 
+# This helper answers a deliberately narrow question:
+# "Given the user's provider/backend/base_url options, where will this request go?"
+#
+# The important design rule is route-first resolution. We choose the route once,
+# using explicit inputs and configured defaults, and only then decide anything
+# else (model validation, native structured outputs, etc.).
+#
+# In particular, this helper does *not* search across providers by model name.
+# If a caller wants discovery, that remains an explicit action via `list_models()`
+# or `.resolve_model_provider()`. Request execution should be boring and
+# predictable: same inputs, same route.
+.resolve_request_route <- function(provider = c("auto", "local", "openai", "lmstudio", "ollama", "localai"),
+                                   backend = NULL,
+                                   base_url = NULL,
+                                   openai_api_key = Sys.getenv("OPENAI_API_KEY", unset = ""),
+                                   allow_remote = getOption("gptr.allow_remote", FALSE)) {
+  provider <- match.arg(provider)
+  effective_openai_api_key <- if (isTRUE(allow_remote)) openai_api_key else ""
+  request_base_url <- if (!is.null(base_url) && nzchar(base_url)) base_url else NULL
+
+  if (provider %in% c("lmstudio", "ollama", "localai")) {
+    backend <- provider
+    provider <- "local"
+  }
+
+  configured_local_root <- getOption("gptr.local_base_url", NULL)
+  roots <- list(
+    lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
+    ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
+    localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080")
+  )
+  prefer <- getOption("gptr.local_prefer", c("lmstudio", "ollama", "localai"))
+  valid_roots <- names(roots)[vapply(roots, function(x) !is.null(x) && nzchar(x), logical(1L))]
+  prefer <- prefer[prefer %in% valid_roots]
+  if (!length(prefer)) prefer <- valid_roots
+
+  if ((provider %in% c("local", "auto")) && !is.null(backend) && nzchar(backend)) {
+    backend <- tolower(as.character(backend))
+    if (!(backend %in% c(names(roots), "custom-local"))) {
+      rlang::abort(sprintf(
+        "Unknown local backend '%s'. Use one of: %s.",
+        backend,
+        paste(c(names(roots), "custom-local"), collapse = ", ")
+      ))
+    }
+  }
+
+  base_root <- NULL
+  if (provider %in% c("local", "auto")) {
+    if (!is.null(request_base_url)) {
+      base_root <- .api_root(request_base_url)
+    } else if (!is.null(backend) && nzchar(backend) && backend %in% names(roots)) {
+      base_root <- .api_root(roots[[backend]])
+    } else if (!is.null(configured_local_root) && nzchar(configured_local_root)) {
+      base_root <- .api_root(configured_local_root)
+    } else if (length(prefer)) {
+      backend <- prefer[[1L]]
+      base_root <- .api_root(roots[[backend]])
+    }
+  }
+
+  if (provider == "auto") {
+    if (!is.null(base_root) && nzchar(base_root)) {
+      provider <- "local"
+    } else if (nzchar(effective_openai_api_key)) {
+      provider <- "openai"
+    } else {
+      rlang::abort(
+        "No route is configured for `provider = \"auto\"`; set `backend` or `base_url`, set `options(gptr.local_base_url = ...)`, or use `provider = \"openai\"` with `allow_remote = TRUE`."
+      )
+    }
+  }
+
+  if (provider == "local") {
+    if (is.null(base_root) || !nzchar(base_root)) {
+      rlang::abort(
+        "No local route is configured; set `backend` or `base_url`, or set `options(gptr.local_base_url = ...)`."
+      )
+    }
+
+    if (is.null(backend) || !nzchar(backend)) {
+      normalized_roots <- vapply(roots, function(x) {
+        if (is.null(x) || !nzchar(x)) return(NA_character_)
+        .api_root(x)
+      }, character(1L))
+      hit <- names(roots)[normalized_roots == base_root]
+      backend <- if (length(hit)) hit[[1L]] else "custom-local"
+    }
+
+    request_base_url <- base_root
+  } else {
+    backend <- NULL
+  }
+
+  list(
+    provider = provider,
+    backend = backend,
+    base_root = if (identical(provider, "local")) base_root else NULL,
+    request_base_url = request_base_url,
+    effective_openai_api_key = effective_openai_api_key
+  )
+}
+
 #' Show current gptr package options
 #'
 #' Prints all options that start with "gptr." along with their current values.

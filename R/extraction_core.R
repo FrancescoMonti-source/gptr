@@ -308,46 +308,43 @@
     provider
 }
 
+# This helper does *not* ask "where does this model exist?".
+# That question belongs to explicit discovery tools like `list_models()`.
+#
+# Instead, it asks a smaller and more reliable question:
+# "Now that we have already chosen the route, can *that route* accept a real
+# JSON schema directly?"
+#
+# That distinction matters because the same model id can exist on multiple
+# providers, and those providers can differ in structured-output support.
+# Route first, capability second keeps `gpt_column()` aligned with `gpt()`.
 .supports_native_structured <- function(provider,
                                         backend = NULL,
                                         model = NULL,
+                                        base_url = NULL,
                                         openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
                                         ssl_cert = NULL,
-                                        allow_remote = getOption("gptr.allow_remote", FALSE)) {
-    provider <- match.arg(provider, c("auto", "local", "openai", "lmstudio", "ollama", "localai"))
+                                        allow_remote = getOption("gptr.allow_remote", FALSE),
+                                        route = NULL) {
+    if (is.null(route)) {
+        route <- .resolve_request_route(
+            provider = provider,
+            backend = backend,
+            base_url = base_url,
+            openai_api_key = openai_api_key,
+            allow_remote = allow_remote
+        )
+    }
     configured <- tolower(getOption("gptr.native_structured_backends", character()))
-    normalized <- .normalize_structured_provider(provider, backend)
-
-    if (identical(normalized, "openai") || normalized %in% configured) {
-        return(TRUE)
-    }
-
-    if (!identical(provider, "auto") || !is.character(model) || !nzchar(model)) {
-        return(FALSE)
-    }
-
-    hits <- try(
-        .resolve_model_provider(
-            model,
-            openai_api_key = if (isTRUE(allow_remote)) openai_api_key else "",
-            ssl_cert = ssl_cert
-        ),
-        silent = TRUE
-    )
-    if (inherits(hits, "try-error") || !is.data.frame(hits) || nrow(hits) < 1L) {
-        return(FALSE)
-    }
-
-    prefer_locals <- getOption("gptr.local_prefer", c("lmstudio", "ollama", "localai"))
-    rank_fn <- function(p) {
-        m <- match(p, c(prefer_locals, "openai"))
-        ifelse(is.na(m), 999L, m)
-    }
-    ord <- order(rank_fn(tolower(as.character(hits$provider))))
-    chosen <- tolower(as.character(hits$provider[ord[1L]]))
-    identical(chosen, "openai") || chosen %in% configured
+    normalized <- .normalize_structured_provider(route$provider, route$backend)
+    identical(normalized, "openai") || normalized %in% configured
 }
 
+# This helper prepares the exact `gpt()` call for one extraction request.
+# It resolves the route first, then decides whether to use provider-native
+# structured outputs (`mode = "native"`) or the prompt-plus-repair fallback
+# (`mode = "repair"`). It does not try to outsmart route selection by looking
+# up which provider happens to host a model.
 .prepare_extraction_request <- function(prompt,
                                         key_specs = NULL,
                                         structured = c("auto", "native", "repair"),
@@ -362,11 +359,18 @@
                                         dots = list()) {
     structured <- match.arg(structured)
     allow_remote <- dots$allow_remote %||% getOption("gptr.allow_remote", FALSE)
-    call_args <- c(base_args, list(prompt = prompt))
-    call_args <- c(call_args, Filter(Negate(is.null), list(
+    route <- .resolve_request_route(
         provider = provider,
         backend = backend,
         base_url = base_url,
+        openai_api_key = openai_api_key,
+        allow_remote = allow_remote
+    )
+    call_args <- c(base_args, list(prompt = prompt))
+    call_args <- c(call_args, Filter(Negate(is.null), list(
+        provider = route$provider,
+        backend = if (identical(route$provider, "local")) route$backend else NULL,
+        base_url = route$request_base_url,
         model = model
     )))
 
@@ -381,12 +385,14 @@
 
     if (!is.null(key_specs) && structured != "repair") {
         can_native <- .supports_native_structured(
-            provider = provider,
-            backend = backend,
+            provider = route$provider,
+            backend = route$backend,
             model = model,
+            base_url = route$request_base_url,
             openai_api_key = openai_api_key,
             ssl_cert = ssl_cert,
-            allow_remote = allow_remote
+            allow_remote = allow_remote,
+            route = route
         )
 
         if (isTRUE(can_native)) {
@@ -398,7 +404,14 @@
         }
 
         if (identical(structured, "native")) {
-            stop("Native structured extraction is not available for this provider/backend.", call. = FALSE)
+            route_name <- .normalize_structured_provider(route$provider, route$backend)
+            stop(
+                sprintf(
+                    "Native structured extraction is not available on the chosen route (%s). Use `structured = \"repair\"`, switch to a route that supports native structured outputs, or configure `options(gptr.native_structured_backends = ...)` for compatible local servers.",
+                    route_name
+                ),
+                call. = FALSE
+            )
         }
     }
 

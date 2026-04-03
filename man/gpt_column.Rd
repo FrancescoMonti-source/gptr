@@ -42,13 +42,18 @@ gpt_column(
 
 \item{keys}{Optional named list defining expected JSON keys and their type or allowed set.}
 
-\item{provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".}
+\item{provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
+With \code{provider = "auto"}, \code{gpt_column()} follows the same configured route
+selection as \code{gpt()}: \code{base_url}, \code{backend}, \code{gptr.local_base_url}, then
+\code{gptr.local_prefer}, with OpenAI fallback only when no local route is
+configured and remote use is allowed.}
 
 \item{backend}{Optional backend to use when \code{provider = "local"}.}
 
 \item{base_url}{(now accepted by gpt_column() too): “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”}
 
-\item{model}{Model identifier to request from the provider/backend.}
+\item{model}{Model identifier to request from the provider/backend. When
+\code{NULL}, the chosen route uses its default model.}
 
 \item{temperature}{Sampling temperature for the model.}
 
@@ -69,10 +74,10 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
-\item{structured}{Extraction strategy. \code{"auto"} (default) prefers native
-structured outputs when supported and falls back to JSON repair. \code{"native"}
-requires provider-native structured extraction. \code{"repair"} always uses the
-prompt-plus-repair path.}
+\item{structured}{Extraction strategy. \code{"auto"} (default) uses native
+structured outputs when the chosen route supports them and falls back to
+JSON repair otherwise. \code{"native"} requires native structured extraction on
+the chosen route. \code{"repair"} always uses the prompt-plus-repair path.}
 
 \item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 

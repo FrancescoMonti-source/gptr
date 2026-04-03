@@ -12,16 +12,21 @@
 #'   ("lev_ratio" or "lev") and `fuzzy_threshold`.
 #' @param keep_unexpected_keys Keep keys not listed in `keys`.
 #' @param provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
+#'   With `provider = "auto"`, `gpt_column()` follows the same configured route
+#'   selection as `gpt()`: `base_url`, `backend`, `gptr.local_base_url`, then
+#'   `gptr.local_prefer`, with OpenAI fallback only when no local route is
+#'   configured and remote use is allowed.
 #' @param backend Optional backend to use when `provider = "local"`.
 #' @param base_url (now accepted by gpt_column() too): “Optional. Pin a specific local endpoint (…/v1 or …/v1/chat/completions).”
-#' @param model Model identifier to request from the provider/backend.
+#' @param model Model identifier to request from the provider/backend. When
+#'   `NULL`, the chosen route uses its default model.
 #' @param na_values Values treated as NA at multiple stages.
 #' @param file_path,image_path Optional file or image paths attached to each model call.
 #' @param temperature Sampling temperature for the model.
-#' @param structured Extraction strategy. `"auto"` (default) prefers native
-#'   structured outputs when supported and falls back to JSON repair. `"native"`
-#'   requires provider-native structured extraction. `"repair"` always uses the
-#'   prompt-plus-repair path.
+#' @param structured Extraction strategy. `"auto"` (default) uses native
+#'   structured outputs when the chosen route supports them and falls back to
+#'   JSON repair otherwise. `"native"` requires native structured extraction on
+#'   the chosen route. `"repair"` always uses the prompt-plus-repair path.
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.
 #' @param return_debug If TRUE, add `.raw_output`, `.structured_mode`,

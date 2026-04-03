@@ -164,7 +164,7 @@ res
  inject {text}/{json_format}          repair, coerce, align
 ```
 
-For each row, `gpt_column()` renders the prompt, prefers native structured outputs when available, falls back to JSON repair when needed, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` renders the prompt, follows the configured request route, uses native structured outputs when that chosen route supports them, falls back to JSON repair when needed, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys
 
@@ -185,7 +185,8 @@ If you want to supply your own examples instead of the auto-generated hint, omit
 1.  Trims the row text and passes it, together with `keys`, to `build_prompt()`.
 2.  Replaces `{text}` in your template with the row text.
 3.  Computes `{json_format}` from `keys` so the model sees a compact schema reminder.
-4.  Omits `{json_format}` entirely when `keys` is `NULL`.
+4.  Resolves the request route the same way `gpt()` does, then chooses native structured output or repair from that route alone.
+5.  Omits `{json_format}` entirely when `keys` is `NULL`.
 
 Placeholders are filled with [`glue`](https://glue.tidyverse.org/). Glue evaluates anything inside braces, so escape literal braces with `{{` and `}}` or wrap code in `glue::glue_safe()` if needed.
 

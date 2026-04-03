@@ -59,84 +59,17 @@ gpt <- function(prompt,
                 allow_remote = getOption("gptr.allow_remote", FALSE),
                 ...) {
 
-    provider <- match.arg(provider)
-    base_root <- NULL
-    effective_openai_api_key <- if (isTRUE(allow_remote)) openai_api_key else ""
-
-    # --- Normalize local provider aliases ---
-    if (provider %in% c("lmstudio","ollama","localai")) {
-        backend  <- provider
-        provider <- "local"
-    }
-
-    configured_local_root <- getOption("gptr.local_base_url", NULL)
-    roots <- NULL
-    prefer <- character(0)
-    if (provider %in% c("local","auto")) {
-        roots <- list(
-            lmstudio = getOption("gptr.lmstudio_base_url", "http://127.0.0.1:1234"),
-            ollama   = getOption("gptr.ollama_base_url",   "http://127.0.0.1:11434"),
-            localai  = getOption("gptr.localai_base_url",  "http://127.0.0.1:8080")
-        )
-        prefer <- getOption("gptr.local_prefer", c("lmstudio","ollama","localai"))
-        valid_roots <- names(roots)[vapply(roots, function(x) !is.null(x) && nzchar(x), logical(1L))]
-        prefer <- prefer[prefer %in% valid_roots]
-        if (!length(prefer)) prefer <- valid_roots
-    }
-
-    if ((provider %in% c("local","auto")) && !is.null(backend) && nzchar(backend)) {
-        backend <- tolower(as.character(backend))
-        if (!(backend %in% c(names(roots), "custom-local"))) {
-            rlang::abort(sprintf(
-                "Unknown local backend '%s'. Use one of: %s.",
-                backend,
-                paste(c(names(roots), "custom-local"), collapse = ", ")
-            ))
-        }
-    }
-
-    if ((provider %in% c("local","auto")) && is.null(base_root)) {
-        if (!is.null(base_url) && nzchar(base_url)) {
-            base_root <- .api_root(base_url)
-        } else if (!is.null(backend) && nzchar(backend) && backend %in% names(roots)) {
-            base_root <- .api_root(roots[[backend]])
-        } else if (!is.null(configured_local_root) && nzchar(configured_local_root)) {
-            base_root <- .api_root(configured_local_root)
-        } else if (length(prefer)) {
-            backend <- prefer[[1L]]
-            base_root <- .api_root(roots[[backend]])
-        }
-    }
-
-    if (provider == "auto") {
-        if (!is.null(base_root) && nzchar(base_root)) {
-            provider <- "local"
-        } else if (nzchar(effective_openai_api_key)) {
-            provider <- "openai"
-        } else {
-            rlang::abort(
-                "No route configured for `provider = \"auto\"`; set a local `backend`/`base_url` or use `provider = \"openai\"`."
-            )
-        }
-    }
-
-    if ((provider %in% c("local","auto")) && !is.null(base_root)) {
-        if (is.null(backend) || !nzchar(backend)) {
-            match_backend <- NULL
-            if (!is.null(roots) && length(roots)) {
-                normalized_roots <- vapply(roots, function(x) {
-                    if (is.null(x) || !nzchar(x)) return(NA_character_)
-                    .api_root(x)
-                }, character(1L))
-                hit <- names(roots)[normalized_roots == base_root]
-                if (length(hit)) {
-                    match_backend <- hit[[1L]]
-                }
-            }
-            backend <- match_backend %||% "custom-local"
-        }
-        provider <- "local"
-    }
+    route <- .resolve_request_route(
+        provider = provider,
+        backend = backend,
+        base_url = base_url,
+        openai_api_key = openai_api_key,
+        allow_remote = allow_remote
+    )
+    provider <- route$provider
+    backend <- route$backend
+    base_root <- route$base_root
+    effective_openai_api_key <- route$effective_openai_api_key
 
     # --- helpers ---
     .compact <- function(lst) lst[!vapply(lst, is.null, logical(1L))]
