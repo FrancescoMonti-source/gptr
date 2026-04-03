@@ -7,8 +7,10 @@
 gpt_column(
   data,
   col,
-  prompt,
+  prompt = NULL,
   keys = NULL,
+  instruction = NULL,
+  template = NULL,
   provider = c("auto", "local", "openai", "lmstudio", "ollama", "localai"),
   backend = NULL,
   base_url = NULL,
@@ -38,9 +40,18 @@ gpt_column(
 
 \item{col}{Unquoted name of the text column to send to the LLM.}
 
-\item{prompt}{Character template with {text}/{json_format} or function(text, keys) -> string.}
+\item{prompt}{Legacy/raw prompt interface. Supply either a character template
+with \code{{text}} / \code{{json_format}} placeholders or a function \verb{(text, keys) -> string}. This path is kept for expert use and backward compatibility.}
 
 \item{keys}{Optional named list defining expected JSON keys and their type or allowed set.}
+
+\item{instruction}{Preferred prompt interface. A plain-language description of
+what to extract. \code{gptr} uses it to build the final prompt scaffold for the
+resolved structured mode.}
+
+\item{template}{Optional advanced prompt template used together with
+\code{instruction}. Supports \code{{instruction}} and \code{{text}}. If \code{{text}} is
+omitted, \code{gptr} appends a standard \verb{Text:} section automatically.}
 
 \item{provider}{One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
 With \code{provider = "auto"}, \code{gpt_column()} follows the same configured route
@@ -80,7 +91,8 @@ structured outputs for OpenAI and otherwise falls back to JSON repair unless
 the chosen local backend was explicitly opted in via
 \code{options(gptr.native_structured_backends = ...)}. \code{"native"} requires native
 structured extraction on the chosen route. \code{"repair"} always uses the
-prompt-plus-repair path.}
+prompt-plus-repair path. The managed \code{instruction} / \code{template} prompt
+scaffold follows this resolved mode automatically.}
 
 \item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 
@@ -97,6 +109,7 @@ prompt-plus-repair path.}
 \item{...}{Extra args passed to \code{gpt()} (e.g., \code{response_format}).}
 }
 \description{
-Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,
-validates and aligns it to a schema, then returns the structured columns bound to the input.
+Sends each row of a text column to an LLM with an instruction-first or legacy
+prompt interface, repairs/parses JSON, validates and aligns it to a schema,
+then returns the structured columns bound to the input.
 }

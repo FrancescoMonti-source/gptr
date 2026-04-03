@@ -12,7 +12,7 @@
 -   [A practical extraction checklist](#a-practical-extraction-checklist)
 -   [Workflow overview](#workflow-overview)
 -   [Schema keys](#schema-keys)
--   [Prompt building and schema injection](#prompt-building-and-schema-injection)
+-   [Prompt UX and legacy templates](#prompt-ux-and-legacy-templates)
 -   [Response validation pipeline](#response-validation-pipeline)
 -   [Debugging, retries, and auditing](#debugging-retries-and-auditing)
 -   [Multiple ways to use gptr](#multiple-ways-to-use-gptr)
@@ -108,21 +108,11 @@ schema <- list(
   diagnosis = "character"
 )
 
-prompt <- "
-You are an assistant specialisez in treating electronical health records. I'm gonna provide you a medical text and you task is to
-extract the following fields as compact JSON on a single line:
-{json_format}
-
-Here is the text:
-\"{text}\"
-
-Respond with JSON only, nothing else."
-
 res <- gpt_column(
   data     = notes,
   col      = text,
   keys     = schema,
-  prompt   = prompt,
+  instruction = "Extract the patient's age and main diagnosis from the note.",
   provider = "ollama", # openai/local/ollama/lmstudio
   model    = "gemma3-4b", # chose among models you have at your disposal. Check list_models() documentation.
   structured = "auto"
@@ -156,75 +146,79 @@ res
 ## Workflow overview
 
 ```         
-[gpt_column()] -- templated prompt --> [gpt()] -- tidy columns --> data + predictions
-      |                                     |
-      | text + keys' schema                 | raw JSON
-      v                                     v
- build_prompt()                       tidy_json() + validation
- inject {text}/{json_format}          repair, coerce, align
+[gpt_column()] -- instruction/template --> [managed prompt + route] --> [gpt()] --> tidy columns
+      |                                           |                         |
+      | text + keys' schema                       | native or repair        | raw JSON
+      v                                           v                         v
+ prompt scaffold                         response_format or repair    tidy_json() + validation
 ```
 
-For each row, `gpt_column()` renders the prompt, follows the configured request route, uses native structured outputs automatically on OpenAI, falls back to JSON repair for local routes unless you explicitly opt a backend into native mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` follows the configured request route, decides whether that route will use native structured outputs or repair, builds the prompt scaffold to match that mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys
 
 `keys` is a named list that documents the shape of the JSON you expect back. Each entry can be:
 
--   A "type" string (`"integer"`, `"numeric"`, `"character"`, `"logical"`). Types declaration drive column coercion and inject type-based examples via glue() through `{json_format}`.
+-   A "type" string (`"integer"`, `"numeric"`, `"character"`, `"logical"`). Types drive coercion, validation, and the managed prompt's value rules.
 -   A vector of allowed values (regardless of the "type"). The parser accepts the listed values case-insensitively for strings.
 -   A mix of the two: you can use types for some fields and enumerations for others. 
 
-The schema is the single source of truth used for prompting, parsing, and validation. 
+The schema is the single source of truth used for prompting, parsing, and validation.
 
-If you want to supply your own examples instead of the auto-generated hint, omit that key from `keys` and document it directly inside the prompt template.
+## Prompt UX and legacy templates
 
-## Prompt building and schema injection
-
-`gpt_column()` renders a fresh prompt for every row to avoid context overflow. Under the hood it:
-
-1.  Trims the row text and passes it, together with `keys`, to `build_prompt()`.
-2.  Replaces `{text}` in your template with the row text.
-3.  Computes `{json_format}` from `keys` so the model sees a compact schema reminder.
-4.  Resolves the request route the same way `gpt()` does, then chooses native structured output or repair from that route alone.
-    OpenAI uses native structured mode by default; local routes stay on repair unless you opt them in with `options(gptr.native_structured_backends = ...)`.
-5.  Omits `{json_format}` entirely when `keys` is `NULL`.
-
-Placeholders are filled with [`glue`](https://glue.tidyverse.org/). Glue evaluates anything inside braces, so escape literal braces with `{{` and `}}` or wrap code in `glue::glue_safe()` if needed.
+The preferred `gpt_column()` interface is now instruction-first:
 
 ```{r, eval = FALSE}
-prompt = "You are triaging clinical notes. Focus on age and diagnosis.
-            {{json_format}}     # Here we inject, based on the keys provided and their declared class, examples of the attended output from the model inroute it
-            Here is the clinical text : {{text}}     # And here we inject the text
-        "
-
-gpt_column(data = "your df",
-            col = "your text column",
-            prompt = prompt,
-            keys = list(age = "numeric",
-                        diagnosis = "character"),
-            provider = "your provider",
-            model = "the model you wanna use"        # if no model is declared, the function looks up in the options to see if a default (for a given provider) has been declared
+gpt_column(
+  data = notes,
+  col = text,
+  keys = schema,
+  instruction = "Extract the patient's age and main diagnosis from the note."
 )
 ```
 
-For full control you can pass a function to `prompt`. It receives `(text, keys)` and should return a string:
+In this default path, you describe what to extract and `gptr` handles how to ask for structured output.
+
+-   On OpenAI routes, `structured = "auto"` builds a light prompt and relies on native `response_format` schema enforcement.
+-   On local routes, `structured = "auto"` builds a repair-oriented scaffold with required keys, value rules, and output constraints.
+-   Local native structured mode stays opt-in through `options(gptr.native_structured_backends = ...)`.
+
+If you want more control over tone or framing, add a `template`:
 
 ```{r, eval = FALSE}
-dynamic_prompt <- function(text, keys) {
-  glue::glue("
-  You are triaging clinical notes. Focus on age and diagnosis.
-  {if (nchar(text) > 280) 'Summarise briefly before extracting.'}
+gpt_column(
+  data = notes,
+  col = text,
+  keys = schema,
+  instruction = "Extract the patient's age and main diagnosis from the note.",
+  template = "
+You are reviewing a clinical note.
 
-  Text:
-  \"{text}\"
-
-  Return JSON using this schema:
-  {jsonlite::toJSON(names(keys), auto_unbox = TRUE)}
-  ")
-}
-
-gpt_column(data = notes, col = text, keys = schema, prompt = dynamic_prompt)
+Task:
+{instruction}
+"
+)
 ```
+
+`template` supports `{instruction}` and `{text}`. `{text}` is optional; if you omit it, `gptr` appends a standard `Text:` section automatically before the structured scaffold.
+
+For expert/back-compat use, the raw `prompt` interface still works unchanged:
+
+```{r, eval = FALSE}
+legacy_prompt <- "
+You are triaging clinical notes.
+Return JSON only in this format:
+{json_format}
+
+Text:
+{text}
+"
+
+gpt_column(data = notes, col = text, keys = schema, prompt = legacy_prompt)
+```
+
+That legacy path is also what the exported `build_prompt()` helper supports. It remains available, but it is now the lower-level path rather than the recommended default.
 
 ## Response validation pipeline
 
@@ -242,7 +236,7 @@ When `keys` is `NULL`, you can still collect structured output: set `keep_unexpe
 -   `return_debug = TRUE` (default behavior) appends `.raw_output` and `.invalid_detail` columns to inspect model responses and validation errors.
 -   `attr(result, "invalid_rows")` gives the row indexes that need attention.
 -   `keep_unexpected_keys = TRUE` stores extra keys in `.extras_json` when you work with a fixed schema.
--   `patch_failed_rows()` retries only the invalid rows with the same or updated prompt.
+-   `patch_failed_rows()` retries only the invalid rows with the same or updated prompt interface.
 
 ```{r, eval = FALSE}
 failed <- attr(res, "invalid_rows")
@@ -252,8 +246,8 @@ if (length(failed)) {
     data   = res,
     col    = text,
     id_col = id,
-    prompt = template,
     keys   = schema,
+    instruction = "Extract the patient's age and main diagnosis from the note.",
     max_attempts = 2
   )
 }

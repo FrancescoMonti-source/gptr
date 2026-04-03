@@ -1,12 +1,21 @@
 #' Extract Structured Data from Free Text via LLM Completion (Orchestrator)
 #'
-#' Sends each row of a text column to an LLM with a templated prompt, repairs/parses JSON,
-#' validates and aligns it to a schema, then returns the structured columns bound to the input.
+#' Sends each row of a text column to an LLM with an instruction-first or legacy
+#' prompt interface, repairs/parses JSON, validates and aligns it to a schema,
+#' then returns the structured columns bound to the input.
 #'
 #' @param data A data frame or tibble containing the text column.
 #' @param col Unquoted name of the text column to send to the LLM.
-#' @param prompt Character template with {text}/{json_format} or function(text, keys) -> string.
+#' @param prompt Legacy/raw prompt interface. Supply either a character template
+#'   with `{text}` / `{json_format}` placeholders or a function `(text, keys) ->
+#'   string`. This path is kept for expert use and backward compatibility.
 #' @param keys Optional named list defining expected JSON keys and their type or allowed set.
+#' @param instruction Preferred prompt interface. A plain-language description of
+#'   what to extract. `gptr` uses it to build the final prompt scaffold for the
+#'   resolved structured mode.
+#' @param template Optional advanced prompt template used together with
+#'   `instruction`. Supports `{instruction}` and `{text}`. If `{text}` is
+#'   omitted, `gptr` appends a standard `Text:` section automatically.
 #' @param auto_correct_keys Logical; fuzzy-correct unexpected key names (unique match only).
 #'   Fuzzy key correction is handled by json_keys_align(); control with `fuzzy_model`
 #'   ("lev_ratio" or "lev") and `fuzzy_threshold`.
@@ -28,7 +37,8 @@
 #'   the chosen local backend was explicitly opted in via
 #'   `options(gptr.native_structured_backends = ...)`. `"native"` requires native
 #'   structured extraction on the chosen route. `"repair"` always uses the
-#'   prompt-plus-repair path.
+#'   prompt-plus-repair path. The managed `instruction` / `template` prompt
+#'   scaffold follows this resolved mode automatically.
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.
 #' @param return_debug If TRUE, add `.raw_output`, `.structured_mode`,
@@ -47,8 +57,10 @@
 
 gpt_column <- function(data,
                        col,
-                       prompt,
+                       prompt = NULL,
                        keys = NULL,
+                       instruction = NULL,
+                       template = NULL,
                        provider = c("auto", "local", "openai", "lmstudio", "ollama", "localai"),
                        backend = NULL,
                        base_url = NULL,
@@ -74,15 +86,12 @@ gpt_column <- function(data,
     # capture all user extras once
     dots <- rlang::list2(...) # <-- new
 
-    # basic prompt validation for clearer errors
-    if (missing(prompt) || is.null(prompt)) {
-        stop("`prompt` must be supplied as a template string or function.", call. = FALSE)
-    }
-    if (!is.function(prompt)) {
-        if (!is.character(prompt) || length(prompt) != 1L || is.na(prompt)) {
-            stop("`prompt` must be a single character string or a function(text, keys).", call. = FALSE)
-        }
-    }
+    prompt_strategy <- .resolve_prompt_strategy(
+        prompt = prompt,
+        instruction = instruction,
+        template = template,
+        caller = "gpt_column"
+    )
 
     provider <- match.arg(provider)
     multi_value <- match.arg(multi_value)
@@ -162,30 +171,46 @@ gpt_column <- function(data,
     key_specs <- .normalize_key_specs(keys)
     expected_keys <- names(key_specs) %||% NULL
 
-    # Build prompt from template or function
-    make_prompt_for <- function(.x_text) {
-        .x_trim <- trimws(.x_text)
-        # Modes:
-        #  1) Template string with placeholders:
-        #     prompt <- 'Text: "{text}"\nReturn JSON: {json_format}'
-        #     build_prompt() substitutes {text} and a schema-based {json_format}
-        #  2) Function:
-        #     prompt <- function(text, keys) paste("Analyse:\n", text, "\nKeys:", paste(names(keys), collapse=", "))
-        if (is.function(prompt)) prompt(.x_trim, keys) else build_prompt(prompt, text = .x_trim, keys = keys)
-    }
-
-    # --- build a stable forward-args list for gpt() ---
-    forward_args <- Filter(
-        Negate(is.null),
-        list(
-            provider = provider,
-            backend  = backend,
-            base_url = base_url,
-            model    = model
-        )
-    )
     request_ssl_cert <- dots$ssl_cert %||% getOption("gptr.ssl_cert", NULL)
     request_openai_api_key <- dots$openai_api_key %||% Sys.getenv("OPENAI_API_KEY", "")
+    resolved_request <- NULL
+    get_request_plan <- function() {
+        if (is.null(resolved_request)) {
+            resolved_request <<- .resolve_extraction_plan(
+                key_specs = key_specs,
+                structured = structured,
+                provider = provider,
+                backend = backend,
+                model = model,
+                base_url = base_url,
+                openai_api_key = request_openai_api_key,
+                ssl_cert = request_ssl_cert,
+                keep_unexpected_keys = keep_unexpected_keys,
+                dots = dots
+            )
+        }
+        resolved_request
+    }
+
+    # Build prompt from either the legacy raw path or the new managed path.
+    make_prompt_for <- function(.x_text) {
+        .x_trim <- trimws(.x_text)
+        if (identical(prompt_strategy$kind, "legacy")) {
+            if (is.function(prompt_strategy$prompt)) {
+                return(prompt_strategy$prompt(.x_trim, keys))
+            }
+            return(build_prompt(prompt_strategy$prompt, text = .x_trim, keys = keys))
+        }
+
+        request_plan <- get_request_plan()
+        .build_managed_extraction_prompt(
+            text = .x_trim,
+            instruction = prompt_strategy$instruction,
+            template = prompt_strategy$template,
+            key_specs = key_specs,
+            mode = request_plan$mode
+        )
+    }
 
     # --- ------ 3) PER-ROW CALL ----
     call_gpt <- function(i) {
@@ -193,6 +218,7 @@ gpt_column <- function(data,
         if (is.na(txt) || !nzchar(trimws(txt))) {
             return(list(raw = NA_character_, mode = "repair"))
         }
+        request_plan <- get_request_plan()
         input_prompt <- make_prompt_for(txt)
         request <- .prepare_extraction_request(
             prompt = input_prompt,
@@ -210,7 +236,8 @@ gpt_column <- function(data,
                 file_path = file_path,
                 image_path = image_path
             ),
-            dots = dots
+            dots = dots,
+            resolved = request_plan
         )
         list(
             raw = do.call(gpt, request$args),

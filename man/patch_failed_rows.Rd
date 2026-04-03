@@ -6,10 +6,12 @@
 \usage{
 patch_failed_rows(
   data,
-  prompt,
+  prompt = NULL,
   col,
   id_col,
   keys = NULL,
+  instruction = NULL,
+  template = NULL,
   max_attempts = 3,
   auto_correct_keys = TRUE,
   relaxed = TRUE,
@@ -21,8 +23,8 @@ patch_failed_rows(
 \item{data}{A data frame that was processed by \code{gpt_column()} and has an
 \code{"invalid_rows"} attribute (integer vector of row indices that failed).}
 
-\item{prompt}{Character scalar. The prompt string to pass back into
-\code{gpt_column()}.}
+\item{prompt}{Legacy/raw prompt interface forwarded back into \code{gpt_column()}.
+Use this for backward compatibility or full prompt control.}
 
 \item{col}{Column in \code{data} containing the text to be processed by
 \code{gpt_column()}. Use tidy-eval notation (unquoted column name).}
@@ -32,6 +34,12 @@ join retry results back into the main dataset. Must have unique values.}
 
 \item{keys}{Optional named list of expected output keys and their R types,
 passed to \code{gpt_column()}.}
+
+\item{instruction}{Preferred prompt interface. Plain-language extraction
+instruction forwarded to \code{gpt_column()}.}
+
+\item{template}{Optional advanced template used together with \code{instruction}.
+Supports \code{{instruction}} and \code{{text}}.}
 
 \item{max_attempts}{Integer. Maximum number of attempts per row before
 giving up. Default is 3.}
@@ -82,10 +90,10 @@ attr(df, "invalid_rows")
 # Retry failed rows up to 2 times
 df <- patch_failed_rows(
   data = df,
-  prompt = "Extract key medical variables.",
   col = note_text,
   id_col = patient_id,
   keys = list(age = "integer", diagnosis = "character"),
+  instruction = "Extract age and diagnosis from the note.",
   max_attempts = 2
 )
 

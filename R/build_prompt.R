@@ -1,9 +1,9 @@
-#' Build a prompt string from a template and schema
+#' Build a legacy/raw prompt string from a template and schema
 #'
 #' `build_prompt()` fills a prompt template by injecting the raw input text
 #' (`{text}`) and, if provided, a one‑line JSON **format hint** (`{json_format}`)
-#' derived from `keys`. It is typically used together with `gpt_column()`, where
-#' `keys` is the single source of truth for the expected output schema.
+#' derived from `keys`. It remains available for expert use and backward
+#' compatibility with the raw `prompt` interface in `gpt_column()`.
 #'
 #' @param template Character scalar. A prompt template that may contain the
 #'   placeholders `{text}` and `{json_format}`. These are replaced using
@@ -48,7 +48,7 @@
 #' # Without a schema, {json_format} is empty and simply omitted:
 #' build_prompt(template, text = "Texte libre", keys = NULL)
 #'
-#' @seealso [gpt_column()] to apply the prompt over a column and parse results,
+#' @seealso [gpt_column()] for the preferred instruction-first extraction path,
 #'   and [gpt()] to send a single prompt to a model.
 #' @importFrom glue glue
 #' @importFrom purrr map_chr

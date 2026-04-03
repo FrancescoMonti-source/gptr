@@ -2,7 +2,7 @@
 % Please edit documentation in R/build_prompt.R
 \name{build_prompt}
 \alias{build_prompt}
-\title{Build a prompt string from a template and schema}
+\title{Build a legacy/raw prompt string from a template and schema}
 \usage{
 build_prompt(template, text, keys = NULL)
 }
@@ -26,8 +26,8 @@ A single character string: the fully rendered prompt.
 \description{
 \code{build_prompt()} fills a prompt template by injecting the raw input text
 (\code{{text}}) and, if provided, a one‑line JSON \strong{format hint} (\code{{json_format}})
-derived from \code{keys}. It is typically used together with \code{gpt_column()}, where
-\code{keys} is the single source of truth for the expected output schema.
+derived from \code{keys}. It remains available for expert use and backward
+compatibility with the raw \code{prompt} interface in \code{gpt_column()}.
 }
 \details{
 \itemize{
@@ -63,6 +63,6 @@ build_prompt(template, text = "Texte libre", keys = NULL)
 
 }
 \seealso{
-\code{\link[=gpt_column]{gpt_column()}} to apply the prompt over a column and parse results,
+\code{\link[=gpt_column]{gpt_column()}} for the preferred instruction-first extraction path,
 and \code{\link[=gpt]{gpt()}} to send a single prompt to a model.
 }

@@ -331,11 +331,79 @@
     identical(normalized, "openai") || normalized %in% configured
 }
 
+# This helper resolves the extraction route and structured-output mode once,
+# before we build the final `gpt()` request. `gpt_column()` uses that same plan
+# to decide both:
+#   1. how to scaffold the prompt (`repair` vs `native`)
+#   2. how to configure the actual request sent to `gpt()`
+# That keeps the user-facing prompt path and the wire request in sync.
+.resolve_extraction_plan <- function(key_specs = NULL,
+                                     structured = c("auto", "native", "repair"),
+                                     provider = "auto",
+                                     backend = NULL,
+                                     model = NULL,
+                                     base_url = NULL,
+                                     openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+                                     ssl_cert = getOption("gptr.ssl_cert", NULL),
+                                     keep_unexpected_keys = FALSE,
+                                     dots = list()) {
+    structured <- match.arg(structured)
+    allow_remote <- dots$allow_remote %||% getOption("gptr.allow_remote", FALSE)
+    route <- .resolve_request_route(
+        provider = provider,
+        backend = backend,
+        base_url = base_url,
+        openai_api_key = openai_api_key,
+        allow_remote = allow_remote
+    )
+    response_format <- NULL
+
+    if (!is.null(key_specs) && structured != "repair") {
+        can_native <- .supports_native_structured(
+            provider = route$provider,
+            backend = route$backend,
+            model = model,
+            base_url = route$request_base_url,
+            openai_api_key = openai_api_key,
+            ssl_cert = ssl_cert,
+            allow_remote = allow_remote,
+            route = route
+        )
+
+        if (isTRUE(can_native)) {
+            response_format <- .schema_to_response_format(
+                key_specs,
+                allow_additional = isTRUE(keep_unexpected_keys)
+            )
+            return(list(
+                route = route,
+                mode = "native",
+                response_format = response_format
+            ))
+        }
+
+        if (identical(structured, "native")) {
+            route_name <- .normalize_structured_provider(route$provider, route$backend)
+            stop(
+                sprintf(
+                    "Native structured extraction is not available on the chosen route (%s). Use `structured = \"repair\"`, switch to a route that supports native structured outputs, or configure `options(gptr.native_structured_backends = ...)` for compatible local servers.",
+                    route_name
+                ),
+                call. = FALSE
+            )
+        }
+    }
+
+    list(
+        route = route,
+        mode = "repair",
+        response_format = NULL
+    )
+}
+
 # This helper prepares the exact `gpt()` call for one extraction request.
-# It resolves the route first, then decides whether to use provider-native
-# structured outputs (`mode = "native"`) or the prompt-plus-repair fallback
-# (`mode = "repair"`). It does not try to outsmart route selection by looking
-# up which provider happens to host a model.
+# It uses the already-resolved extraction plan when available, so prompt
+# scaffolding and request configuration follow the same route and mode.
 .prepare_extraction_request <- function(prompt,
                                         key_specs = NULL,
                                         structured = c("auto", "native", "repair"),
@@ -347,16 +415,22 @@
                                         ssl_cert = getOption("gptr.ssl_cert", NULL),
                                         keep_unexpected_keys = FALSE,
                                         base_args = list(),
-                                        dots = list()) {
+                                        dots = list(),
+                                        resolved = NULL) {
     structured <- match.arg(structured)
-    allow_remote <- dots$allow_remote %||% getOption("gptr.allow_remote", FALSE)
-    route <- .resolve_request_route(
+    resolved <- resolved %||% .resolve_extraction_plan(
+        key_specs = key_specs,
+        structured = structured,
         provider = provider,
         backend = backend,
+        model = model,
         base_url = base_url,
         openai_api_key = openai_api_key,
-        allow_remote = allow_remote
+        ssl_cert = ssl_cert,
+        keep_unexpected_keys = keep_unexpected_keys,
+        dots = dots
     )
+    route <- resolved$route
     call_args <- c(base_args, list(prompt = prompt))
     call_args <- c(call_args, Filter(Negate(is.null), list(
         provider = route$provider,
@@ -374,39 +448,11 @@
         dots$response_format <- NULL
     }
 
-    if (!is.null(key_specs) && structured != "repair") {
-        can_native <- .supports_native_structured(
-            provider = route$provider,
-            backend = route$backend,
-            model = model,
-            base_url = route$request_base_url,
-            openai_api_key = openai_api_key,
-            ssl_cert = ssl_cert,
-            allow_remote = allow_remote,
-            route = route
-        )
-
-        if (isTRUE(can_native)) {
-            dots$response_format <- .schema_to_response_format(
-                key_specs,
-                allow_additional = isTRUE(keep_unexpected_keys)
-            )
-            return(list(args = c(call_args, dots), mode = "native"))
-        }
-
-        if (identical(structured, "native")) {
-            route_name <- .normalize_structured_provider(route$provider, route$backend)
-            stop(
-                sprintf(
-                    "Native structured extraction is not available on the chosen route (%s). Use `structured = \"repair\"`, switch to a route that supports native structured outputs, or configure `options(gptr.native_structured_backends = ...)` for compatible local servers.",
-                    route_name
-                ),
-                call. = FALSE
-            )
-        }
+    if (!is.null(resolved$response_format)) {
+        dots$response_format <- resolved$response_format
     }
 
-    list(args = c(call_args, dots), mode = "repair")
+    list(args = c(call_args, dots), mode = resolved$mode)
 }
 
 .req_apply_ssl_cert <- function(req, ssl_cert = NULL) {
