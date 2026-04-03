@@ -166,9 +166,6 @@ test_that("gpt forwards ssl_cert to strict local model validation", {
 test_that("auto chooses the preferred local route without provider discovery", {
     called <- NULL
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(...) {
-            stop("should not resolve providers")
-        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", refresh = FALSE,
                                         ssl_cert = NULL, ...) {
@@ -257,9 +254,6 @@ test_that(".request_local sets cainfo when ssl_cert supplied", {
 test_that("auto keeps using the chosen local route even when a model looks remote", {
     called <- NULL
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(...) {
-            stop("should not resolve providers")
-        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", ...) {
             stop("should not probe model listings")
@@ -327,9 +321,6 @@ test_that("provider=openai is blocked unless remote transmission is explicitly a
 
 test_that("auto with strict_model validates only the chosen local route", {
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(...) {
-            stop("should not resolve providers")
-        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", ...) {
             expect_identical(provider, "lmstudio")
@@ -377,9 +368,6 @@ test_that("auto falls back to OpenAI only when no local route is configured", {
 test_that("allow_backend_autoswitch is ignored for backward compatibility", {
     called <- NULL
     testthat::local_mocked_bindings(
-        .resolve_model_provider = function(...) {
-            stop("should not resolve providers")
-        },
         .fetch_models_cached = function(provider = NULL, base_url = NULL,
                                         openai_api_key = "", ...) {
             stop("should not probe")
@@ -589,7 +577,6 @@ test_that("OpenAI strict_model matching is case-insensitive", {
 })
 
 test_that("no backend mocks persist across tests", {
-    expect_true(is.function(gptr:::.resolve_model_provider))
     expect_true(is.function(gptr:::.fetch_models_cached))
 })
 

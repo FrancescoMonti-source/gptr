@@ -31,9 +31,6 @@ test_that("gpt_column auto mode uses native structured outputs on the chosen Ope
     gptr.local_prefer = character()
   ))
   testthat::local_mocked_bindings(
-    .resolve_model_provider = function(...) {
-      stop("should not resolve providers")
-    },
     gpt = function(prompt, response_format = NULL, provider = NULL, ...) {
       seen_response_format <<- response_format
       seen_provider <<- provider
@@ -73,9 +70,6 @@ test_that("gpt_column auto mode keeps smart defaults on the chosen local route",
     gptr.ollama_model = "mistral"
   ))
   testthat::local_mocked_bindings(
-    .resolve_model_provider = function(...) {
-      stop("should not resolve providers")
-    },
     gpt = function(prompt, response_format = NULL, provider = NULL, backend = NULL, base_url = NULL, model = NULL, ...) {
       seen_response_format <<- response_format
       seen_provider <<- provider
@@ -108,9 +102,6 @@ test_that("gpt_column auto mode keeps smart defaults on the chosen local route",
 
 test_that("gpt_column native mode errors with actionable guidance on unsupported routes", {
   testthat::local_mocked_bindings(
-    .resolve_model_provider = function(...) {
-      stop("should not resolve providers")
-    },
     gpt = function(prompt, response_format = NULL, ...) '{"age":64}',
     .package = "gptr"
   )
@@ -132,9 +123,6 @@ test_that("gpt_column native mode errors with actionable guidance on unsupported
 
 test_that("gpt_column auto mode errors clearly when no route is configured", {
   testthat::local_mocked_bindings(
-    .resolve_model_provider = function(...) {
-      stop("should not resolve providers")
-    },
     gpt = function(prompt, response_format = NULL, ...) '{"age":64}',
     .package = "gptr"
   )

@@ -166,9 +166,8 @@ browse_openai_documentation <- function(url = "https://platform.openai.com/docs/
 # else (model validation, native structured outputs, etc.).
 #
 # In particular, this helper does *not* search across providers by model name.
-# If a caller wants discovery, that remains an explicit action via `list_models()`
-# or `.resolve_model_provider()`. Request execution should be boring and
-# predictable: same inputs, same route.
+# If a caller wants discovery, that remains an explicit action via `list_models()`.
+# Request execution should be boring and predictable: same inputs, same route.
 .resolve_request_route <- function(provider = c("auto", "local", "openai", "lmstudio", "ollama", "localai"),
                                    backend = NULL,
                                    base_url = NULL,

@@ -5,8 +5,8 @@
 \title{Retrieve models using a cache with optional refresh.}
 \usage{
 .fetch_models_cached(
-  provider = NULL,
-  base_url = NULL,
+  provider,
+  base_url,
   openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
   refresh = FALSE,
   ssl_cert = NULL
