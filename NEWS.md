@@ -1,3 +1,10 @@
+# gptr 0.4.8
+
+* Recentered the package around schema-based extraction, with `gpt_column()` now supporting an instruction-first prompt UX alongside the legacy raw `prompt` path.
+* Structured extraction is now route-first: `gpt()` and `gpt_column()` share route resolution, native-vs-repair mode follows the chosen route, and hidden cross-provider model searching was removed from execution paths.
+* Simplified ownership hotspots by pruning dead model discovery internals, deduplicating type coercion logic, and shrinking the `models_cache` test suite into a smaller public-first set.
+* Refreshed docs and tests around the new extraction core, including synthetic real-world fixtures, prompt UX coverage, and clearer positioning of chat/TTS/model utilities as supporting features.
+
 # gptr 0.4.4
 
 * Overhauled model caching and fetching: consolidated helpers under cachem, `.fetch_models_live()` now handles OpenAI and local providers directly, `list_models()` caches by default with a new `refresh_models()` to force a live probe, and redundant base URL normalization was removed.

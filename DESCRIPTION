@@ -1,7 +1,7 @@
 Package: gptr
 Type: Package
 Title: Structured Extraction Pipelines from Text with LLMs
-Version: 0.4.5
+Version: 0.4.8
 Author: Francesco Monti
 Maintainer: Francesco Monti <francesco.monti@outlook.it>
 Description: Centers schema-based extraction workflows for data frames via
