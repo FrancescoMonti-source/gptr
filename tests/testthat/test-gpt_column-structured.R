@@ -19,6 +19,25 @@ test_that("gpt_column flags invalid enum values and coerces them to NA", {
   expect_false(out$.invalid_detail[[1]]$allowed[[1]])
 })
 
+test_that("gpt_column uses shared explicit logical coercion", {
+  testthat::local_mocked_bindings(
+    gpt = function(prompt, ...) '{"flag":"oui"}',
+    .package = "gptr"
+  )
+
+  out <- gpt_column(
+    data = data.frame(txt = "note", stringsAsFactors = FALSE),
+    col = txt,
+    prompt = function(text, keys) "Return JSON only",
+    keys = list(flag = "logical"),
+    progress = FALSE,
+    return_debug = TRUE
+  )
+
+  expect_true(out$flag[[1]])
+  expect_false(out$.invalid_rows[[1]])
+})
+
 test_that("gpt_column auto mode uses native structured outputs on the chosen OpenAI route", {
   seen_response_format <- NULL
   seen_provider <- NULL
@@ -98,6 +117,41 @@ test_that("gpt_column auto mode keeps smart defaults on the chosen local route",
   expect_null(seen_response_format)
   expect_identical(out$age[[1]], 64L)
   expect_identical(out$.structured_mode[[1]], "repair")
+})
+
+test_that("gpt_column auto mode uses native structured outputs for opted-in local backends only", {
+  seen_response_format <- "__unset__"
+  seen_backend <- NULL
+
+  withr::local_options(list(
+    gptr.local_prefer = c("ollama", "lmstudio", "localai"),
+    gptr.ollama_model = "mistral",
+    gptr.native_structured_backends = "ollama"
+  ))
+  testthat::local_mocked_bindings(
+    gpt = function(prompt, response_format = NULL, provider = NULL, backend = NULL, ...) {
+      seen_response_format <<- response_format
+      seen_backend <<- backend
+      '{"age":64}'
+    },
+    .package = "gptr"
+  )
+
+  out <- gpt_column(
+    data = data.frame(txt = "patient is 64", stringsAsFactors = FALSE),
+    col = txt,
+    prompt = "Extract {json_format} from {text}",
+    keys = list(age = "integer"),
+    provider = "auto",
+    structured = "auto",
+    progress = FALSE,
+    return_debug = TRUE
+  )
+
+  expect_identical(seen_backend, "ollama")
+  expect_true(is.list(seen_response_format))
+  expect_identical(out$age[[1]], 64L)
+  expect_identical(out$.structured_mode[[1]], "native")
 })
 
 test_that("gpt_column native mode errors with actionable guidance on unsupported routes", {

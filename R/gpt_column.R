@@ -24,14 +24,17 @@
 #' @param file_path,image_path Optional file or image paths attached to each model call.
 #' @param temperature Sampling temperature for the model.
 #' @param structured Extraction strategy. `"auto"` (default) uses native
-#'   structured outputs when the chosen route supports them and falls back to
-#'   JSON repair otherwise. `"native"` requires native structured extraction on
-#'   the chosen route. `"repair"` always uses the prompt-plus-repair path.
+#'   structured outputs for OpenAI and otherwise falls back to JSON repair unless
+#'   the chosen local backend was explicitly opted in via
+#'   `options(gptr.native_structured_backends = ...)`. `"native"` requires native
+#'   structured extraction on the chosen route. `"repair"` always uses the
+#'   prompt-plus-repair path.
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.
 #' @param return_debug If TRUE, add `.raw_output`, `.structured_mode`,
 #'   `.invalid_rows`, and `.invalid_detail`. Default TRUE.
-#' @param .coerce_types Row-level coercion toggle (default TRUE).
+#' @param .coerce_types Row-level coercion toggle (default TRUE). Explicit
+#'   logical coercion accepts `true/false`, `yes/no`, `oui/non`, and `1/0`.
 #' @param coerce_when Optional named list of per-key target types used for row-level coercion.
 #' @param infer_types Logical; when no schema is provided, infer column types (default FALSE).
 #'   If a schema (`keys`) is provided, it is always used for final typing.
@@ -118,50 +121,6 @@ gpt_column <- function(data,
             return(as.character(v))
         }
         jsonlite::toJSON(v, auto_unbox = TRUE, null = "null")
-    }
-
-    norm_type <- function(t) {
-        t <- tolower(trimws(as.character(t)))
-        if (t %in% c("integer", "int", "long", "whole")) {
-            return("integer")
-        }
-        if (t %in% c("numeric", "double", "float", "number", "real")) {
-            return("numeric")
-        }
-        if (t %in% c("logical", "bool", "boolean")) {
-            return("logical")
-        }
-        if (t %in% c("character", "string", "text")) {
-            return("character")
-        }
-        t
-    }
-    # Row-level scalar coercion (fast, permissive). Final column coercion/validation happens later.
-    cast_one <- function(val, type) {
-        type <- norm_type(type)
-        if (type == "integer") {
-            return(suppressWarnings(as.integer(val)))
-        }
-        if (type == "numeric") {
-            return(suppressWarnings(as.numeric(val)))
-        }
-        if (type == "logical") {
-            if (is.logical(val)) {
-                return(val)
-            }
-            if (is.numeric(val)) {
-                return(val != 0)
-            }
-            if (is.character(val)) {
-                v <- tolower(trimws(val))
-                return(ifelse(v %in% c("true", "t", "yes", "y", "1", "oui"),
-                              TRUE,
-                              ifelse(v %in% c("false", "f", "no", "n", "0", "non"), FALSE, NA)
-                ))
-            }
-            return(suppressWarnings(as.logical(val)))
-        }
-        as.character(val)
     }
 
     # Ungroup; validate column
@@ -392,12 +351,12 @@ gpt_column <- function(data,
         if (isTRUE(.coerce_types) && !is.null(key_specs)) {
             for (k in intersect(names(x), names(key_specs))) {
                 tt <- .effective_key_type(key_specs[[k]])
-                if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
+                if (!is.null(tt)) x[[k]] <- .coerce_type(x[[k]], tt)
             }
         } else if (!is.null(coerce_when) && isTRUE(.coerce_types)) {
             for (k in intersect(names(x), names(coerce_when))) {
                 tt <- coerce_when[[k]]
-                if (!is.null(tt)) x[[k]] <- cast_one(x[[k]], tt)
+                if (!is.null(tt)) x[[k]] <- .coerce_type(x[[k]], tt)
             }
         }
 

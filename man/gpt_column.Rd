@@ -59,7 +59,8 @@ configured and remote use is allowed.}
 
 \item{file_path, image_path}{Optional file or image paths attached to each model call.}
 
-\item{.coerce_types}{Row-level coercion toggle (default TRUE).}
+\item{.coerce_types}{Row-level coercion toggle (default TRUE). Explicit
+logical coercion accepts \code{true/false}, \code{yes/no}, \code{oui/non}, and \code{1/0}.}
 
 \item{coerce_when}{Optional named list of per-key target types used for row-level coercion.}
 
@@ -75,9 +76,11 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 \item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
 \item{structured}{Extraction strategy. \code{"auto"} (default) uses native
-structured outputs when the chosen route supports them and falls back to
-JSON repair otherwise. \code{"native"} requires native structured extraction on
-the chosen route. \code{"repair"} always uses the prompt-plus-repair path.}
+structured outputs for OpenAI and otherwise falls back to JSON repair unless
+the chosen local backend was explicitly opted in via
+\code{options(gptr.native_structured_backends = ...)}. \code{"native"} requires native
+structured extraction on the chosen route. \code{"repair"} always uses the
+prompt-plus-repair path.}
 
 \item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 

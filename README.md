@@ -164,7 +164,7 @@ res
  inject {text}/{json_format}          repair, coerce, align
 ```
 
-For each row, `gpt_column()` renders the prompt, follows the configured request route, uses native structured outputs when that chosen route supports them, falls back to JSON repair when needed, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` renders the prompt, follows the configured request route, uses native structured outputs automatically on OpenAI, falls back to JSON repair for local routes unless you explicitly opt a backend into native mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys
 
@@ -186,6 +186,7 @@ If you want to supply your own examples instead of the auto-generated hint, omit
 2.  Replaces `{text}` in your template with the row text.
 3.  Computes `{json_format}` from `keys` so the model sees a compact schema reminder.
 4.  Resolves the request route the same way `gpt()` does, then chooses native structured output or repair from that route alone.
+    OpenAI uses native structured mode by default; local routes stay on repair unless you opt them in with `options(gptr.native_structured_backends = ...)`.
 5.  Omits `{json_format}` entirely when `keys` is `NULL`.
 
 Placeholders are filled with [`glue`](https://glue.tidyverse.org/). Glue evaluates anything inside braces, so escape literal braces with `{{` and `}}` or wrap code in `glue::glue_safe()` if needed.
@@ -307,6 +308,7 @@ delete_models_cache()
 
 -   **Fuzzy key repair:** enable `auto_correct_keys = TRUE` (default) so `json_keys_align()` can fix typos when there is a unique close match. Control the algorithm with `fuzzy_model = "lev_ratio"` or `"lev"` and the tolerance via `fuzzy_threshold`.
 -   **Type coercion:** leave `.coerce_types = TRUE` for schema-driven casts, or pass `coerce_when = list(field = "integer")` to override individual columns. Provide `na_values` to recognise additional sentinel strings.
+-   **Native structured local backends:** by default, `structured = "auto"` uses native mode on OpenAI and repair mode on local routes. If you know a local backend really supports JSON schema/`response_format`, opt it in explicitly with something like `options(gptr.native_structured_backends = c("lmstudio"))`.
 -   **Relaxed parsing:** set `relaxed = TRUE` when `keys = NULL` and you want to accept scalar strings or partially structured replies. Combine with `keep_unexpected_keys = TRUE` to persist a `.parsed_json` column.
 -   **Type inference:** when you omit `keys`, `infer_types = TRUE` attempts to guess column types from the parsed JSON.
 -   **File/image inputs:** supply `file_path` or `image_path` and they are attached to the `gpt()` request; useful for multimodal providers that accept binary attachments. Local file attachments require `base64enc`.

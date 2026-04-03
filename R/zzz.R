@@ -23,6 +23,7 @@
     gptr.verbose_preflight = FALSE,
     gptr.check_model_once = TRUE, # probe once per session (default)
     gptr.model_cache_ttl = 3600, # seconds used when check_model_once = FALSE
+    gptr.native_structured_backends = character(), # opt-in local backends that can truly honor response_format/json_schema
     gptr.progress.force = TRUE  # default: force "my" handler, set gptr.progress.force = FALSE in.Rprofile to nor override your own
   )
   toset <- !(names(op.gptr) %in% names(op))

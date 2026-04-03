@@ -10,9 +10,9 @@ browse_openai_documentation <- function(url = "https://platform.openai.com/docs/
 #' @return list(type = <chr|NULL>, allowed = <vector|NULL>)
 #' @keywords internal
 .parse_key_spec <- function(spec) {
-  types <- c("integer", "numeric", "character", "logical")
-  if (is.character(spec) && length(spec) == 1L && spec %in% types) {
-    list(type = spec, allowed = NULL, allowed_type = NULL)
+  normalized_type <- if (is.character(spec) && length(spec) == 1L) .normalize_type_name(spec) else NULL
+  if (!is.null(normalized_type)) {
+    list(type = normalized_type, allowed = NULL, allowed_type = NULL)
   } else {
     list(type = NULL, allowed = spec, allowed_type = .infer_allowed_type(spec))
   }
@@ -38,36 +38,6 @@ browse_openai_documentation <- function(url = "https://platform.openai.com/docs/
     return(as.character(x))
   }
   NA_character_
-}
-
-#' coerce a value to a requested type
-#' @keywords internal
-.coerce_type <- function(value, type) {
-  if (type == "integer") {
-    return(suppressWarnings(as.integer(value)))
-  }
-  if (type == "numeric") {
-    return(suppressWarnings(as.numeric(value)))
-  }
-  if (type == "logical") {
-    # accept true/false/0/1/"true"/"false"
-    if (is.character(value)) {
-      v <- tolower(trimws(value))
-      if (v %in% c("true", "1")) {
-        return(TRUE)
-      }
-      if (v %in% c("false", "0")) {
-        return(FALSE)
-      }
-      return(NA)
-    }
-    return(as.logical(value))
-  }
-  # character
-  if (is.null(value)) {
-    return(NA_character_)
-  }
-  as.character(value)
 }
 
 #' check if a scalar belongs to an allowed set (case-insensitive for character)

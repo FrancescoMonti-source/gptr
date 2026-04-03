@@ -20,7 +20,7 @@
 
     if (is.character(allowed)) {
         vals <- trimws(tolower(allowed))
-        if (length(vals) && all(vals %in% c("true", "false", "t", "f", "yes", "y", "no", "n", "0", "1", "oui", "non"))) {
+        if (length(vals) && all(vals %in% c(.gptr_explicit_logical_true_tokens, .gptr_explicit_logical_false_tokens))) {
             return("logical")
         }
         num_vals <- suppressWarnings(as.numeric(vals))
@@ -50,7 +50,7 @@
 }
 
 .effective_key_type <- function(spec) {
-    spec$type %||% spec$allowed_type %||% "character"
+    .normalize_type_name(spec$type %||% spec$allowed_type) %||% "character"
 }
 
 .format_schema_value <- function(value) {
@@ -154,7 +154,7 @@
 }
 
 .can_coerce_scalar <- function(value, type) {
-    type <- tolower(type %||% "")
+    type <- .normalize_type_name(type) %||% ""
     if (!nzchar(type) || is.null(value) || (length(value) == 1L && is.na(value))) {
         return(TRUE)
     }
@@ -193,17 +193,8 @@
     }
 
     if (type == "logical") {
-        if (is.logical(value)) {
-            return(TRUE)
-        }
-        if (is.numeric(value)) {
-            return(!is.na(value) && value %in% c(0, 1))
-        }
-        if (is.character(value)) {
-            val <- trimws(tolower(value))
-            return(val %in% c("true", "false", "t", "f", "yes", "y", "no", "n", "0", "1", "oui", "non"))
-        }
-        return(FALSE)
+        coerced <- .coerce_type(value, "logical")
+        return(length(coerced) == 1L && !is.na(coerced))
     }
 
     TRUE
