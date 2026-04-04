@@ -1,3 +1,8 @@
+# gptr 0.4.9
+
+* Renamed the structured extraction vocabulary to be more explicit: debug output now reports `.schema_mode` with `backend_schema` / `prompt_schema`, while `structured = "native"` / `"repair"` remain accepted as legacy aliases.
+* Added `gptr.backend_schema_backends` as the preferred advanced opt-in option for local backends that truly support `response_format` / JSON schema, while keeping `gptr.native_structured_backends` as a compatibility alias.
+
 # gptr 0.4.8
 
 * Recentered the package around schema-based extraction, with `gpt_column()` now supporting an instruction-first prompt UX alongside the legacy raw `prompt` path.

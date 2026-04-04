@@ -110,7 +110,7 @@
   sprintf("- %s: %s, or NA if not stated", name, label)
 }
 
-.build_repair_prompt_scaffold <- function(key_specs = NULL) {
+.build_prompt_schema_scaffold <- function(key_specs = NULL) {
   sections <- list()
 
   if (!is.null(key_specs) && length(key_specs)) {
@@ -141,7 +141,7 @@
   sections
 }
 
-.build_native_prompt_scaffold <- function() {
+.build_backend_schema_scaffold <- function() {
   list(
     .format_prompt_section(
       "Structured output:",
@@ -155,19 +155,19 @@
 }
 
 # This helper builds the prompt text for the managed path only.
-# In repair mode it adds key/value/output rules because the model has to honor
-# structure via the prompt itself. In native mode it stays much lighter because
-# the schema already travels separately through `response_format`.
+# In prompt-schema mode it adds key/value/output rules because the model has to
+# honor structure via the prompt itself. In backend-schema mode it stays much
+# lighter because the schema already travels separately through `response_format`.
 .build_managed_extraction_prompt <- function(text,
                                              instruction,
                                              template = NULL,
                                              key_specs = NULL,
-                                             mode = c("repair", "native")) {
+                                             mode = c("prompt_schema", "backend_schema")) {
   mode <- match.arg(mode)
-  scaffold <- if (identical(mode, "native")) {
-    .build_native_prompt_scaffold()
+  scaffold <- if (identical(mode, "backend_schema")) {
+    .build_backend_schema_scaffold()
   } else {
-    .build_repair_prompt_scaffold(key_specs)
+    .build_prompt_schema_scaffold(key_specs)
   }
 
   sections <- if (is.null(template)) {

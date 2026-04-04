@@ -1,4 +1,4 @@
-test_that("managed repair prompt scaffold includes task, schema rules, and text", {
+test_that("managed prompt-schema scaffold includes task, schema rules, and text", {
   key_specs <- gptr:::.normalize_key_specs(list(
     age = "integer",
     diagnosis = "character",
@@ -9,7 +9,7 @@ test_that("managed repair prompt scaffold includes task, schema rules, and text"
     text = "Patient is 64 years old.",
     instruction = "Extract age, diagnosis, and severity.",
     key_specs = key_specs,
-    mode = "repair"
+    mode = "prompt_schema"
   )
 
   expect_match(prompt, "Task:\nExtract age, diagnosis, and severity\\.")
@@ -23,14 +23,14 @@ test_that("managed repair prompt scaffold includes task, schema rules, and text"
   expect_match(prompt, "Text:\nPatient is 64 years old\\.")
 })
 
-test_that("managed native prompt scaffold stays light", {
+test_that("managed backend-schema prompt scaffold stays light", {
   key_specs <- gptr:::.normalize_key_specs(list(age = "integer"))
 
   prompt <- gptr:::.build_managed_extraction_prompt(
     text = "Patient is 64 years old.",
     instruction = "Extract age.",
     key_specs = key_specs,
-    mode = "native"
+    mode = "backend_schema"
   )
 
   expect_match(prompt, "Task:\nExtract age\\.")
@@ -47,7 +47,7 @@ test_that("managed template path renders placeholders and appends missing text b
     instruction = "Extract age.",
     template = "Review this note.\n\nTask reminder:\n{instruction}\n\nClinical text:\n{text}",
     key_specs = key_specs,
-    mode = "repair"
+    mode = "prompt_schema"
   )
 
   expect_match(with_text, "Review this note\\.")
@@ -59,7 +59,7 @@ test_that("managed template path renders placeholders and appends missing text b
     instruction = "Extract age.",
     template = "Review this note.\n\nTask reminder:\n{instruction}",
     key_specs = key_specs,
-    mode = "repair"
+    mode = "prompt_schema"
   )
 
   expect_match(without_text, "Task reminder:\nExtract age\\.")

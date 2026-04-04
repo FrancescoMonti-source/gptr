@@ -118,7 +118,7 @@ test_that("legacy-style gpt_column calls still work on redacted real-world fixtu
       res <- run_fixture_case(task, case, provider = "local")
       expect_case_matches(res$out, case)
       testthat::expect_false(res$out$.invalid_rows[[1]], info = paste(task$task_id, case$case_id))
-      testthat::expect_identical(res$out$.structured_mode[[1]], "repair", info = paste(task$task_id, case$case_id))
+      testthat::expect_identical(res$out$.schema_mode[[1]], "prompt_schema", info = paste(task$task_id, case$case_id))
       testthat::expect_null(res$response_format, info = paste(task$task_id, case$case_id))
     }
   }
@@ -201,19 +201,19 @@ test_that("real-world fixtures honor structured mode selection", {
   task <- fixture_task("d0840_dialysis_before_transplant")
   case <- task$rows[[1L]]
 
-  native_res <- run_fixture_case(task, case, provider = "openai", structured = "auto")
-  testthat::expect_true(is.list(native_res$response_format))
-  testthat::expect_identical(native_res$response_format$type, "json_schema")
-  testthat::expect_identical(native_res$out$.structured_mode[[1L]], "native")
-  expect_case_matches(native_res$out, case)
+  backend_schema_res <- run_fixture_case(task, case, provider = "openai", structured = "auto")
+  testthat::expect_true(is.list(backend_schema_res$response_format))
+  testthat::expect_identical(backend_schema_res$response_format$type, "json_schema")
+  testthat::expect_identical(backend_schema_res$out$.schema_mode[[1L]], "backend_schema")
+  expect_case_matches(backend_schema_res$out, case)
 
-  repair_res <- run_fixture_case(task, case, provider = "ollama", structured = "repair")
-  testthat::expect_null(repair_res$response_format)
-  testthat::expect_identical(repair_res$out$.structured_mode[[1L]], "repair")
-  expect_case_matches(repair_res$out, case)
+  prompt_schema_res <- run_fixture_case(task, case, provider = "ollama", structured = "prompt_schema")
+  testthat::expect_null(prompt_schema_res$response_format)
+  testthat::expect_identical(prompt_schema_res$out$.schema_mode[[1L]], "prompt_schema")
+  expect_case_matches(prompt_schema_res$out, case)
 
   testthat::expect_error(
-    run_fixture_case(task, case, provider = "local", structured = "native"),
-    "Native structured extraction is not available"
+    run_fixture_case(task, case, provider = "local", structured = "backend_schema"),
+    "Backend schema extraction is not available"
   )
 })

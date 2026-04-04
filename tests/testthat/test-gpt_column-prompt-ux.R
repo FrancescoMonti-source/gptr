@@ -1,4 +1,4 @@
-test_that("instruction-only prompt follows repair scaffold on the chosen local auto route", {
+test_that("instruction-only prompt follows prompt-schema scaffold on the chosen local auto route", {
   seen_prompt <- NULL
 
   withr::local_options(list(
@@ -31,11 +31,11 @@ test_that("instruction-only prompt follows repair scaffold on the chosen local a
   expect_match(seen_prompt, "Required keys:")
   expect_match(seen_prompt, "Value rules:")
   expect_match(seen_prompt, "Text:\npatient is 64")
-  expect_identical(out$.structured_mode[[1]], "repair")
+  expect_identical(out$.schema_mode[[1]], "prompt_schema")
   expect_identical(out$age[[1]], 64L)
 })
 
-test_that("instruction-only prompt follows native scaffold on the chosen OpenAI auto route", {
+test_that("instruction-only prompt follows backend-schema scaffold on the chosen OpenAI auto route", {
   seen_prompt <- NULL
   seen_response_format <- NULL
 
@@ -73,7 +73,7 @@ test_that("instruction-only prompt follows native scaffold on the chosen OpenAI 
   expect_false(grepl("Required keys:", seen_prompt, fixed = TRUE))
   expect_false(grepl("Value rules:", seen_prompt, fixed = TRUE))
   expect_true(is.list(seen_response_format))
-  expect_identical(out$.structured_mode[[1]], "native")
+  expect_identical(out$.schema_mode[[1]], "backend_schema")
   expect_identical(out$age[[1]], 64L)
 })
 
@@ -96,7 +96,7 @@ test_that("instruction plus template appends text when the template omits it", {
     keys = list(age = "integer"),
     provider = "local",
     backend = "ollama",
-    structured = "repair",
+    structured = "prompt_schema",
     progress = FALSE,
     return_debug = TRUE
   )
@@ -126,7 +126,7 @@ test_that("legacy raw prompt path remains unchanged", {
     keys = list(age = "integer"),
     provider = "local",
     backend = "ollama",
-    structured = "repair",
+    structured = "prompt_schema",
     progress = FALSE,
     return_debug = TRUE
   )

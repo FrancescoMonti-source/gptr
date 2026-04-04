@@ -26,7 +26,7 @@ gpt_column(
   keep_unexpected_keys = getOption("gptr.keep_unexpected_keys", FALSE),
   fuzzy_model = getOption("gptr.fuzzy_model", "lev_ratio"),
   fuzzy_threshold = getOption("gptr.fuzzy_threshold", 0.25),
-  structured = c("auto", "native", "repair"),
+  structured = c("auto", "backend_schema", "prompt_schema"),
   relaxed = FALSE,
   return_debug = TRUE,
   verbose = FALSE,
@@ -47,7 +47,7 @@ with \code{{text}} / \code{{json_format}} placeholders or a function \verb{(text
 
 \item{instruction}{Preferred prompt interface. A plain-language description of
 what to extract. \code{gptr} uses it to build the final prompt scaffold for the
-resolved structured mode.}
+resolved schema mode.}
 
 \item{template}{Optional advanced prompt template used together with
 \code{instruction}. Supports \code{{instruction}} and \code{{text}}. If \code{{text}} is
@@ -86,17 +86,18 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
-\item{structured}{Extraction strategy. \code{"auto"} (default) uses native
-structured outputs for OpenAI and otherwise falls back to JSON repair unless
+\item{structured}{Extraction strategy. \code{"auto"} (default) uses backend-enforced
+schemas for OpenAI and otherwise falls back to prompt-managed schemas unless
 the chosen local backend was explicitly opted in via
-\code{options(gptr.native_structured_backends = ...)}. \code{"native"} requires native
-structured extraction on the chosen route. \code{"repair"} always uses the
-prompt-plus-repair path. The managed \code{instruction} / \code{template} prompt
-scaffold follows this resolved mode automatically.}
+\code{options(gptr.backend_schema_backends = ...)}. \code{"backend_schema"}
+requires backend schema support on the chosen route. \code{"prompt_schema"}
+always uses the prompt-managed path. Legacy aliases \code{"native"} and
+\code{"repair"} are still accepted. The managed \code{instruction} / \code{template}
+prompt scaffold follows this resolved mode automatically.}
 
 \item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 
-\item{return_debug}{If TRUE, add \code{.raw_output}, \code{.structured_mode},
+\item{return_debug}{If TRUE, add \code{.raw_output}, \code{.schema_mode},
 \code{.invalid_rows}, and \code{.invalid_detail}. Default TRUE.}
 
 \item{verbose}{Print repair/validation messages.}

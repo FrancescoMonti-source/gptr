@@ -133,7 +133,7 @@ browse_openai_documentation <- function(url = "https://platform.openai.com/docs/
 #
 # The important design rule is route-first resolution. We choose the route once,
 # using explicit inputs and configured defaults, and only then decide anything
-# else (model validation, native structured outputs, etc.).
+# else (model validation, backend-schema support, etc.).
 #
 # In particular, this helper does *not* search across providers by model name.
 # If a caller wants discovery, that remains an explicit action via `list_models()`.

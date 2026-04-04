@@ -148,12 +148,12 @@ res
 ```         
 [gpt_column()] -- instruction/template --> [managed prompt + route] --> [gpt()] --> tidy columns
       |                                           |                         |
-      | text + keys' schema                       | native or repair        | raw JSON
+      | text + keys' schema                       | backend_schema or prompt_schema | raw JSON
       v                                           v                         v
- prompt scaffold                         response_format or repair    tidy_json() + validation
+ prompt scaffold                         response_format or prompt schema    tidy_json() + validation
 ```
 
-For each row, `gpt_column()` follows the configured request route, decides whether that route will use native structured outputs or repair, builds the prompt scaffold to match that mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, structured mode, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` follows the configured request route, decides whether that route will use backend-enforced schemas or prompt-managed schemas, builds the prompt scaffold to match that mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, schema mode, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys
 
@@ -180,9 +180,9 @@ gpt_column(
 
 In this default path, you describe what to extract and `gptr` handles how to ask for structured output.
 
--   On OpenAI routes, `structured = "auto"` builds a light prompt and relies on native `response_format` schema enforcement.
--   On local routes, `structured = "auto"` builds a repair-oriented scaffold with required keys, value rules, and output constraints.
--   Local native structured mode stays opt-in through `options(gptr.native_structured_backends = ...)`.
+-   On OpenAI routes, `structured = "auto"` builds a light prompt and relies on backend `response_format` schema enforcement.
+-   On local routes, `structured = "auto"` builds a prompt-schema scaffold with required keys, value rules, and output constraints.
+-   Local backend-schema mode stays opt-in through `options(gptr.backend_schema_backends = ...)`.
 
 If you want more control over tone or framing, add a `template`:
 
@@ -302,7 +302,7 @@ delete_models_cache()
 
 -   **Fuzzy key repair:** enable `auto_correct_keys = TRUE` (default) so `json_keys_align()` can fix typos when there is a unique close match. Control the algorithm with `fuzzy_model = "lev_ratio"` or `"lev"` and the tolerance via `fuzzy_threshold`.
 -   **Type coercion:** leave `.coerce_types = TRUE` for schema-driven casts, or pass `coerce_when = list(field = "integer")` to override individual columns. Provide `na_values` to recognise additional sentinel strings.
--   **Native structured local backends:** by default, `structured = "auto"` uses native mode on OpenAI and repair mode on local routes. If you know a local backend really supports JSON schema/`response_format`, opt it in explicitly with something like `options(gptr.native_structured_backends = c("lmstudio"))`.
+-   **Backend schema local backends:** by default, `structured = "auto"` uses backend-schema mode on OpenAI and prompt-schema mode on local routes. If you know a local backend really supports JSON schema/`response_format`, opt it in explicitly with something like `options(gptr.backend_schema_backends = c("lmstudio"))`.
 -   **Relaxed parsing:** set `relaxed = TRUE` when `keys = NULL` and you want to accept scalar strings or partially structured replies. Combine with `keep_unexpected_keys = TRUE` to persist a `.parsed_json` column.
 -   **Type inference:** when you omit `keys`, `infer_types = TRUE` attempts to guess column types from the parsed JSON.
 -   **File/image inputs:** supply `file_path` or `image_path` and they are attached to the `gpt()` request; useful for multimodal providers that accept binary attachments. Local file attachments require `base64enc`.

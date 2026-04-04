@@ -299,6 +299,36 @@
     provider
 }
 
+.normalize_structured_mode <- function(x, arg = "structured") {
+    if (is.null(x) || !length(x) || is.na(x[[1]])) {
+        stop(sprintf("`%s` must be one of \"auto\", \"backend_schema\", or \"prompt_schema\".", arg), call. = FALSE)
+    }
+
+    value <- tolower(trimws(as.character(x[[1]])))
+    normalized <- switch(
+        value,
+        auto = "auto",
+        backend_schema = "backend_schema",
+        prompt_schema = "prompt_schema",
+        native = "backend_schema",
+        repair = "prompt_schema",
+        NULL
+    )
+
+    if (is.null(normalized)) {
+        stop(sprintf("`%s` must be one of \"auto\", \"backend_schema\", or \"prompt_schema\".", arg), call. = FALSE)
+    }
+
+    normalized
+}
+
+.configured_backend_schema_backends <- function() {
+    unique(tolower(c(
+        getOption("gptr.backend_schema_backends", character()),
+        getOption("gptr.native_structured_backends", character())
+    )))
+}
+
 # This helper does *not* ask "where does this model exist?".
 # That question belongs to explicit discovery tools like `list_models()`.
 #
@@ -307,16 +337,16 @@
 # JSON schema directly?"
 #
 # That distinction matters because the same model id can exist on multiple
-# providers, and those providers can differ in structured-output support.
+# providers, and those providers can differ in backend-schema support.
 # Route first, capability second keeps `gpt_column()` aligned with `gpt()`.
-.supports_native_structured <- function(provider,
-                                        backend = NULL,
-                                        model = NULL,
-                                        base_url = NULL,
-                                        openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
-                                        ssl_cert = NULL,
-                                        allow_remote = getOption("gptr.allow_remote", FALSE),
-                                        route = NULL) {
+.supports_backend_schema <- function(provider,
+                                     backend = NULL,
+                                     model = NULL,
+                                     base_url = NULL,
+                                     openai_api_key = Sys.getenv("OPENAI_API_KEY", ""),
+                                     ssl_cert = NULL,
+                                     allow_remote = getOption("gptr.allow_remote", FALSE),
+                                     route = NULL) {
     if (is.null(route)) {
         route <- .resolve_request_route(
             provider = provider,
@@ -326,19 +356,21 @@
             allow_remote = allow_remote
         )
     }
-    configured <- tolower(getOption("gptr.native_structured_backends", character()))
+    configured <- .configured_backend_schema_backends()
     normalized <- .normalize_structured_provider(route$provider, route$backend)
     identical(normalized, "openai") || normalized %in% configured
 }
 
+.supports_native_structured <- .supports_backend_schema
+
 # This helper resolves the extraction route and structured-output mode once,
 # before we build the final `gpt()` request. `gpt_column()` uses that same plan
 # to decide both:
-#   1. how to scaffold the prompt (`repair` vs `native`)
+#   1. how to scaffold the prompt (`prompt_schema` vs `backend_schema`)
 #   2. how to configure the actual request sent to `gpt()`
 # That keeps the user-facing prompt path and the wire request in sync.
 .resolve_extraction_plan <- function(key_specs = NULL,
-                                     structured = c("auto", "native", "repair"),
+                                     structured = c("auto", "backend_schema", "prompt_schema"),
                                      provider = "auto",
                                      backend = NULL,
                                      model = NULL,
@@ -347,7 +379,7 @@
                                      ssl_cert = getOption("gptr.ssl_cert", NULL),
                                      keep_unexpected_keys = FALSE,
                                      dots = list()) {
-    structured <- match.arg(structured)
+    structured <- .normalize_structured_mode(structured)
     allow_remote <- dots$allow_remote %||% getOption("gptr.allow_remote", FALSE)
     route <- .resolve_request_route(
         provider = provider,
@@ -358,8 +390,8 @@
     )
     response_format <- NULL
 
-    if (!is.null(key_specs) && structured != "repair") {
-        can_native <- .supports_native_structured(
+    if (!is.null(key_specs) && structured != "prompt_schema") {
+        can_backend_schema <- .supports_backend_schema(
             provider = route$provider,
             backend = route$backend,
             model = model,
@@ -370,23 +402,23 @@
             route = route
         )
 
-        if (isTRUE(can_native)) {
+        if (isTRUE(can_backend_schema)) {
             response_format <- .schema_to_response_format(
                 key_specs,
                 allow_additional = isTRUE(keep_unexpected_keys)
             )
             return(list(
                 route = route,
-                mode = "native",
+                mode = "backend_schema",
                 response_format = response_format
             ))
         }
 
-        if (identical(structured, "native")) {
+        if (identical(structured, "backend_schema")) {
             route_name <- .normalize_structured_provider(route$provider, route$backend)
             stop(
                 sprintf(
-                    "Native structured extraction is not available on the chosen route (%s). Use `structured = \"repair\"`, switch to a route that supports native structured outputs, or configure `options(gptr.native_structured_backends = ...)` for compatible local servers.",
+                    "Backend schema extraction is not available on the chosen route (%s). Use `structured = \"prompt_schema\"`, switch to a route that supports backend-enforced schemas, or configure `options(gptr.backend_schema_backends = ...)` for compatible local servers.",
                     route_name
                 ),
                 call. = FALSE
@@ -396,7 +428,7 @@
 
     list(
         route = route,
-        mode = "repair",
+        mode = "prompt_schema",
         response_format = NULL
     )
 }
@@ -406,7 +438,7 @@
 # scaffolding and request configuration follow the same route and mode.
 .prepare_extraction_request <- function(prompt,
                                         key_specs = NULL,
-                                        structured = c("auto", "native", "repair"),
+                                        structured = c("auto", "backend_schema", "prompt_schema"),
                                         provider = "auto",
                                         backend = NULL,
                                         model = NULL,
@@ -417,7 +449,7 @@
                                         base_args = list(),
                                         dots = list(),
                                         resolved = NULL) {
-    structured <- match.arg(structured)
+    structured <- .normalize_structured_mode(structured)
     resolved <- resolved %||% .resolve_extraction_plan(
         key_specs = key_specs,
         structured = structured,
@@ -439,9 +471,9 @@
         model = model
     )))
 
-    if (!is.null(dots$response_format) && structured != "repair" && !is.null(key_specs)) {
+    if (!is.null(dots$response_format) && structured != "prompt_schema" && !is.null(key_specs)) {
         rlang::warn(
-            "`gpt_column()` controls `response_format` when `structured != \"repair\"`; ignoring the user-supplied value.",
+            "`gpt_column()` controls `response_format` when `structured != \"prompt_schema\"`; ignoring the user-supplied value.",
             .frequency = "once",
             .frequency_id = "gptr_gpt_column_response_format_ignored"
         )

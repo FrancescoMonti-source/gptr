@@ -15,7 +15,7 @@ test_that("gpt_column flags invalid enum values and coerces them to NA", {
 
   expect_true(is.na(out$severity[[1]]))
   expect_true(out$.invalid_rows[[1]])
-  expect_identical(out$.structured_mode[[1]], "repair")
+  expect_identical(out$.schema_mode[[1]], "prompt_schema")
   expect_false(out$.invalid_detail[[1]]$allowed[[1]])
 })
 
@@ -75,7 +75,7 @@ test_that("gpt_column auto mode uses native structured outputs on the chosen Ope
   expect_true(is.list(seen_response_format))
   expect_identical(seen_response_format$type, "json_schema")
   expect_identical(out$age[[1]], 64L)
-  expect_identical(out$.structured_mode[[1]], "native")
+  expect_identical(out$.schema_mode[[1]], "backend_schema")
 })
 
 test_that("gpt_column auto mode keeps smart defaults on the chosen local route", {
@@ -116,7 +116,7 @@ test_that("gpt_column auto mode keeps smart defaults on the chosen local route",
   expect_identical(seen_base_url, "http://127.0.0.1:11434")
   expect_null(seen_response_format)
   expect_identical(out$age[[1]], 64L)
-  expect_identical(out$.structured_mode[[1]], "repair")
+  expect_identical(out$.schema_mode[[1]], "prompt_schema")
 })
 
 test_that("gpt_column auto mode uses native structured outputs for opted-in local backends only", {
@@ -126,7 +126,7 @@ test_that("gpt_column auto mode uses native structured outputs for opted-in loca
   withr::local_options(list(
     gptr.local_prefer = c("ollama", "lmstudio", "localai"),
     gptr.ollama_model = "mistral",
-    gptr.native_structured_backends = "ollama"
+    gptr.backend_schema_backends = "ollama"
   ))
   testthat::local_mocked_bindings(
     gpt = function(prompt, response_format = NULL, provider = NULL, backend = NULL, ...) {
@@ -151,10 +151,10 @@ test_that("gpt_column auto mode uses native structured outputs for opted-in loca
   expect_identical(seen_backend, "ollama")
   expect_true(is.list(seen_response_format))
   expect_identical(out$age[[1]], 64L)
-  expect_identical(out$.structured_mode[[1]], "native")
+  expect_identical(out$.schema_mode[[1]], "backend_schema")
 })
 
-test_that("gpt_column native mode errors with actionable guidance on unsupported routes", {
+test_that("gpt_column backend_schema mode errors with actionable guidance on unsupported routes", {
   testthat::local_mocked_bindings(
     gpt = function(prompt, response_format = NULL, ...) '{"age":64}',
     .package = "gptr"
@@ -167,12 +167,47 @@ test_that("gpt_column native mode errors with actionable guidance on unsupported
       prompt = "Extract {json_format} from {text}",
       keys = list(age = "integer"),
       provider = "local",
-      structured = "native",
+      structured = "backend_schema",
       progress = FALSE
     ),
-    "Use `structured = \"repair\"`, switch to a route that supports native structured outputs, or configure `options\\(gptr.native_structured_backends = \\.\\.\\.\\)`",
+    "Use `structured = \"prompt_schema\"`, switch to a route that supports backend-enforced schemas, or configure `options\\(gptr.backend_schema_backends = \\.\\.\\.\\)`",
     perl = TRUE
   )
+})
+
+test_that("gpt_column still accepts legacy structured aliases", {
+  testthat::local_mocked_bindings(
+    gpt = function(prompt, response_format = NULL, ...) '{"age":64}',
+    .package = "gptr"
+  )
+
+  prompt_schema_out <- gpt_column(
+    data = data.frame(txt = "patient is 64", stringsAsFactors = FALSE),
+    col = txt,
+    prompt = "Extract {json_format} from {text}",
+    keys = list(age = "integer"),
+    provider = "local",
+    backend = "ollama",
+    structured = "repair",
+    progress = FALSE,
+    return_debug = TRUE
+  )
+
+  backend_schema_out <- gpt_column(
+    data = data.frame(txt = "patient is 64", stringsAsFactors = FALSE),
+    col = txt,
+    prompt = "Extract {json_format} from {text}",
+    keys = list(age = "integer"),
+    provider = "openai",
+    structured = "native",
+    openai_api_key = "sk-test",
+    allow_remote = TRUE,
+    progress = FALSE,
+    return_debug = TRUE
+  )
+
+  expect_identical(prompt_schema_out$.schema_mode[[1]], "prompt_schema")
+  expect_identical(backend_schema_out$.schema_mode[[1]], "backend_schema")
 })
 
 test_that("gpt_column auto mode errors clearly when no route is configured", {

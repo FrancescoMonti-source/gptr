@@ -12,7 +12,7 @@
 #' @param keys Optional named list defining expected JSON keys and their type or allowed set.
 #' @param instruction Preferred prompt interface. A plain-language description of
 #'   what to extract. `gptr` uses it to build the final prompt scaffold for the
-#'   resolved structured mode.
+#'   resolved schema mode.
 #' @param template Optional advanced prompt template used together with
 #'   `instruction`. Supports `{instruction}` and `{text}`. If `{text}` is
 #'   omitted, `gptr` appends a standard `Text:` section automatically.
@@ -32,16 +32,17 @@
 #' @param na_values Values treated as NA at multiple stages.
 #' @param file_path,image_path Optional file or image paths attached to each model call.
 #' @param temperature Sampling temperature for the model.
-#' @param structured Extraction strategy. `"auto"` (default) uses native
-#'   structured outputs for OpenAI and otherwise falls back to JSON repair unless
+#' @param structured Extraction strategy. `"auto"` (default) uses backend-enforced
+#'   schemas for OpenAI and otherwise falls back to prompt-managed schemas unless
 #'   the chosen local backend was explicitly opted in via
-#'   `options(gptr.native_structured_backends = ...)`. `"native"` requires native
-#'   structured extraction on the chosen route. `"repair"` always uses the
-#'   prompt-plus-repair path. The managed `instruction` / `template` prompt
-#'   scaffold follows this resolved mode automatically.
+#'   `options(gptr.backend_schema_backends = ...)`. `"backend_schema"`
+#'   requires backend schema support on the chosen route. `"prompt_schema"`
+#'   always uses the prompt-managed path. Legacy aliases `"native"` and
+#'   `"repair"` are still accepted. The managed `instruction` / `template`
+#'   prompt scaffold follows this resolved mode automatically.
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.
-#' @param return_debug If TRUE, add `.raw_output`, `.structured_mode`,
+#' @param return_debug If TRUE, add `.raw_output`, `.schema_mode`,
 #'   `.invalid_rows`, and `.invalid_detail`. Default TRUE.
 #' @param .coerce_types Row-level coercion toggle (default TRUE). Explicit
 #'   logical coercion accepts `true/false`, `yes/no`, `oui/non`, and `1/0`.
@@ -76,7 +77,7 @@ gpt_column <- function(data,
                        keep_unexpected_keys = getOption("gptr.keep_unexpected_keys", FALSE),
                        fuzzy_model = getOption("gptr.fuzzy_model", "lev_ratio"),
                        fuzzy_threshold = getOption("gptr.fuzzy_threshold", 0.25),
-                       structured = c("auto", "native", "repair"),
+                       structured = c("auto", "backend_schema", "prompt_schema"),
                        relaxed = FALSE,
                        return_debug = TRUE,
                        verbose = FALSE,
@@ -95,7 +96,7 @@ gpt_column <- function(data,
 
     provider <- match.arg(provider)
     multi_value <- match.arg(multi_value)
-    structured <- match.arg(structured)
+    structured <- .normalize_structured_mode(structured)
     if (provider %in% c("lmstudio", "ollama", "localai")) {
         backend <- provider
         provider <- "local"
@@ -165,8 +166,8 @@ gpt_column <- function(data,
     #
     # WHY expected_keys: the ordered vector of column names, used to pad/order and
     # drive json_keys_align() / row_to_tibble() / .finalize_columns().
-    if (identical(structured, "native") && is.null(keys)) {
-        stop("`structured = \"native\"` requires a non-NULL `keys` schema.", call. = FALSE)
+    if (identical(structured, "backend_schema") && is.null(keys)) {
+        stop("`structured = \"backend_schema\"` requires a non-NULL `keys` schema.", call. = FALSE)
     }
     key_specs <- .normalize_key_specs(keys)
     expected_keys <- names(key_specs) %||% NULL
@@ -216,7 +217,7 @@ gpt_column <- function(data,
     call_gpt <- function(i) {
         txt <- texts[[i]]
         if (is.na(txt) || !nzchar(trimws(txt))) {
-            return(list(raw = NA_character_, mode = "repair"))
+            return(list(raw = NA_character_, mode = "prompt_schema"))
         }
         request_plan <- get_request_plan()
         input_prompt <- make_prompt_for(txt)
@@ -459,7 +460,7 @@ gpt_column <- function(data,
             } else {
                 result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
             }
-            result$.structured_mode <- extraction_modes
+            result$.schema_mode <- extraction_modes
             result$.invalid_rows <- invalid_flags
             result$.invalid_detail <- invalid_detail
         }
@@ -490,7 +491,7 @@ gpt_column <- function(data,
 
         # Clean internal noise (preserve debug cols if present)
         if (isTRUE(return_debug)) {
-            keep_debug <- c(".raw_output", ".structured_mode", ".invalid_rows", ".invalid_detail", ".parsed_json")
+            keep_debug <- c(".raw_output", ".schema_mode", ".invalid_rows", ".invalid_detail", ".parsed_json")
             junk <- c("type", "allowed", "valid", ".valid", ".raw", ".error", "..raw_json", "..parse_error", ".path")
             to_drop <- setdiff(junk, keep_debug)
             result <- result[, setdiff(names(result), to_drop), drop = FALSE]
@@ -586,13 +587,13 @@ gpt_column <- function(data,
         } else {
             result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
         }
-        result$.structured_mode <- extraction_modes
+        result$.schema_mode <- extraction_modes
         result$.invalid_rows <- invalid_flags
         result$.invalid_detail <- invalid_detail
     }
 
     # Drop noisy internal meta while preserving debug/extras
-    keep_debug <- c(".raw_output", ".structured_mode", ".invalid_rows", ".invalid_detail", ".extras_json")
+    keep_debug <- c(".raw_output", ".schema_mode", ".invalid_rows", ".invalid_detail", ".extras_json")
     junk <- c("type", "allowed", "valid", ".valid", ".raw", ".error", "..raw_json", "..parse_error", ".path")
     to_drop <- setdiff(junk, keep_debug)
     result <- result[, setdiff(names(result), to_drop), drop = FALSE]
