@@ -3,3 +3,4 @@
 ^dev$
 bilan preop
 docs
+^manual-eval($|/)

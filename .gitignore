@@ -9,3 +9,7 @@ bilan preop
 dev/structure/pkgnet_report.html
 
 /.quarto/
+manual-eval/*
+manual-eval/**/*
+!manual-eval/.gitkeep
+!manual-eval/manual_eval_d0840.R
