@@ -1,6 +1,6 @@
 # gptr - Structured Data Extraction with R + LLMs
 
-`gptr` turns unstructured, domain-specific text into tidy, validated data frames using large language models (LLMs). It wraps prompt templating, provider orchestration, schema enforcement, and observability so you can rely on LLM-powered extraction inside reproducible R pipelines.
+`gptr` is meant to help you turn unstructured, domain-specific text into tidy, validated data frames using large language models (LLMs). It wraps prompt templating, provider orchestration, schema enforcement, and observability so you can rely on LLM-powered extraction inside reproducible R pipelines.
 
 ## Contents
 
@@ -25,22 +25,22 @@
 -   [Contributing](#contributing)
 -   [License](#license)
 
-## Why gptr
+## Why gptr {#why-gptr}
 
--   Schema-aware parsing that repairs JSON, coerces column types, enforces allowed values, and optionally aligns fuzzy key names.
--   Provider-agnostic orchestration: talk to OpenAI, LM Studio, Ollama, LocalAI, or any OpenAI-compatible endpoint with the same R call.
--   Pipeline-friendly design: `gpt_column()` binds predictions back to the original tibble, honours tidy evaluation, and plays nicely with progress bars and parallel plans.
+-   Schema-aware parsing that repairs JSON (if needed), coerces column types, enforces allowed values, and optionally aligns fuzzy key names.
+-   Provider-agnostic orchestration: talk to OpenAI, LM Studio, Ollama, LocalAI, or any OpenAI-compatible endpoint with the same R call. More will be eventually implemented in the future.
+-   Pipeline-friendly design: `gpt_column()` binds predictions back to the original tibble (basically creating structured variables from unstructured variables when an LLM is worth using ex. in the case of text –\> structured output), honours tidy evaluation, and plays nicely with progress bars and parallel plans.
 -   Built-in diagnostics: capture raw outputs, invalid rows, retry helpers, and `keep_unexpected_keys` controls for messy payloads.
 -   Supporting APIs for single prompts, chat, text-to-speech, and model discovery when you need them, without taking focus away from extraction workflows.
 
 ### When to use gptr
 
--   Extract structured fields (age, diagnosis, amounts, dates) from messy text.
+-   Extract structured fields (age, diagnosis, amounts, dates) from messy text when "old" methods fail or are expected to not run reliably or easily break.
 -   Ask a model complex questions about a text (summaries/interpretation/etc..)
 -   Turn meeting notes, tickets, or lab reports into tidy tables.
 -   Build repeatable extraction pipelines that need validation and retry paths.
 
-## New here? Start in 5 minutes
+## New here? Start in 5 minutes {#new-here-start-in-5-minutes}
 
 1.  **Install the package** (see below).
 2.  **Configure a provider**:
@@ -55,7 +55,7 @@ gpt("ping", provider = "insert your provider here", model = "the model you just 
 
 If you see a response, you're ready for structured extraction with `gpt_column()`.
 
-## Installation
+## Installation {#installation}
 
 ``` r
 # Requires pak or remotes
@@ -69,12 +69,7 @@ Set an API key (e.g., `OPENAI_API_KEY`) or run a local OpenAI-compatible server 
 
 ### Configure credentials and defaults
 
-Store credentials in `.Renviron` or your session so they do not get hard-coded:
-
-```{r, eval = FALSE}
-# ~/.Renviron (restart R after editing)
-OPENAI_API_KEY="your-key-here"
-```
+Store credentials in `.Renviron` or your session so they do not get hard-coded or even better create an environment variable .
 
 You can also set defaults for a session. Use `gptr::show_gptr_options()` to see the default parameters and `options(x = "y")` to update them according to your needs.
 
@@ -83,13 +78,13 @@ You can also set defaults for a session. Use `gptr::show_gptr_options()` to see 
 `gptr` can work with local or hosted providers. Pick the one that matches your setup:
 
 | Provider | Best for | Notes |
-| --- | --- | --- |
-| `auto` | First-time users | Prefers local if running, otherwise uses OpenAI when credentials exist. |
+|------------------------|------------------------|------------------------|
+| `auto` | New users/no hassle | Prefers local if running, otherwise uses OpenAI when credentials exist. |
 | `openai` | Hosted models | Requires `OPENAI_API_KEY`. |
 | `lmstudio` / `ollama` / `localai` | Local models | Run the server and pass the model name available on that backend. |
 | `local` | Other OpenAI-compatible server | Provide `base_url` or `backend` to pin. |
 
-## Quick start
+## Quick start {#quick-start}
 
 ```{r, eval = FALSE}
 library(gptr)
@@ -110,7 +105,7 @@ schema <- list(
 
 res <- gpt_column(
   data     = notes,
-  col      = text,
+  text_col = text,
   keys     = schema,
   instruction = "Extract the patient's age and main diagnosis from the note.",
   provider = "ollama", # openai/local/ollama/lmstudio
@@ -129,21 +124,22 @@ res
 
 `gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.raw_output` and `.invalid_detail` for auditing. The `".invalid_rows"` flags rows that failed validation so that you can retry them selectively.
 
-## Common first-run issues
+## Common first-run issues {#common-first-run-issues}
 
--   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. Try `gpt("ping", provider = "lmstudio")`, `gpt("ping", provider = "ollama")`, or `gpt("ping", provider = "openai")` to confirm the route you want to use.
+-   **"No backend available"**: start a local server (LM Studio/Ollama/LocalAI) or set `OPENAI_API_KEY`. \
+    Try `gpt("ping", provider = "lmstudio")`, `gpt("ping", provider = "ollama")`, or `gpt("ping", provider = "openai")` to confirm the route you want to use.
 -   **"Model not found"**: run `list_models()` (or `list_models(provider = "ollama")`, etc.) to see what's available. Set a default model for your provider (see `show_gptr_options()`) or pass a model name explicitly whenever you make a call to the LLM.
 -   **Invalid JSON**: keep `return_debug = TRUE` and inspect `.raw_output` or `.invalid_detail` to tune your prompt or schema.
 
-## A practical extraction checklist
+## A practical extraction checklist {#a-practical-extraction-checklist}
 
 1.  **Start with a minimal schema** (two or three fields) and a short prompt.
-2.  **Run 5–10 real samples** to see where the model drifts.
+2.  **Run 5–10 real samples** to see where/if the model drifts.
 3.  **Tighten the schema** (types or enumerations) and re-run.
 4.  **Inspect invalid rows** with `return_debug = TRUE` and `patch_failed_rows()`.
 5.  **Scale up** with progress backends or parallel plans once the prompt stabilizes.
 
-## Workflow overview
+## Workflow overview {#workflow-overview}
 
 ```         
 [gpt_column()] -- instruction/template --> [managed prompt + route] --> [gpt()] --> tidy columns
@@ -155,24 +151,24 @@ res
 
 For each row, `gpt_column()` follows the configured request route, decides whether that route will use backend-enforced schemas or prompt-managed schemas, builds the prompt scaffold to match that mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, schema mode, validation detail, invalid row indexes) stay attached for debugging.
 
-## Schema keys
+## Schema keys {#schema-keys}
 
 `keys` is a named list that documents the shape of the JSON you expect back. Each entry can be:
 
 -   A "type" string (`"integer"`, `"numeric"`, `"character"`, `"logical"`). Types drive coercion, validation, and the managed prompt's value rules.
 -   A vector of allowed values (regardless of the "type"). The parser accepts the listed values case-insensitively for strings.
--   A mix of the two: you can use types for some fields and enumerations for others. 
+-   A mix of the two: you can use types for some fields and enumerations for others.
 
 The schema is the single source of truth used for prompting, parsing, and validation.
 
-## Prompt UX and legacy templates
+## Prompt UX and legacy templates {#prompt-ux-and-legacy-templates}
 
 The preferred `gpt_column()` interface is now instruction-first:
 
 ```{r, eval = FALSE}
 gpt_column(
   data = notes,
-  col = text,
+  text_col = text,
   keys = schema,
   instruction = "Extract the patient's age and main diagnosis from the note."
 )
@@ -189,7 +185,7 @@ If you want more control over tone or framing, add a `template`:
 ```{r, eval = FALSE}
 gpt_column(
   data = notes,
-  col = text,
+  text_col = text,
   keys = schema,
   instruction = "Extract the patient's age and main diagnosis from the note.",
   template = "
@@ -215,12 +211,12 @@ Text:
 {text}
 "
 
-gpt_column(data = notes, col = text, keys = schema, prompt = legacy_prompt)
+gpt_column(data = notes, text_col = text, keys = schema, prompt = legacy_prompt)
 ```
 
 That legacy path is also what the exported `build_prompt()` helper supports. It remains available, but it is now the lower-level path rather than the recommended default.
 
-## Response validation pipeline
+## Response validation pipeline {#response-validation-pipeline}
 
 After the model replies, `gpt_column()` runs a deterministic pipeline:
 
@@ -231,7 +227,7 @@ After the model replies, `gpt_column()` runs a deterministic pipeline:
 
 When `keys` is `NULL`, you can still collect structured output: set `keep_unexpected_keys = TRUE` to keep a minified `.parsed_json` column, or use `relaxed = TRUE` to accept non-JSON responses.
 
-## Debugging, retries, and auditing
+## Debugging, retries, and auditing {#debugging-retries-and-auditing}
 
 -   `return_debug = TRUE` (default behavior) appends `.raw_output` and `.invalid_detail` columns to inspect model responses and validation errors.
 -   `attr(result, "invalid_rows")` gives the row indexes that need attention.
@@ -244,7 +240,7 @@ failed <- attr(res, "invalid_rows")
 if (length(failed)) {
   res2 <- patch_failed_rows(
     data   = res,
-    col    = text,
+    text_col = text,
     id_col = id,
     keys   = schema,
     instruction = "Extract the patient's age and main diagnosis from the note.",
@@ -278,7 +274,7 @@ audio <- gpt_tts("Hello from gptr!")
 play(audio)
 ```
 
-## Quality-of-life helpers
+## Quality-of-life helpers {#quality-of-life-helpers}
 
 Use these helpers to inspect configuration, explore models, and manage caches:
 
@@ -291,14 +287,14 @@ refresh_models()
 delete_models_cache()
 ```
 
-## Other helpers
+## Other helpers {#other-helpers}
 
 -   **Single call vs chat:** `gpt()` is stateless and useful for small utilities or debugging prompts; `gpt_chat()` maintains conversational history (reset with `gpt_chat$reset()`).
 -   **Text-to-speech:** `gpt_tts("Hello from R!")` sends text to OpenAI TTS, saves an audio file, and returns a `gptr_audio` object (use `play(audio)` to open it).
 -   **Model discovery:** `list_models()` (or a specific provider like `list_models(provider = "ollama")`) probes backends and caches results; `refresh_models()` bypasses the cache. Use `delete_models_cache()` to clear entries.
 -   **Options introspection:** `show_gptr_options()` prints every `gptr.*` option currently in effect so you can see provider defaults, timeouts, and cache behaviour.
 
-## Advanced tuning
+## Advanced tuning {#advanced-tuning}
 
 -   **Fuzzy key repair:** enable `auto_correct_keys = TRUE` (default) so `json_keys_align()` can fix typos when there is a unique close match. Control the algorithm with `fuzzy_model = "lev_ratio"` or `"lev"` and the tolerance via `fuzzy_threshold`.
 -   **Type coercion:** leave `.coerce_types = TRUE` for schema-driven casts, or pass `coerce_when = list(field = "integer")` to override individual columns. Provide `na_values` to recognise additional sentinel strings.
@@ -310,7 +306,7 @@ delete_models_cache()
 
 All knobs and defaults can be inspected with `show_gptr_options()`, then overridden via `options(gptr.* = value)` in your session or `.Rprofile`.
 
-## Provider support
+## Provider support {#provider-support}
 
 `gptr` works with both hosted and local models via a consistent interface:
 
@@ -327,27 +323,27 @@ gpt("ping", provider = "lmstudio", model = "mistralai/mistral-7b-instruct-v0.3")
 gpt("ping", provider = "openai", model = "gpt-4o-mini")
 ```
 
-## FAQ
+## FAQ {#faq}
 
-**Do I need to provide a schema?**  
-No. If `keys = NULL`, you can still collect structured output with `keep_unexpected_keys = TRUE` (or `relaxed = TRUE` when you want to accept non-JSON replies). The trade-off is weaker validation. 
+**Do I need to provide a schema?**\
+No. If `keys = NULL`, you can still collect structured output with `keep_unexpected_keys = TRUE` (or `relaxed = TRUE` when you want to accept non-JSON replies). The trade-off is weaker validation.
 
-**How do I pick a model?**  
+**How do I pick a model?**\
 Start with `list_models()` (or target a backend like `list_models(provider = "ollama")`) to see what your backend exposes, then set `model` explicitly to make runs reproducible.
 
-**Where do I see the package defaults?**  
+**Where do I see the package defaults?**\
 Run `show_gptr_options()` to print the full list of `gptr.*` options active in your session.
 
-## Requirements
+## Requirements {#requirements}
 
 -   R \>= 4.1
 -   Imports: `cli`, `httr`, `httr2`, `jsonlite`, `purrr`, `stringr`, `tibble`
 -   Suggested: `furrr`, `progressr`, `pdftools`, `officer`, `mime`
 
-## Contributing
+## Contributing {#contributing}
 
 Issues and pull requests are welcome. Please open an issue to discuss substantial changes before submitting a PR.
 
-## License
+## License {#license}
 
 MIT License - see `LICENSE.txt`.

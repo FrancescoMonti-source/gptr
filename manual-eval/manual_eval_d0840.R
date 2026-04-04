@@ -244,7 +244,7 @@ manual_eval_call_input$.manual_eval_text <- manual_eval_call_input[[config$text_
 
 manual_eval_result <- gpt_column(
   manual_eval_call_input,
-  col = .manual_eval_text,
+  text_col = .manual_eval_text,
   keys = config$keys,
   instruction = config$instruction,
   provider = provider,

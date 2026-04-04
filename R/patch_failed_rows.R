@@ -12,8 +12,10 @@
 #'   `"invalid_rows"` attribute (integer vector of row indices that failed).
 #' @param prompt Legacy/raw prompt interface forwarded back into `gpt_column()`.
 #'   Use this for backward compatibility or full prompt control.
-#' @param col Column in `data` containing the text to be processed by
-#'   `gpt_column()`. Use tidy-eval notation (unquoted column name).
+#' @param text_col Preferred column in `data` containing the text to be
+#'   processed by `gpt_column()`. Use tidy-eval notation (unquoted column
+#'   name).
+#' @param col Legacy alias for `text_col`. Kept for backward compatibility.
 #' @param id_col Column in `data` that uniquely identifies each row. Used to
 #'   join retry results back into the main dataset. Must have unique values.
 #' @param keys Optional named list of expected output keys and their R types,
@@ -55,7 +57,7 @@
 #' # Retry failed rows up to 2 times
 #' df <- patch_failed_rows(
 #'   data = df,
-#'   col = note_text,
+#'   text_col = note_text,
 #'   id_col = patient_id,
 #'   keys = list(age = "integer", diagnosis = "character"),
 #'   instruction = "Extract age and diagnosis from the note.",
@@ -74,7 +76,7 @@
 
 patch_failed_rows <- function(data,
                               prompt = NULL,
-                              col,
+                              text_col,
                               id_col,
                               keys = NULL,
                               instruction = NULL,
@@ -83,6 +85,7 @@ patch_failed_rows <- function(data,
                               auto_correct_keys = TRUE,
                               relaxed = TRUE,
                               print_retry = TRUE,
+                              col = NULL,
                               ...) {
   # --- deps ---
   for (pkg in c("dplyr", "purrr", "progressr", "rlang")) {
@@ -97,7 +100,15 @@ patch_failed_rows <- function(data,
   )
 
   # --- quosures & names ---
-  col_quo <- rlang::enquo(col)
+  text_col_missing <- missing(text_col)
+  col_missing <- missing(col)
+  if (text_col_missing && col_missing) {
+    stop("Supply `text_col` (preferred) or legacy `col` in `patch_failed_rows()`.", call. = FALSE)
+  }
+  if (!text_col_missing && !col_missing) {
+    stop("Supply only one of `text_col` or legacy `col` in `patch_failed_rows()`.", call. = FALSE)
+  }
+  col_quo <- if (!text_col_missing) rlang::enquo(text_col) else rlang::enquo(col)
   id_col_quo <- rlang::enquo(id_col)
   col_name <- rlang::as_name(col_quo)
   id_col_name <- rlang::as_name(id_col_quo)
@@ -121,7 +132,7 @@ patch_failed_rows <- function(data,
     out <- tryCatch(
       gpt_column(
         data = row_df,
-        col = !!col_quo,
+        text_col = !!col_quo,
         prompt = prompt,
         keys = keys,
         instruction = instruction,

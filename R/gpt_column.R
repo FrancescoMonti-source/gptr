@@ -5,7 +5,9 @@
 #' then returns the structured columns bound to the input.
 #'
 #' @param data A data frame or tibble containing the text column.
-#' @param col Unquoted name of the text column to send to the LLM.
+#' @param text_col Preferred unquoted name of the text column to send to the
+#'   LLM.
+#' @param col Legacy alias for `text_col`. Kept for backward compatibility.
 #' @param prompt Legacy/raw prompt interface. Supply either a character template
 #'   with `{text}` / `{json_format}` placeholders or a function `(text, keys) ->
 #'   string`. This path is kept for expert use and backward compatibility.
@@ -57,7 +59,7 @@
 #'
 
 gpt_column <- function(data,
-                       col,
+                       text_col,
                        prompt = NULL,
                        keys = NULL,
                        instruction = NULL,
@@ -83,6 +85,7 @@ gpt_column <- function(data,
                        verbose = FALSE,
                        progress = TRUE,
                        multi_value = c("first", "error", "list"),
+                       col = NULL,
                        ...) {
     # capture all user extras once
     dots <- rlang::list2(...) # <-- new
@@ -135,11 +138,19 @@ gpt_column <- function(data,
 
     # Ungroup; validate column
     if (dplyr::is_grouped_df(data)) data <- dplyr::ungroup(data)
-    col_quo <- rlang::enquo(col)
-    col_name <- rlang::as_name(col_quo)
-    if (!col_name %in% names(data)) stop("Column '", col_name, "' not found in `data`.", call. = FALSE)
+    text_col_missing <- missing(text_col)
+    col_missing <- missing(col)
+    if (text_col_missing && col_missing) {
+        stop("Supply `text_col` (preferred) or legacy `col` in `gpt_column()`.", call. = FALSE)
+    }
+    if (!text_col_missing && !col_missing) {
+        stop("Supply only one of `text_col` or legacy `col` in `gpt_column()`.", call. = FALSE)
+    }
+    text_col_quo <- if (!text_col_missing) rlang::enquo(text_col) else rlang::enquo(col)
+    text_col_name <- rlang::as_name(text_col_quo)
+    if (!text_col_name %in% names(data)) stop("Column '", text_col_name, "' not found in `data`.", call. = FALSE)
 
-    texts <- dplyr::pull(data, !!col_quo)
+    texts <- dplyr::pull(data, !!text_col_quo)
     if (!is.character(texts)) texts <- as.character(texts)
     n <- length(texts)
 
@@ -458,7 +469,7 @@ gpt_column <- function(data,
             if (".raw_output" %in% names(result)) {
                 result$.raw_output <- raw_outputs
             } else {
-                result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
+                result <- tibble::add_column(result, .raw_output = raw_outputs, .after = text_col_name)
             }
             result$.schema_mode <- extraction_modes
             result$.invalid_rows <- invalid_flags
@@ -485,7 +496,7 @@ gpt_column <- function(data,
             if (".parsed_json" %in% names(result)) {
                 result$.parsed_json <- parsed_json
             } else {
-                result <- tibble::add_column(result, .parsed_json = parsed_json, .after = col_name)
+                result <- tibble::add_column(result, .parsed_json = parsed_json, .after = text_col_name)
             }
         }
 
@@ -576,7 +587,7 @@ gpt_column <- function(data,
         if (".extras_json" %in% names(result)) {
             result$.extras_json <- extras_json
         } else {
-            result <- tibble::add_column(result, .extras_json = extras_json, .after = col_name)
+            result <- tibble::add_column(result, .extras_json = extras_json, .after = text_col_name)
         }
     }
 
@@ -585,7 +596,7 @@ gpt_column <- function(data,
         if (".raw_output" %in% names(result)) {
             result$.raw_output <- raw_outputs
         } else {
-            result <- tibble::add_column(result, .raw_output = raw_outputs, .after = col_name)
+            result <- tibble::add_column(result, .raw_output = raw_outputs, .after = text_col_name)
         }
         result$.schema_mode <- extraction_modes
         result$.invalid_rows <- invalid_flags

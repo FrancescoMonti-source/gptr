@@ -7,7 +7,7 @@
 patch_failed_rows(
   data,
   prompt = NULL,
-  col,
+  text_col,
   id_col,
   keys = NULL,
   instruction = NULL,
@@ -16,6 +16,7 @@ patch_failed_rows(
   auto_correct_keys = TRUE,
   relaxed = TRUE,
   print_retry = TRUE,
+  col = NULL,
   ...
 )
 }
@@ -26,8 +27,9 @@ patch_failed_rows(
 \item{prompt}{Legacy/raw prompt interface forwarded back into \code{gpt_column()}.
 Use this for backward compatibility or full prompt control.}
 
-\item{col}{Column in \code{data} containing the text to be processed by
-\code{gpt_column()}. Use tidy-eval notation (unquoted column name).}
+\item{text_col}{Preferred column in \code{data} containing the text to be
+processed by \code{gpt_column()}. Use tidy-eval notation (unquoted column
+name).}
 
 \item{id_col}{Column in \code{data} that uniquely identifies each row. Used to
 join retry results back into the main dataset. Must have unique values.}
@@ -52,6 +54,8 @@ Default is \code{TRUE}.}
 
 \item{print_retry}{Logical. If \code{TRUE} (default), prints the combined retry
 results for inspection (truncated after 50 rows).}
+
+\item{col}{Legacy alias for \code{text_col}. Kept for backward compatibility.}
 
 \item{...}{Additional arguments passed to \code{gpt_column()}.}
 }
@@ -90,7 +94,7 @@ attr(df, "invalid_rows")
 # Retry failed rows up to 2 times
 df <- patch_failed_rows(
   data = df,
-  col = note_text,
+  text_col = note_text,
   id_col = patient_id,
   keys = list(age = "integer", diagnosis = "character"),
   instruction = "Extract age and diagnosis from the note.",

@@ -18,7 +18,7 @@ test_that("instruction-only prompt follows prompt-schema scaffold on the chosen 
 
   out <- gpt_column(
     data = data.frame(txt = "patient is 64", stringsAsFactors = FALSE),
-    col = txt,
+    text_col = txt,
     instruction = "Extract age.",
     keys = list(age = "integer"),
     provider = "auto",
@@ -33,6 +33,40 @@ test_that("instruction-only prompt follows prompt-schema scaffold on the chosen 
   expect_match(seen_prompt, "Text:\npatient is 64")
   expect_identical(out$.schema_mode[[1]], "prompt_schema")
   expect_identical(out$age[[1]], 64L)
+})
+
+test_that("gpt_column still accepts legacy `col` and rejects mixed text_col/col", {
+  testthat::local_mocked_bindings(
+    gpt = function(prompt, ...) '{"age":64}',
+    .package = "gptr"
+  )
+
+  legacy_out <- gpt_column(
+    data = data.frame(txt = "patient is 64", stringsAsFactors = FALSE),
+    col = txt,
+    instruction = "Extract age.",
+    keys = list(age = "integer"),
+    provider = "local",
+    backend = "ollama",
+    structured = "prompt_schema",
+    progress = FALSE,
+    return_debug = TRUE
+  )
+
+  expect_identical(legacy_out$age[[1]], 64L)
+
+  expect_error(
+    gpt_column(
+      data = data.frame(txt = "patient is 64", stringsAsFactors = FALSE),
+      text_col = txt,
+      col = txt,
+      instruction = "Extract age.",
+      keys = list(age = "integer"),
+      progress = FALSE
+    ),
+    "Supply only one of `text_col` or legacy `col`",
+    fixed = TRUE
+  )
 })
 
 test_that("instruction-only prompt follows backend-schema scaffold on the chosen OpenAI auto route", {

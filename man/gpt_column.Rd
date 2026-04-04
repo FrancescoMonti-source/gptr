@@ -6,7 +6,7 @@
 \usage{
 gpt_column(
   data,
-  col,
+  text_col,
   prompt = NULL,
   keys = NULL,
   instruction = NULL,
@@ -32,13 +32,15 @@ gpt_column(
   verbose = FALSE,
   progress = TRUE,
   multi_value = c("first", "error", "list"),
+  col = NULL,
   ...
 )
 }
 \arguments{
 \item{data}{A data frame or tibble containing the text column.}
 
-\item{col}{Unquoted name of the text column to send to the LLM.}
+\item{text_col}{Preferred unquoted name of the text column to send to the
+LLM.}
 
 \item{prompt}{Legacy/raw prompt interface. Supply either a character template
 with \code{{text}} / \code{{json_format}} placeholders or a function \verb{(text, keys) -> string}. This path is kept for expert use and backward compatibility.}
@@ -106,6 +108,8 @@ prompt scaffold follows this resolved mode automatically.}
 
 \item{multi_value}{Strategy when a key maps to multiple values. Passed to
 \code{row_to_tibble()}. Defaults to \code{"first"}.}
+
+\item{col}{Legacy alias for \code{text_col}. Kept for backward compatibility.}
 
 \item{...}{Extra args passed to \code{gpt()} (e.g., \code{response_format}).}
 }
