@@ -148,27 +148,17 @@ Règles de décision:
 
 Exemple 1:
 Texte: 'ATCD: appendicectomie, 2e greffe rénale, fistule artério-veineuse de dialyse'
-Réponse:
-{{
-  \"atcd_chir_abdo_pelvienne\": 1,
-  \"atcd_chir_abdo_pelvienne_type\": \"appendicectomie\",
-  \"atcd_chir_voies_urinaires\": 1,
-  \"atcd_chir_voies_urinaires_type\": \"greffe rénale antérieure\",
-  \"atcd_chir_vasc\": 0,
-  \"atcd_chir_vasc_type\": null
-}}
+Décision attendue:
+- catégorie abdo/pelvienne: oui, type = appendicectomie
+- catégorie voies urinaires: oui, type = greffe rénale antérieure
+- catégorie vasculaire: non
 
 Exemple 2:
 Texte: 'Transplantation rénale ce jour avec pose de sonde JJ'
-Réponse:
-{{
-  \"atcd_chir_abdo_pelvienne\": 0,
-  \"atcd_chir_abdo_pelvienne_type\": null,
-  \"atcd_chir_voies_urinaires\": 0,
-  \"atcd_chir_voies_urinaires_type\": null,
-  \"atcd_chir_vasc\": 0,
-  \"atcd_chir_vasc_type\": null
-}}"
+Décision attendue:
+- catégorie abdo/pelvienne: non
+- catégorie voies urinaires: non
+- catégorie vasculaire: non"
   )
 )
 
