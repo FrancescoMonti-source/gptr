@@ -85,37 +85,24 @@ if (requireNamespace("pkgload", quietly = TRUE)) {
       tabac_statut = "character",
       tabac_resume = "character"
     ),
-    prompt = "Tu es un assistant d'extraction clinique.
+    instruction = "Tu es un assistant d'extraction clinique.
 Tu recois uniquement des extraits de dossier potentiellement pertinents pour le tabagisme autour d'une chirurgie.
 Ta tache est de determiner le statut tabagique du patient au moment de la chirurgie.
 
-Variables a retourner:
-- tabac_actif: 1 si le patient fume encore au moment de la chirurgie, 0 sinon, null si incertain
-- tabac_sevre: 1 si le patient est ancien fumeur / sevre au moment de la chirurgie, 0 sinon, null si incertain
-- tabac_statut: une seule valeur parmi actif, sevre, non_fumeur, indetermine
-- tabac_resume: resume clinique tres court de l'evidence retenue
-
-Regles:
+Regles de decision:
 - Base-toi uniquement sur les extraits fournis
 - Cherche le statut du patient a la date de chirurgie, pas a une autre periode
 - Ignore les mentions concernant la famille, les parents ou l'entourage
-- Si le texte dit non-fumeur, jamais fume, absence de tabagisme: retourne non_fumeur, avec tabac_actif = 0 et tabac_sevre = 0
-- Si le texte dit ex-fumeur, ancien fumeur, sevre, arret du tabac avant la chirurgie: retourne sevre, avec tabac_actif = 0 et tabac_sevre = 1
-- Si le texte dit tabagisme actif, fumeur, non sevre, ou une consommation actuelle: retourne actif, avec tabac_actif = 1 et tabac_sevre = 0
-- Si les extraits sont contradictoires ou insuffisants: retourne indetermine, avec tabac_actif = null et tabac_sevre = null
-- Retourne uniquement un JSON valide
+- Si le texte dit non-fumeur, jamais fume, absence de tabagisme: classe le patient comme non_fumeur
+- Si le texte dit ex-fumeur, ancien fumeur, sevre, arret du tabac avant la chirurgie: classe le patient comme sevre
+- Si le texte dit tabagisme actif, fumeur, non sevre, ou une consommation actuelle: classe le patient comme actif
+- Si les extraits sont contradictoires ou insuffisants: classe le patient comme indetermine
 
 Exemples de decision:
 - 'Tabagisme actif : oui, 20 PA' => actif
 - 'Ex-fumeur, sevre en 2010' => sevre
 - 'Non-fumeur' => non_fumeur
-- 'Pere fumeur' => ne concerne pas le patient
-
-Format attendu:
-{json_format}
-
-Extraits:
-{text}"
+- 'Pere fumeur' => ne concerne pas le patient"
   ),
   atcd_chir = list(
     pool_path = file.path(.manual_eval_dir, "atcd_chir_eval_pool_1000.rds"),
@@ -129,7 +116,7 @@ Extraits:
       atcd_chir_vasc = "integer",
       atcd_chir_vasc_type = "character"
     ),
-    prompt = "Tu es un assistant d'extraction clinique.
+    instruction = "Tu es un assistant d'extraction clinique.
 Ta tâche est d'extraire uniquement les antécédents chirurgicaux anciens explicitement mentionnés dans le texte.
 Il faut identifier de vraies chirurgies antérieures du patient, pas l'intervention actuelle ni les gestes mineurs.
 
@@ -158,7 +145,6 @@ Règles de décision:
 - Si une chirurgie est mentionnée plusieurs fois, ne la compte qu'une fois
 - Pour chaque champ *_type, retourne un libellé court, normalisé et clinique
 - Si plusieurs chirurgies existent dans une même catégorie, sépare-les par ' | '
-- Retourne uniquement un JSON valide, sans texte additionnel
 
 Exemple 1:
 Texte: 'ATCD: appendicectomie, 2e greffe rénale, fistule artério-veineuse de dialyse'
@@ -182,13 +168,7 @@ Réponse:
   \"atcd_chir_voies_urinaires_type\": null,
   \"atcd_chir_vasc\": 0,
   \"atcd_chir_vasc_type\": null
-}}
-
-Format attendu:
-{json_format}
-
-Texte source:
-{text}"
+}}"
   )
 )
 
@@ -265,8 +245,8 @@ manual_eval_call_input$.manual_eval_text <- manual_eval_call_input[[config$text_
 manual_eval_result <- gpt_column(
   manual_eval_call_input,
   col = .manual_eval_text,
-  prompt = config$prompt,
   keys = config$keys,
+  instruction = config$instruction,
   provider = provider,
   model = model
 )
