@@ -29,7 +29,7 @@
 #   file.path("path", "to", "gptr", "manual-eval", "atcd_chir_eval_pool_1000.rds")
 # )
 
-task <- "tabac"
+task <- "atcd_chir" # tabac / atcd_chir
 sample_n <- 25L
 seed <- 42L
 provider <- "ollama"
@@ -115,28 +115,26 @@ Exemples de decision:
 - 'Tabagisme actif : oui, 20 PA' => actif
 - 'Ex-fumeur, sevre en 2010' => sevre
 - 'Non-fumeur' => non_fumeur
-- 'Pere fumeur' => ne concerne pas le patient"
+- 'Pere fumeur' => ne concerne pas le patient
+- 'Sevrage réussi de corticothérapie pour rhumatisme inflammatoire' => ne concerne pas le statut tabagique"
   ),
   atcd_chir = list(
     pool_path = file.path(.manual_eval_dir, "atcd_chir_eval_pool_1000.rds"),
     text_col = "text_atcd",
     required_cols = c("text_atcd"),
     keys = list(
-      atcd_chir_abdo_pelvienne = "integer",
       atcd_chir_abdo_pelvienne_type = "character",
-      atcd_chir_voies_urinaires = "integer",
       atcd_chir_voies_urinaires_type = "character",
-      atcd_chir_vasc = "integer",
       atcd_chir_vasc_type = "character"
     ),
     instruction = "Tu es un assistant d'extraction clinique.
 Ta tâche est d'extraire uniquement les antécédents chirurgicaux anciens explicitement mentionnés dans le texte.
 Il faut identifier de vraies chirurgies antérieures du patient, pas l'intervention actuelle ni les gestes mineurs.
 
-Catégories à renseigner:
-- atcd_chir_abdo_pelvienne: chirurgie abdominale ou pelvienne hors voies urinaires et hors chirurgie vasculaire
-- atcd_chir_voies_urinaires: chirurgie urologique vraie du rein, des uretères, de la vessie, de l'urètre ou de la prostate
-- atcd_chir_vasc: chirurgie vasculaire vraie artérielle ou veineuse
+Champs à renseigner:
+- atcd_chir_abdo_pelvienne_type: chirurgie abdominale ou pelvienne hors voies urinaires et hors chirurgie vasculaire
+- atcd_chir_voies_urinaires_type: chirurgie urologique vraie du rein, des uretères, de la vessie, de l'urètre ou de la prostate
+- atcd_chir_vasc_type: chirurgie vasculaire vraie artérielle ou veineuse
 
 Exemples à compter:
 - abdo/pelvienne: appendicectomie, cholécystectomie, césarienne, hystérectomie, ovariectomie, colectomie
@@ -154,34 +152,25 @@ Ne pas compter:
 Règles de décision:
 - Utilise uniquement les informations explicitement présentes dans le texte
 - N'invente rien et n'interprète pas au-delà du texte
-- Si le texte est ambigu ou insuffisant, retourne 0 et NA pour la catégorie concernée
+- Pour chaque champ *_type, retourne un libellé court, normalisé et clinique si une chirurgie ancienne de cette catégorie est explicitement présente
+- Si aucune chirurgie de la catégorie n'est explicitement présente, retourne NA pour le champ concerné
+- Si le texte est ambigu ou insuffisant pour une catégorie, retourne NA pour cette catégorie
 - Si une chirurgie est mentionnée plusieurs fois, ne la compte qu'une fois
-- Pour chaque champ *_type, retourne un libellé court, normalisé et clinique
 - Si plusieurs chirurgies existent dans une même catégorie, sépare-les par ' | '
 
 Exemple 1:
 Texte: 'ATCD: appendicectomie, 2e greffe rénale, fistule artério-veineuse de dialyse'
-Réponse:
-{{
-  \"atcd_chir_abdo_pelvienne\": 1,
-  \"atcd_chir_abdo_pelvienne_type\": \"appendicectomie\",
-  \"atcd_chir_voies_urinaires\": 1,
-  \"atcd_chir_voies_urinaires_type\": \"greffe rénale antérieure\",
-  \"atcd_chir_vasc\": 0,
-  \"atcd_chir_vasc_type\": null
-}}
+Décision attendue:
+- atcd_chir_abdo_pelvienne_type: appendicectomie
+- atcd_chir_voies_urinaires_type: greffe rénale antérieure
+- atcd_chir_vasc_type: NA
 
 Exemple 2:
 Texte: 'Transplantation rénale ce jour avec pose de sonde JJ'
-Réponse:
-{{
-  \"atcd_chir_abdo_pelvienne\": 0,
-  \"atcd_chir_abdo_pelvienne_type\": null,
-  \"atcd_chir_voies_urinaires\": 0,
-  \"atcd_chir_voies_urinaires_type\": null,
-  \"atcd_chir_vasc\": 0,
-  \"atcd_chir_vasc_type\": null
-}}"
+Décision attendue:
+- atcd_chir_abdo_pelvienne_type: NA
+- atcd_chir_voies_urinaires_type: NA
+- atcd_chir_vasc_type: NA"
   )
 )
 
