@@ -31,6 +31,7 @@ test_that("instruction-only prompt follows prompt-schema scaffold on the chosen 
   expect_match(seen_prompt, "Required keys:")
   expect_match(seen_prompt, "Value rules:")
   expect_match(seen_prompt, "Text:\npatient is 64")
+  expect_identical(out$.final_prompt[[1]], seen_prompt)
   expect_identical(out$.schema_mode[[1]], "prompt_schema")
   expect_identical(out$age[[1]], 64L)
 })
@@ -107,6 +108,7 @@ test_that("instruction-only prompt follows backend-schema scaffold on the chosen
   expect_false(grepl("Required keys:", seen_prompt, fixed = TRUE))
   expect_false(grepl("Value rules:", seen_prompt, fixed = TRUE))
   expect_true(is.list(seen_response_format))
+  expect_identical(out$.final_prompt[[1]], seen_prompt)
   expect_identical(out$.schema_mode[[1]], "backend_schema")
   expect_identical(out$age[[1]], 64L)
 })
@@ -139,6 +141,7 @@ test_that("instruction plus template appends text when the template omits it", {
   expect_match(seen_prompt, "Task reminder:\nExtract age\\.")
   expect_match(seen_prompt, "Text:\npatient is 64")
   expect_match(seen_prompt, "Required keys:")
+  expect_identical(out$.final_prompt[[1]], seen_prompt)
   expect_identical(out$age[[1]], 64L)
 })
 
@@ -166,6 +169,7 @@ test_that("legacy raw prompt path remains unchanged", {
   )
 
   expect_match(seen_prompt, "Legacy \\{ age: \"0\"\\|\"1\"\\|\"NA\" \\}\nText: patient is 64")
+  expect_identical(out$.final_prompt[[1]], seen_prompt)
   expect_identical(out$age[[1]], 64L)
 })
 

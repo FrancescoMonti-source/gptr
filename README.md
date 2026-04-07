@@ -122,7 +122,7 @@ res
 
 ```
 
-`gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.raw_output` and `.invalid_detail` for auditing. The `".invalid_rows"` flags rows that failed validation so that you can retry them selectively.
+`gpt_column()` adds the extracted variables, retains the original text, and (with `return_debug = TRUE`) appends `.final_prompt`, `.raw_output`, and `.invalid_detail` for auditing. The `".invalid_rows"` flags rows that failed validation so that you can retry them selectively.
 
 ## Common first-run issues {#common-first-run-issues}
 
@@ -149,7 +149,7 @@ res
  prompt scaffold                         response_format or prompt schema    tidy_json() + validation
 ```
 
-For each row, `gpt_column()` follows the configured request route, decides whether that route will use backend-enforced schemas or prompt-managed schemas, builds the prompt scaffold to match that mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (raw output, schema mode, validation detail, invalid row indexes) stay attached for debugging.
+For each row, `gpt_column()` follows the configured request route, decides whether that route will use backend-enforced schemas or prompt-managed schemas, builds the prompt scaffold to match that mode, validates the result against the schema, and binds the structured values back onto the original tibble. If `return_debug = TRUE`, all intermediate artefacts (built prompt, raw output, schema mode, validation detail, invalid row indexes) stay attached for debugging.
 
 ## Schema keys {#schema-keys}
 
@@ -229,7 +229,7 @@ When `keys` is `NULL`, you can still collect structured output: set `keep_unexpe
 
 ## Debugging, retries, and auditing {#debugging-retries-and-auditing}
 
--   `return_debug = TRUE` (default behavior) appends `.raw_output` and `.invalid_detail` columns to inspect model responses and validation errors.
+-   `return_debug = TRUE` (default behavior) appends `.final_prompt`, `.raw_output`, and `.invalid_detail` columns to inspect what was sent to the model, what came back, and why validation failed.
 -   `attr(result, "invalid_rows")` gives the row indexes that need attention.
 -   `keep_unexpected_keys = TRUE` stores extra keys in `.extras_json` when you work with a fixed schema.
 -   `patch_failed_rows()` retries only the invalid rows with the same or updated prompt interface.

@@ -34,7 +34,7 @@ sample_n <- 25L
 seed <- 42L
 provider <- "ollama"
 model <- "gemma3:4b"
-save_run <- FALSE
+save_run <- TRUE
 
 .find_gptr_repo_root <- function() {
   source_file <- NULL
@@ -48,13 +48,22 @@ save_run <- FALSE
   }
 
   candidate_roots <- unique(c(
-    if (!is.null(source_file)) normalizePath(file.path(dirname(source_file), ".."), winslash = "/", mustWork = FALSE),
+    if (!is.null(source_file)) {
+      normalizePath(
+        file.path(dirname(source_file), ".."),
+        winslash = "/",
+        mustWork = FALSE
+      )
+    },
     normalizePath(".", winslash = "/", mustWork = FALSE),
     normalizePath("..", winslash = "/", mustWork = FALSE)
   ))
 
   for (root in candidate_roots) {
-    if (file.exists(file.path(root, "DESCRIPTION")) && file.exists(file.path(root, "R"))) {
+    if (
+      file.exists(file.path(root, "DESCRIPTION")) &&
+        file.exists(file.path(root, "R"))
+    ) {
       return(root)
     }
   }
@@ -69,7 +78,12 @@ save_run <- FALSE
 .manual_eval_dir <- file.path(.repo_root, "manual-eval")
 
 if (requireNamespace("pkgload", quietly = TRUE)) {
-  pkgload::load_all(.repo_root, export_all = FALSE, helpers = FALSE, quiet = TRUE)
+  pkgload::load_all(
+    .repo_root,
+    export_all = FALSE,
+    helpers = FALSE,
+    quiet = TRUE
+  )
 } else {
   library(gptr)
 }
@@ -80,9 +94,7 @@ if (requireNamespace("pkgload", quietly = TRUE)) {
     text_col = "text_tabac_llm",
     required_cols = c("text_tabac_llm", "ELTID_tabac_contexte"),
     keys = list(
-      tabac_actif = "integer",
-      tabac_sevre = "integer",
-      tabac_statut = "character",
+      tabac_statut = c("actif", "sevre", "non_fumeur", "indetermine"),
       tabac_resume = "character"
     ),
     instruction = "Tu es un assistant d'extraction clinique.
@@ -97,6 +109,7 @@ Regles de decision:
 - Si le texte dit ex-fumeur, ancien fumeur, sevre, arret du tabac avant la chirurgie: classe le patient comme sevre
 - Si le texte dit tabagisme actif, fumeur, non sevre, ou une consommation actuelle: classe le patient comme actif
 - Si les extraits sont contradictoires ou insuffisants: classe le patient comme indetermine
+- Retourne tabac_resume comme un resume clinique tres court de l'evidence retenue
 
 Exemples de decision:
 - 'Tabagisme actif : oui, 20 PA' => actif
@@ -148,17 +161,27 @@ Règles de décision:
 
 Exemple 1:
 Texte: 'ATCD: appendicectomie, 2e greffe rénale, fistule artério-veineuse de dialyse'
-Décision attendue:
-- catégorie abdo/pelvienne: oui, type = appendicectomie
-- catégorie voies urinaires: oui, type = greffe rénale antérieure
-- catégorie vasculaire: non
+Réponse:
+{{
+  \"atcd_chir_abdo_pelvienne\": 1,
+  \"atcd_chir_abdo_pelvienne_type\": \"appendicectomie\",
+  \"atcd_chir_voies_urinaires\": 1,
+  \"atcd_chir_voies_urinaires_type\": \"greffe rénale antérieure\",
+  \"atcd_chir_vasc\": 0,
+  \"atcd_chir_vasc_type\": null
+}}
 
 Exemple 2:
 Texte: 'Transplantation rénale ce jour avec pose de sonde JJ'
-Décision attendue:
-- catégorie abdo/pelvienne: non
-- catégorie voies urinaires: non
-- catégorie vasculaire: non"
+Réponse:
+{{
+  \"atcd_chir_abdo_pelvienne\": 0,
+  \"atcd_chir_abdo_pelvienne_type\": null,
+  \"atcd_chir_voies_urinaires\": 0,
+  \"atcd_chir_voies_urinaires_type\": null,
+  \"atcd_chir_vasc\": 0,
+  \"atcd_chir_vasc_type\": null
+}}"
   )
 )
 
@@ -188,7 +211,10 @@ Décision attendue:
   }
   pool <- readRDS(config$pool_path)
   if (!is.data.frame(pool)) {
-    stop(sprintf("The %s manual-eval artifact must contain a data frame.", label), call. = FALSE)
+    stop(
+      sprintf("The %s manual-eval artifact must contain a data frame.", label),
+      call. = FALSE
+    )
   }
   .stop_missing_cols(pool, config$required_cols, label)
 
@@ -197,7 +223,10 @@ Décision attendue:
   pool <- pool[valid, , drop = FALSE]
   rownames(pool) <- NULL
   if (nrow(pool) == 0L) {
-    stop(sprintf("The %s manual-eval artifact has no non-empty rows.", label), call. = FALSE)
+    stop(
+      sprintf("The %s manual-eval artifact has no non-empty rows.", label),
+      call. = FALSE
+    )
   }
   pool
 }
@@ -211,7 +240,11 @@ Décision attendue:
     set.seed(as.integer(seed)[1])
   }
   size <- min(n, nrow(pool))
-  idx <- if (size == nrow(pool)) seq_len(nrow(pool)) else sample.int(nrow(pool), size = size)
+  idx <- if (size == nrow(pool)) {
+    seq_len(nrow(pool))
+  } else {
+    sample.int(nrow(pool), size = size)
+  }
   rownames(pool) <- NULL
   pool[idx, , drop = FALSE]
 }
@@ -228,9 +261,15 @@ task <- match.arg(task, choices = names(.manual_eval_configs))
 config <- .manual_eval_configs[[task]]
 
 manual_eval_pool <- .read_manual_eval_pool(config, task)
-manual_eval_input <- .sample_manual_eval_pool(manual_eval_pool, n = sample_n, seed = seed)
+manual_eval_input <- .sample_manual_eval_pool(
+  manual_eval_pool,
+  n = sample_n,
+  seed = seed
+)
 manual_eval_call_input <- manual_eval_input
-manual_eval_call_input$.manual_eval_text <- manual_eval_call_input[[config$text_col]]
+manual_eval_call_input$.manual_eval_text <- manual_eval_call_input[[
+  config$text_col
+]]
 
 manual_eval_result <- gpt_column(
   manual_eval_call_input,
@@ -257,7 +296,11 @@ manual_eval_run <- list(
 )
 
 if (isTRUE(save_run)) {
-  dir.create(file.path(.manual_eval_dir, "runs"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(
+    file.path(.manual_eval_dir, "runs"),
+    recursive = TRUE,
+    showWarnings = FALSE
+  )
   stamp <- format(Sys.time(), "%Y%m%d-%H%M%S")
   run_path <- file.path(
     .manual_eval_dir,
@@ -271,7 +314,10 @@ if (isTRUE(save_run)) {
     )
   )
   saveRDS(manual_eval_run, run_path)
-  message("Saved manual-eval run: ", normalizePath(run_path, winslash = "/", mustWork = FALSE))
+  message(
+    "Saved manual-eval run: ",
+    normalizePath(run_path, winslash = "/", mustWork = FALSE)
+  )
 }
 
 message(

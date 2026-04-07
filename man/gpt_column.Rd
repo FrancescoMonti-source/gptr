@@ -99,8 +99,8 @@ prompt scaffold follows this resolved mode automatically.}
 
 \item{relaxed}{If TRUE and \code{keys} is NULL, allow non-JSON / raw outputs.}
 
-\item{return_debug}{If TRUE, add \code{.raw_output}, \code{.schema_mode},
-\code{.invalid_rows}, and \code{.invalid_detail}. Default TRUE.}
+\item{return_debug}{If TRUE, add \code{.final_prompt}, \code{.raw_output},
+\code{.schema_mode}, \code{.invalid_rows}, and \code{.invalid_detail}. Default TRUE.}
 
 \item{verbose}{Print repair/validation messages.}
 

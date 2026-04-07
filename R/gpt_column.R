@@ -44,8 +44,8 @@
 #'   prompt scaffold follows this resolved mode automatically.
 #' @param relaxed If TRUE and `keys` is NULL, allow non-JSON / raw outputs.
 #' @param verbose Print repair/validation messages.
-#' @param return_debug If TRUE, add `.raw_output`, `.schema_mode`,
-#'   `.invalid_rows`, and `.invalid_detail`. Default TRUE.
+#' @param return_debug If TRUE, add `.final_prompt`, `.raw_output`,
+#'   `.schema_mode`, `.invalid_rows`, and `.invalid_detail`. Default TRUE.
 #' @param .coerce_types Row-level coercion toggle (default TRUE). Explicit
 #'   logical coercion accepts `true/false`, `yes/no`, `oui/non`, and `1/0`.
 #' @param coerce_when Optional named list of per-key target types used for row-level coercion.
@@ -228,7 +228,7 @@ gpt_column <- function(data,
     call_gpt <- function(i) {
         txt <- texts[[i]]
         if (is.na(txt) || !nzchar(trimws(txt))) {
-            return(list(raw = NA_character_, mode = "prompt_schema"))
+            return(list(raw = NA_character_, mode = "prompt_schema", prompt = NA_character_))
         }
         request_plan <- get_request_plan()
         input_prompt <- make_prompt_for(txt)
@@ -253,11 +253,13 @@ gpt_column <- function(data,
         )
         list(
             raw = do.call(gpt, request$args),
-            mode = request$mode
+            mode = request$mode,
+            prompt = input_prompt
         )
     }
 
     raw_outputs <- character(n)
+    final_prompts <- character(n)
     extraction_modes <- character(n)
     parsed_results <- vector("list", n) # list of named lists (schema) or scalars/lists (no schema)
     invalid_flags <- logical(n) # TRUE when row invalid (parse/validate failures)
@@ -420,6 +422,7 @@ gpt_column <- function(data,
         for (i in seq_len(n)) {
             req <- call_gpt(i)
             raw_outputs[[i]] <<- req$raw
+            final_prompts[[i]] <<- req$prompt
             extraction_modes[[i]] <<- req$mode
             process_response(i)
             if (!is.null(tick)) {
@@ -460,16 +463,22 @@ gpt_column <- function(data,
         n_out <- nrow(result)
 
         # Normalize debug vectors/lists
+        final_prompts <- as.character(rep_len(final_prompts, n_out))
         raw_outputs <- as.character(rep_len(raw_outputs, n_out))
         extraction_modes <- as.character(rep_len(extraction_modes, n_out))
         invalid_flags <- as.logical(rep_len(invalid_flags, n_out))
         if (length(invalid_detail) != n_out) length(invalid_detail) <- n_out
 
         if (isTRUE(return_debug)) {
+            if (".final_prompt" %in% names(result)) {
+                result$.final_prompt <- final_prompts
+            } else {
+                result <- tibble::add_column(result, .final_prompt = final_prompts, .after = text_col_name)
+            }
             if (".raw_output" %in% names(result)) {
                 result$.raw_output <- raw_outputs
             } else {
-                result <- tibble::add_column(result, .raw_output = raw_outputs, .after = text_col_name)
+                result <- tibble::add_column(result, .raw_output = raw_outputs, .after = ".final_prompt")
             }
             result$.schema_mode <- extraction_modes
             result$.invalid_rows <- invalid_flags
@@ -502,7 +511,7 @@ gpt_column <- function(data,
 
         # Clean internal noise (preserve debug cols if present)
         if (isTRUE(return_debug)) {
-            keep_debug <- c(".raw_output", ".schema_mode", ".invalid_rows", ".invalid_detail", ".parsed_json")
+            keep_debug <- c(".final_prompt", ".raw_output", ".schema_mode", ".invalid_rows", ".invalid_detail", ".parsed_json")
             junk <- c("type", "allowed", "valid", ".valid", ".raw", ".error", "..raw_json", "..parse_error", ".path")
             to_drop <- setdiff(junk, keep_debug)
             result <- result[, setdiff(names(result), to_drop), drop = FALSE]
@@ -572,6 +581,7 @@ gpt_column <- function(data,
     n_out <- nrow(result)
 
     # Normalize debug vectors/lists
+    final_prompts <- as.character(rep_len(final_prompts, n_out))
     raw_outputs <- as.character(rep_len(raw_outputs, n_out))
     extraction_modes <- as.character(rep_len(extraction_modes, n_out))
     invalid_flags <- as.logical(rep_len(invalid_flags, n_out))
@@ -593,10 +603,15 @@ gpt_column <- function(data,
 
     # Debug columns (add/replace, no duplicates)
     if (isTRUE(return_debug)) {
+        if (".final_prompt" %in% names(result)) {
+            result$.final_prompt <- final_prompts
+        } else {
+            result <- tibble::add_column(result, .final_prompt = final_prompts, .after = text_col_name)
+        }
         if (".raw_output" %in% names(result)) {
             result$.raw_output <- raw_outputs
         } else {
-            result <- tibble::add_column(result, .raw_output = raw_outputs, .after = text_col_name)
+            result <- tibble::add_column(result, .raw_output = raw_outputs, .after = ".final_prompt")
         }
         result$.schema_mode <- extraction_modes
         result$.invalid_rows <- invalid_flags
@@ -604,7 +619,7 @@ gpt_column <- function(data,
     }
 
     # Drop noisy internal meta while preserving debug/extras
-    keep_debug <- c(".raw_output", ".schema_mode", ".invalid_rows", ".invalid_detail", ".extras_json")
+    keep_debug <- c(".final_prompt", ".raw_output", ".schema_mode", ".invalid_rows", ".invalid_detail", ".extras_json")
     junk <- c("type", "allowed", "valid", ".valid", ".raw", ".error", "..raw_json", "..parse_error", ".path")
     to_drop <- setdiff(junk, keep_debug)
     result <- result[, setdiff(names(result), to_drop), drop = FALSE]
