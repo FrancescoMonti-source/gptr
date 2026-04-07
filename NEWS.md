@@ -1,3 +1,9 @@
+# gptr 0.4.10
+
+* `gpt_column()` and `patch_failed_rows()` now prefer `text_col`, while keeping `col` as a backward-compatible alias.
+* `return_debug = TRUE` now includes `.final_prompt` so the exact prompt sent to the model is visible alongside `.raw_output` and validation details.
+* Added a local-only `manual-eval/` workflow for D0840-derived smoke testing, then updated that runner to use the instruction-first prompt UX and a tighter tobacco schema.
+
 # gptr 0.4.9
 
 * Renamed the structured extraction vocabulary to be more explicit: debug output now reports `.schema_mode` with `backend_schema` / `prompt_schema`, while `structured = "native"` / `"repair"` remain accepted as legacy aliases.
