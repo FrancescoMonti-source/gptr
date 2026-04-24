@@ -67,7 +67,7 @@ gpt_column <- function(data,
                        provider = c("auto", "local", "openai", "lmstudio", "ollama", "localai"),
                        backend = NULL,
                        base_url = NULL,
-                       model = NULL, # <-- new
+                       model = NULL,
                        temperature = 0.2,
                        file_path = NULL,
                        image_path = NULL,
@@ -88,7 +88,7 @@ gpt_column <- function(data,
                        col = NULL,
                        ...) {
     # capture all user extras once
-    dots <- rlang::list2(...) # <-- new
+    dots <- rlang::list2(...)
 
     prompt_strategy <- .resolve_prompt_strategy(
         prompt = prompt,
@@ -521,7 +521,7 @@ gpt_column <- function(data,
         return(result)
     }
 
-    # temporary debug
+    # Optional verbose diagnostics for malformed parsed rows.
     if (verbose) {
         bad_idx <- which(vapply(parsed_results, function(z) is.null(names(z)), logical(1)))
         if (length(bad_idx)) {

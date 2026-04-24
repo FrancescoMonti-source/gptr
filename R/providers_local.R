@@ -34,7 +34,7 @@
       max_tries = max_tries,
       backoff = function(attempt) 0.2 * (2^(attempt - 1))
     ) %>%
-    httr2::req_error(is_error = function(resp) FALSE) # patched
+    httr2::req_error(is_error = function(resp) FALSE)
 
   # Payload: list -> JSON; character -> raw JSON
   if (is.list(payload)) {
