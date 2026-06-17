@@ -4,6 +4,7 @@
 bilan preop
 docs
 ^manual-eval($|/)
+^\.github$
 ^\.claude$
 ^\.vscode$
 ^.*\.Rcheck$

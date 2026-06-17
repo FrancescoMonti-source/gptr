@@ -1,5 +1,9 @@
 # gptr - Structured Data Extraction with R + LLMs
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/FrancescoMonti-source/gptr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FrancescoMonti-source/gptr/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
 `gptr` is meant to help you turn unstructured, domain-specific text into tidy, validated data frames using large language models (LLMs). It wraps prompt templating, provider orchestration, schema enforcement, and observability so you can rely on LLM-powered extraction inside reproducible R pipelines.
 
 ## Contents
