@@ -34,6 +34,9 @@
 
 #' Package startup: install a default progress handler if none is set
 #' (interactive sessions only; silent if user already configured one)
+#' @param libname Library path where the package is installed.
+#' @param pkgname Name of the package being attached.
+#' @keywords internal
 .onAttach <- function(libname, pkgname) {
     if (!interactive()) return()
     if (!requireNamespace("progressr", quietly = TRUE)) return()

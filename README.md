@@ -337,8 +337,8 @@ Run `show_gptr_options()` to print the full list of `gptr.*` options active in y
 ## Requirements {#requirements}
 
 -   R \>= 4.1
--   Imports: `httr2`, `curl`, `tibble`, `dplyr`, `purrr`, `jsonlite`, `glue`, `rlang`, `cli`, `cachem`, `digest`, `magrittr`, `tools`, `stats`, `utils`
--   Suggests: `base64enc` (local file/image attachments), `progressr` (rich progress bars in parallel/long runs), `testthat` and `withr` (tests), `pkgnet` (dependency-graph reports)
+-   Imports: `httr2`, `tibble`, `dplyr`, `purrr`, `jsonlite`, `glue`, `rlang`, `cli`, `cachem`, `digest`, `magrittr`, `tools`, `stats`, `utils`
+-   Suggests: `base64enc` (local file/image attachments), `tokenizers` (word-aware text trimming), `progressr` (rich progress bars in parallel/long runs), `testthat` and `withr` (tests), `pkgnet` (dependency-graph reports)
 
 ## Contributing {#contributing}
 

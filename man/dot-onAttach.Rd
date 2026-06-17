@@ -7,7 +7,13 @@
 \usage{
 .onAttach(libname, pkgname)
 }
+\arguments{
+\item{libname}{Library path where the package is installed.}
+
+\item{pkgname}{Name of the package being attached.}
+}
 \description{
 Package startup: install a default progress handler if none is set
 (interactive sessions only; silent if user already configured one)
 }
+\keyword{internal}

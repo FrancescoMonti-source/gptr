@@ -22,6 +22,9 @@
 #'   Fuzzy key correction is handled by json_keys_align(); control with `fuzzy_model`
 #'   ("lev_ratio" or "lev") and `fuzzy_threshold`.
 #' @param keep_unexpected_keys Keep keys not listed in `keys`.
+#' @param fuzzy_model Fuzzy key-matching algorithm passed to [json_keys_align()]:
+#'   `"lev_ratio"` (default) or `"lev"`.
+#' @param fuzzy_threshold Numeric tolerance for fuzzy key matching (default 0.25).
 #' @param provider One of "auto", "local", "openai", "lmstudio", "ollama", "localai".
 #'   With `provider = "auto"`, `gpt_column()` follows the same configured route
 #'   selection as `gpt()`: `base_url`, `backend`, `gptr.local_base_url`, then

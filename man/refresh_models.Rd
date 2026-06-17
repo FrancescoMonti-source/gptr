@@ -6,6 +6,9 @@
 \usage{
 refresh_models(...)
 }
+\arguments{
+\item{...}{Additional arguments forwarded to \code{\link[=list_models]{list_models()}}.}
+}
 \value{
 See \code{\link[=list_models]{list_models()}}
 }

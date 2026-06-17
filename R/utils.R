@@ -256,6 +256,7 @@ show_gptr_options <- function() {
 }
 
 #' Play a gptr_audio
+#' @param x A `gptr_audio` object (as returned by [gpt_tts()]), or a path string.
 #' @export
 play <- function(x) {
   path <- if (inherits(x, "gptr_audio")) x$file else as.character(x)
@@ -266,13 +267,9 @@ play <- function(x) {
 }
 
 
-#' Coalesce operator (re-export from rlang)
-#' See [rlang::%||%].
-#' @name %||%
-#' @rdname coalesce-operator
-#' @export
 #' @importFrom rlang %||%
-NULL
+#' @export
+rlang::`%||%`
 
 #' @importFrom stats na.omit runif setNames
 NULL

@@ -6,6 +6,9 @@
 \usage{
 play(x)
 }
+\arguments{
+\item{x}{A \code{gptr_audio} object (as returned by \code{\link[=gpt_tts]{gpt_tts()}}), or a path string.}
+}
 \description{
 Play a gptr_audio
 }

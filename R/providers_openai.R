@@ -51,6 +51,9 @@
 #'   embedded as "type": "input_image" with a data URL (base64).
 #' @param file_paths Optional character vector of file paths. Each will be embedded
 #'   as "type": "input_file" with a data URL (base64). Requires `base64enc`.
+#' @param on_missing How to handle image/file paths that do not exist:
+#'   `"warn"` (default) skips the attachment with a warning, `"skip"` drops it
+#'   silently, and `"error"` aborts.
 #' @return A list suitable for OpenAI `messages`
 #' @export
 openai_build_messages <- function(system = NULL, user = NULL,

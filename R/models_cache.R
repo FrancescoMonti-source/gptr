@@ -360,7 +360,9 @@ list_models <- function(provider = NULL,
 #'
 #' Convenience wrapper around [list_models()] with `refresh = TRUE`.
 #' @inheritParams list_models
+#' @param ... Additional arguments forwarded to [list_models()].
 #' @return See [list_models()]
+#' @importFrom cachem cache_mem
 #' @export
 refresh_models <- function(...) {
   list_models(refresh = TRUE, ...)

@@ -71,6 +71,7 @@
 #' @seealso
 #' [gpt_column()] for the main extraction function.
 #'
+#' @importFrom rlang := .data
 #' @export
 
 
@@ -181,7 +182,7 @@ patch_failed_rows <- function(data,
       # identify successes (expect .invalid_rows == 0)
       successes <- dplyr::filter(
         batch_df,
-        (.invalid_rows %in% c(0L, FALSE)) | is.na(.invalid_rows)
+        (.data[[".invalid_rows"]] %in% c(0L, FALSE)) | is.na(.data[[".invalid_rows"]])
       )
       if (nrow(successes) > 0) {
         # Apply successful patches immediately

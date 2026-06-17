@@ -1,6 +1,10 @@
-#' list_models() helprer
-#'  internal
-#'  base_url_normalized Logical; set TRUE when base_url is already normalized
+#' Normalize a raw models payload into an id/created data frame
+#'
+#' Internal `list_models()` helper.
+#' @param x A data frame, named atomic vector, list, or character vector of
+#'   model identifiers returned by a provider.
+#' @return A data frame with `id` and `created` columns.
+#' @keywords internal
 .normalize_models_df <- function(x) {
     if (is.null(x)) {
         return(data.frame(id = character(0), created = numeric(0), stringsAsFactors = FALSE))

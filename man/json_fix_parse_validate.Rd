@@ -15,6 +15,8 @@ json_fix_parse_validate(
 )
 }
 \arguments{
+\item{text}{Raw model output (character).}
+
 \item{key_specs}{Named list of specs from .parse_key_spec() or NULL.}
 
 \item{na_values}{Character vector treated as NA.}
@@ -27,8 +29,6 @@ json_fix_parse_validate(
 
 \item{coerce_when}{Optional predicate function(key, value, spec, row_index) -> TRUE/FALSE,
 overrides .coerce_types per value when provided.}
-
-\item{out}{Raw model output (character).}
 }
 \value{
 list(ok = TRUE/FALSE, value = parsed list or raw string, note = "parsed"/"not-json"/"NA-like")

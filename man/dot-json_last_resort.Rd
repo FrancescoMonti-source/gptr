@@ -2,11 +2,17 @@
 % Please edit documentation in R/json_fix_parse_validate.R
 \name{.json_last_resort}
 \alias{.json_last_resort}
-\title{Repairs: { "text_rewritten": "\if{html}{\out{<long messy text>}}" }}
+\title{Last-resort repair of a single \code{text_rewritten} JSON object}
 \usage{
 .json_last_resort(raw)
 }
-\description{
-Repairs: { "text_rewritten": "\if{html}{\out{<long messy text>}}" }
+\arguments{
+\item{raw}{Character scalar with the (possibly malformed) model output.}
 }
-\keyword{Internal}
+\value{
+The parsed object recovered from the repaired JSON.
+}
+\description{
+Last-resort repair of a single \code{text_rewritten} JSON object
+}
+\keyword{internal}

@@ -1,5 +1,8 @@
-#' Repairs: { "text_rewritten": "<long messy text>" }
-#' @keywords Internal
+#' Last-resort repair of a single `text_rewritten` JSON object
+#'
+#' @param raw Character scalar with the (possibly malformed) model output.
+#' @return The parsed object recovered from the repaired JSON.
+#' @keywords internal
 .json_last_resort <- function(raw) {
     stopifnot(is.character(raw), length(raw) == 1L)
     s <- trimws(raw)
@@ -197,7 +200,7 @@
 #' 1) Fix common JSON issues with .tidy_json(); 2) parse via jsonlite; 3) validate
 #'    and optionally coerce values according to key_specs.
 #'
-#' @param out Raw model output (character).
+#' @param text Raw model output (character).
 #' @param key_specs Named list of specs from .parse_key_spec() or NULL.
 #' @param na_values Character vector treated as NA.
 #' @param verbose Logical; print repair notes and validation issues.

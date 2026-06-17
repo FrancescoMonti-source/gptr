@@ -88,6 +88,11 @@ Fuzzy key correction is handled by json_keys_align(); control with \code{fuzzy_m
 
 \item{keep_unexpected_keys}{Keep keys not listed in \code{keys}.}
 
+\item{fuzzy_model}{Fuzzy key-matching algorithm passed to \code{\link[=json_keys_align]{json_keys_align()}}:
+\code{"lev_ratio"} (default) or \code{"lev"}.}
+
+\item{fuzzy_threshold}{Numeric tolerance for fuzzy key matching (default 0.25).}
+
 \item{structured}{Extraction strategy. \code{"auto"} (default) uses backend-enforced
 schemas for OpenAI and otherwise falls back to prompt-managed schemas unless
 the chosen local backend was explicitly opted in via

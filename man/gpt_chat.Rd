@@ -17,8 +17,6 @@ gpt_chat(
   trim_max_chars = NULL,
   ...
 )
-
-gpt_chat$<method>
 }
 \arguments{
 \item{prompt}{Character scalar, the new user input. Required unless showing

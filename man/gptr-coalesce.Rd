@@ -23,6 +23,9 @@ when you explicitly want to treat the empty string as “unset”.
 NULL \%||\% "default" # "default"
 "x" \%||\% "default" # "x"
 
+# coalesce_len0() and coalesce_blank() are internal helpers (not exported);
+# call them via gptr::: when experimenting interactively.
+\dontrun{
 # Length-0 coalescing:
 coalesce_len0(character(0), "fallback") # "fallback"
 coalesce_len0(numeric(0), 42) # 42
@@ -34,4 +37,5 @@ coalesce_blank("  ", "fallback") # "  " (not trimmed!)
 coalesce_blank("text", "fallback") # "text"
 coalesce_blank(NULL, "fallback") # "fallback"
 coalesce_blank(character(0), "fallback") # "fallback"
+}
 }

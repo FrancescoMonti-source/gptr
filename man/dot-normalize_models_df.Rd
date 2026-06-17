@@ -2,14 +2,18 @@
 % Please edit documentation in R/utils-cache.R
 \name{.normalize_models_df}
 \alias{.normalize_models_df}
-\title{list_models() helprer
-internal
-base_url_normalized Logical; set TRUE when base_url is already normalized}
+\title{Normalize a raw models payload into an id/created data frame}
 \usage{
 .normalize_models_df(x)
 }
-\description{
-list_models() helprer
-internal
-base_url_normalized Logical; set TRUE when base_url is already normalized
+\arguments{
+\item{x}{A data frame, named atomic vector, list, or character vector of
+model identifiers returned by a provider.}
 }
+\value{
+A data frame with \code{id} and \code{created} columns.
+}
+\description{
+Internal \code{list_models()} helper.
+}
+\keyword{internal}

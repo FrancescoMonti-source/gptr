@@ -4,3 +4,9 @@
 bilan preop
 docs
 ^manual-eval($|/)
+^\.claude$
+^\.vscode$
+^.*\.Rcheck$
+^LICENSE\.Rmd$
+^LICENSE\.txt$
+^RELEASE\.qmd$

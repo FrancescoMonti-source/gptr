@@ -261,7 +261,7 @@ gpt_chat <- local({
 
 #' @export
 #' @rdname gpt_chat
-#' @usage gpt_chat$<method>
+#' @usage NULL
 #' @details
 #' **Available methods** (call with `gpt_chat$method(...)`):
 #' - `show_history(as_text = TRUE)`

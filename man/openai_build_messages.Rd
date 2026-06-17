@@ -22,6 +22,10 @@ embedded as "type": "input_image" with a data URL (base64).}
 
 \item{file_paths}{Optional character vector of file paths. Each will be embedded
 as "type": "input_file" with a data URL (base64). Requires \code{base64enc}.}
+
+\item{on_missing}{How to handle image/file paths that do not exist:
+\code{"warn"} (default) skips the attachment with a warning, \code{"skip"} drops it
+silently, and \code{"error"} aborts.}
 }
 \value{
 A list suitable for OpenAI \code{messages}
