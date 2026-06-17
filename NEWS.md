@@ -1,3 +1,11 @@
+# gptr 0.4.11
+
+* Package now passes `R CMD check` cleanly (0 errors / 0 warnings / 0 notes).
+* Declared `Depends: R (>= 4.1)`, added `tokenizers` to `Suggests` (used by `trim_text()`), and removed the unused `curl` import.
+* Added a CRAN-style `LICENSE` file so `MIT + file LICENSE` resolves, and dropped the unused `LazyData` field.
+* Documented previously undocumented arguments (including `gpt_column()`'s `fuzzy_model` / `fuzzy_threshold`) and fixed malformed `Rd` in the coalesce and JSON-repair help pages.
+* Excluded development-only files (`.claude/`, `.vscode/`, license sources) from the package build, re-exported `%||%` via the standard reexports mechanism, and made the `exports.txt` invariant test skip when that dev file is absent.
+
 # gptr 0.4.10
 
 * `gpt_column()` and `patch_failed_rows()` now prefer `text_col`, while keeping `col` as a backward-compatible alias.
