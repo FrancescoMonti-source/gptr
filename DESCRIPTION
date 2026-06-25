@@ -33,6 +33,7 @@ Imports:
     digest
 Suggests:
     base64enc,
+    curl,
     testthat (>= 3.0.0),
     progressr,
     pkgnet,
